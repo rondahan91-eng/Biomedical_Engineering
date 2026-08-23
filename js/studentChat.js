@@ -8,8 +8,8 @@ import { getStudentContext, sendMentorMessage, setCurrentExperiment } from './ap
 
 // הקטנת תמונות לפני השליחה. צילומי טלפון/מסך מגיעים לעיתים במגה-בייטים,
 // ו-Gemini מחייב על תמונות לפי רזולוציה - ההקטנה חוסכת עלות טוקנים, זמן
-// המתנה ונפח ב-Drive. 1024px נשמר בכוונה גבוה מספיק כדי שקווי שבר ופרטים
-// עדינים בצילום הרנטגן יישארו ניתנים לזיהוי.
+// המתנה ונפח ב-Drive. 1024px נשמר בכוונה גבוה מספיק כדי שמספרים בתרשים,
+// תוויות בטבלה ופרטים עדינים במפת קשב יישארו קריאים.
 const RAIL_PREF_KEY = 'ai-mentor-rail-hidden';
 
 const MAX_IMAGE_DIM = 1024;
@@ -153,8 +153,8 @@ export async function mountStudentChat(app, session, onLogout) {
 
       <div class="rail-tip">
         <b>שימו לב:</b> רק החלק המוערך נכנס לציון. בכל שאר השיחה אפשר לשאול
-        בחופשיות על הפרויקט, על הפעלת Teachable Machine או על אנטומיה ופיזיקה
-        של הדימות — בלי שזה נמדד.
+        בחופשיות על הניסוי, על הפעלת Teachable Machine, על קריאת המדדים
+        והגרפים או על הרקע הרפואי — בלי שזה נמדד.
       </div>
     </aside>`;
   }
@@ -181,8 +181,8 @@ export async function mountStudentChat(app, session, onLogout) {
     return `<div class="stream-empty">
         ${logoMark(52)}
         <div class="big">שלום ${escapeHtml(ctx.firstName || '')}, נתחיל?</div>
-        <p>אפשר לפתוח בשאלה חופשית על הפרויקט, או להעלות למטה את תמונות
-           ההתקדמות של השבוע כדי להתחיל את החלק המוערך.</p>
+        <p>אפשר לפתוח בשאלה חופשית על הניסוי שאת/ה מריץ/ה, או להעלות למטה
+           שתי תמונות מהשבוע כדי להתחיל את החלק המוערך.</p>
       </div>`;
   }
 
@@ -219,7 +219,8 @@ export async function mountStudentChat(app, session, onLogout) {
           <h3>משימת שבוע ${ctx.weekNumber}</h3>
           <button class="modal-close" id="modal-close" title="סגירה">✕</button>
         </div>
-        <p class="form-note">2 תמונות התקדמות + סיכום קצר. השליחה פותחת את החלק המוערך.</p>
+        <p class="form-note">שתי תמונות מהניסוי + סיכום קצר. מומלץ: תרשים אחד
+          מכלי ההערכה ומפת קשב אחת שמדגימה את הממצא. השליחה פותחת את החלק המוערך.</p>
         <div class="tiles">
           ${[0, 1].map(i => `
             <label class="tile${state.slots[i] ? ' filled' : ''}">
@@ -230,7 +231,7 @@ export async function mountStudentChat(app, session, onLogout) {
             </label>`).join('')}
         </div>
         <div class="field" style="margin:12px 0 10px;">
-          <textarea id="week-summary" rows="3" placeholder="מה עשית השבוע? (אילו תמונות אספת ולמה הן מתאימות לאסטרטגיה שלך)">${escapeHtml(state.summaryDraft || '')}</textarea>
+          <textarea id="week-summary" rows="3" placeholder="מה הרצת השבוע, מה יצא, ומה הפתיע אותך?">${escapeHtml(state.summaryDraft || '')}</textarea>
         </div>
         <button type="button" id="start-graded-btn" style="width:100%;">שליחה והתחלת החלק המוערך</button>
       </div>

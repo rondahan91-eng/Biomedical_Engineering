@@ -9,9 +9,10 @@ function artPanel() {
   <div class="auth-art">
     <div class="auth-brand">${logoMark(34)} <span>AI Mentor · הנדסה ביו-רפואית</span></div>
     <div>
-      <div class="auth-headline">מהצילום<br>אל האבחנה</div>
-      <p class="auth-sub">ליווי שבועי אישי בפרויקט בניית מודל ה-AI שלך לזיהוי שברים —
-        שאלות עומק על הניסוי שאת/ה מריץ/ה, על מה שמדדת ועל מה שכלי הבדיקה הראו.</p>
+      <div class="auth-headline">לא רק אם צדק —<br>אלא למה</div>
+      <p class="auth-sub">ליווי שבועי אישי במחקר שלך: ארבעה ניסויים מבוקרים שבודקים
+        מה באמת משפיע על מודל אבחון רפואי, ושאלות עומק על מה שמדדת ועל מה
+        שכלי הבדיקה הראו.</p>
     </div>
     <div class="auth-meta">
       <div><b>4</b>ניסויים מבוקרים</div>
