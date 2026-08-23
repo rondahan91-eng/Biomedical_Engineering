@@ -45,6 +45,13 @@ async function callRemote(action, payload) {
 }
 
 // ---------------------------------------------------------------- DEV MODE (localStorage)
+const DEV_EXPERIMENTS = [
+  { key: 'curve', name: 'עקומת למידה' },
+  { key: 'balance', name: 'יחסי איזון' },
+  { key: 'source', name: 'הכללה בין מקורות' },
+  { key: 'intervention', name: 'התערבות — תיקון הבעיה' },
+];
+
 function loadDB() {
   const raw = localStorage.getItem(DB_KEY);
   return raw ? JSON.parse(raw) : null;
@@ -63,7 +70,7 @@ async function ensureSeeded() {
   db.users.push({
     studentId: 'demo1', username: 'מיכל5678', passHash: await sha256Hex('140810'),
     mustChangePassword: false, role: 'student', firstName: 'מיכל', lastName: 'לדוגמה',
-    group: 'קבוצה 1', bodyPart: 'כתף', strategy: 'רעשים',
+    group: 'קבוצה 1', note: '', currentExperiment: 'curve',
   });
   saveDB(db);
   return db;
@@ -76,19 +83,21 @@ function findStudent(db, studentId) {
 }
 
 const MOCK_QUESTIONS = [
-  (ctx) => `היי ${ctx.firstName}! השבוע למדנו על "${ctx.week.topicText}". באסטרטגיית ה${ctx.strategy} שלך על איבר ה${ctx.bodyPart}, איך זה עשוי להשפיע על התמונות שאספת השבוע? נמק את עמדתך. (זו שאלה מדומה - מצב פיתוח מקומי, לא AI אמיתי)`,
+  (ctx) => `היי ${ctx.firstName}! השבוע למדנו על "${ctx.week.topicText}". בניסוי ${ctx.experimentName} על ${ctx.moduleName}, איך זה עשוי להשפיע על המספרים שמדדת? נמק את עמדתך. (זו שאלה מדומה - מצב פיתוח מקומי, לא AI אמיתי)`,
   () => 'תוכל/י לתת לי דוגמה קונקרטית מתוך התמונות שאספת השבוע? (שאלה מדומה - מצב פיתוח)',
   () => 'מעניין - ואיך זה מתקשר למה שלמדנו על מטריצת פיקסלים? (שאלה מדומה - מצב פיתוח)',
 ];
 
 async function mockMentorReply(db, studentId, history) {
   const u = findStudent(db, studentId);
-  const ctx = { firstName: u.firstName, bodyPart: u.bodyPart, strategy: u.strategy, week: db.week };
+  const ctx = { firstName: u.firstName, moduleName: 'מלריה — תאי דם',
+    experimentName: (DEV_EXPERIMENTS.find(e => e.key === (u.currentExperiment || 'curve')) || {}).name,
+    week: db.week };
   const userTurns = history.filter(h => h.role === 'user').length; // כולל ההודעה שרק נשלחה
   if (userTurns > MOCK_QUESTIONS.length) {
     const score = 7 + Math.floor(Math.random() * 3);
     return {
-      reply: `תודה על התשובות, ${u.firstName}. ציון ההערכה לשבוע זה: ${score}. משוב מנטור: הפגנת הבנה טובה של הקישור בין האסטרטגיה שלך לתופעה שנשאלת. לפעם הבאה - נסה/י לחזק את הנימוק המדעי עם עוד מונחים מקצועיים. (הערכה מדומה - מצב פיתוח מקומי)`,
+      reply: `תודה על התשובות, ${u.firstName}. ציון ההערכה לשבוע זה: ${score}. משוב מנטור: הפגנת הבנה טובה של הקישור בין הניסוי שלך לתופעה שנשאלת. לפעם הבאה - נסה/י לחזק את הנימוק המדעי עם עוד מונחים מקצועיים. (הערכה מדומה - מצב פיתוח מקומי)`,
       graded: true, score,
     };
   }
@@ -112,6 +121,12 @@ async function callLocal(action, payload) {
   }
 
   if (action === 'logout') return { ok: true };
+  if (action === 'setCurrentExperiment') {
+    const u = findStudent(db, payload.studentId);
+    u.currentExperiment = payload.experiment;
+    saveDB(db);
+    return { ok: true, experiment: payload.experiment };
+  }
 
   if (action === 'changePassword') {
     const { studentId, newPassword } = payload;
@@ -138,7 +153,10 @@ async function callLocal(action, payload) {
     const lastGraded = mine.filter(c => c.status === 'graded').slice(-1)[0];
     const doneThisWeek = mine.some(c => c.weekNumber === db.week.weekNumber && c.status === 'graded');
     return {
-      firstName: u.firstName, bodyPart: u.bodyPart, strategy: u.strategy, group: u.group,
+      firstName: u.firstName, group: u.group, note: u.note,
+      moduleName: 'מלריה — תאי דם', experiments: DEV_EXPERIMENTS,
+      currentExperiment: u.currentExperiment || 'curve',
+      experimentName: (DEV_EXPERIMENTS.find(e => e.key === (u.currentExperiment || 'curve')) || {}).name,
       weekNumber: db.week.weekNumber, topicText: db.week.topicText,
       priorSummary: lastGraded ? lastGraded.aiMemorySummary : '', gradedThisWeek: doneThisWeek,
     };
@@ -190,7 +208,9 @@ async function callLocal(action, payload) {
       const doneThisWeek = mine.some(c => c.weekNumber === db.week.weekNumber && c.status === 'graded');
       return {
         studentId: u.studentId, firstName: u.firstName, lastName: u.lastName,
-        group: u.group, bodyPart: u.bodyPart, strategy: u.strategy,
+        group: u.group, note: u.note,
+        currentExperiment: u.currentExperiment || 'curve',
+        experimentName: (DEV_EXPERIMENTS.find(e => e.key === (u.currentExperiment || 'curve')) || {}).name,
         weeksCompleted: mine.length, mentorGrade: grade, surplusPoints,
         doneThisWeek, lastScore: mine.length ? scores[scores.length - 1] : null,
       };
@@ -227,7 +247,8 @@ async function callLocal(action, payload) {
       db.users.push({
         studentId: 's_' + Date.now() + Math.random().toString(36).slice(2, 6),
         username: s.username, passHash: await sha256Hex(s.password), mustChangePassword: false, role: 'student',
-        firstName: s.firstName, lastName: s.lastName, group: s.group, bodyPart: s.bodyPart, strategy: s.strategy,
+        firstName: s.firstName, lastName: s.lastName, group: s.group, note: s.note,
+        currentExperiment: 'curve',
       });
       existingUsernames.push(s.username);
       results.push({ firstName: s.firstName, username: s.username, ok: true, status: 'נוצר' });
@@ -267,6 +288,10 @@ export async function resetStudentPassword(studentId, newPassword) {
 export async function importRoster(students) {
   return dispatch('importRoster', { students });
 }
+export async function setCurrentExperiment(studentId, experiment) {
+  return dispatch('setCurrentExperiment', { studentId, experiment });
+}
+
 export async function getStudentContext(studentId) {
   return dispatch('getStudentContext', { studentId });
 }

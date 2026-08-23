@@ -184,7 +184,7 @@ label { display: block; font-size: 12.5px; font-weight: 600; color: var(--ink-2)
 .id-card .who b { display: block; font-size: 14.5px; }
 .id-card .who span { font-size: 12px; color: var(--ink-3); }
 
-/* כרטיס המשימה - מקודד בצבע לפי אסטרטגיה */
+/* כרטיס המשימה */
 .mission {
   border: 1px solid var(--line); border-radius: var(--r-md);
   padding: 14px; background: var(--surface-2); position: relative; overflow: hidden;
@@ -193,9 +193,6 @@ label { display: block; font-size: 12.5px; font-weight: 600; color: var(--ink-2)
   content: ''; position: absolute; inset-block: 0; inset-inline-start: 0; width: 4px;
   background: var(--s-color, var(--brand));
 }
-.mission[data-strategy="תקן"]   { --s-color: var(--s-standard); }
-.mission[data-strategy="הטיות"] { --s-color: var(--s-bias); }
-.mission[data-strategy="רעשים"] { --s-color: var(--s-noise); }
 .mission h4 { font-size: 11px; letter-spacing: .6px; text-transform: uppercase; color: var(--ink-3); margin-bottom: 10px; }
 .mission-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 5px 0; font-size: 13px; }
 /* רק תווית השורה (ה-span הראשון) אפורה. בלי :first-child הכלל הזה גבר גם על
@@ -207,6 +204,32 @@ label { display: block; font-size: 12.5px; font-weight: 600; color: var(--ink-2)
   display: inline-block; padding: 3px 11px; border-radius: 20px;
   font-size: 12px; font-weight: 700; color: #fff; background: var(--s-color, var(--brand));
 }
+
+/* סולם הניסויים - כל תלמיד/ה מריץ/ה את כולם, בקצב שלו/ה */
+.ladder { border: 1px solid var(--line); border-radius: var(--r-md); padding: 14px; }
+.ladder h4 { font-size: 11px; letter-spacing: .6px; text-transform: uppercase;
+  color: var(--ink-3); margin-bottom: 10px; }
+.ladder .exp {
+  display: flex; gap: 10px; align-items: flex-start; width: 100%; text-align: start;
+  background: transparent; border: 1px solid transparent; border-radius: 10px;
+  padding: 7px 8px; margin-bottom: 3px; cursor: pointer; font: inherit;
+}
+.ladder .exp:hover { background: var(--surface-2); border-color: var(--line); }
+.ladder .exp .n {
+  flex: none; width: 21px; height: 21px; border-radius: 50%; margin-top: 1px;
+  display: grid; place-items: center; font-size: 11px; font-weight: 700;
+  background: var(--line); color: var(--ink-2);
+}
+.ladder .exp .t { display: block; min-width: 0; }
+.ladder .exp .t b { display: block; font-size: 13px; color: var(--ink-2); font-weight: 600; }
+.ladder .exp .t span { display: block; font-size: 11.5px; color: var(--ink-3); line-height: 1.5; }
+.ladder .exp.done .n { background: var(--ok, #059669); color: #fff; }
+.ladder .exp.done .t b { color: var(--ink-3); }
+.ladder .exp.cur {
+  background: var(--brand-soft); border-color: var(--brand);
+}
+.ladder .exp.cur .n { background: var(--brand); color: #fff; }
+.ladder .exp.cur .t b { color: var(--brand-2); }
 
 /* צעדי המשימה השבועית */
 .steps { border: 1px solid var(--line); border-radius: var(--r-md); padding: 14px; }

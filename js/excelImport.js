@@ -13,14 +13,14 @@ const HEADER_ALIASES = {
   idNumber: ['תעודת זהות מלאה', 'ת.ז', 'ת"ז', 'ת״ז', 'תעודת זהות', 'תז'],
   dob: ['תאריך לידה'],
   group: ['קבוצה'],
-  bodyPart: ['איבר התמחות קבוצתי', 'איבר התמחות', 'איבר'],
-  strategy: ['אסטרטגיית מודל - תפקיד', 'אסטרטגיית מודל', 'אסטרטגיה'],
+  note: ['הערה', 'הערות', 'הערה על התלמיד'],
 };
+// שדות שאינם חובה: שורה בלי ערך בהם עדיין מיובאת.
+const OPTIONAL_FIELDS = ['note'];
 const FIELD_LABELS = {
   firstName: 'שם פרטי', lastName: 'שם משפחה', idNumber: 'תעודת זהות מלאה',
-  dob: 'תאריך לידה', group: 'קבוצה', bodyPart: 'איבר התמחות קבוצתי', strategy: 'אסטרטגיית מודל',
+  dob: 'תאריך לידה', group: 'קבוצה', note: 'הערה',
 };
-const VALID_STRATEGIES = ['תקן', 'הטיות', 'רעשים'];
 
 function normalizeHeader(h) {
   return String(h || '').replace(/["'״׳]/g, '').replace(/\s+/g, ' ').trim();
@@ -94,7 +94,8 @@ export async function parseStudentsExcel(file, existingUsernames = []) {
   }
 
   const fieldMap = buildFieldMap(rows[0]);
-  const missingFields = Object.keys(HEADER_ALIASES).filter(f => !fieldMap[f]);
+  const missingFields = Object.keys(HEADER_ALIASES)
+    .filter(f => !OPTIONAL_FIELDS.includes(f) && !fieldMap[f]);
   if (missingFields.length) {
     return {
       valid: [],
@@ -115,10 +116,9 @@ export async function parseStudentsExcel(file, existingUsernames = []) {
     const idNumber = String(row[fieldMap.idNumber] ?? '').trim(); // נקרא כאן בלבד, לא מוחזר
     const dobRaw = row[fieldMap.dob];
     const group = String(row[fieldMap.group] ?? '').trim();
-    const bodyPart = String(row[fieldMap.bodyPart] ?? '').trim();
-    const strategy = String(row[fieldMap.strategy] ?? '').trim();
+    const note = String(row[fieldMap.note] ?? '').trim();
 
-    if (!firstName || !lastName || !idNumber || !dobRaw || !group || !bodyPart || !strategy) {
+    if (!firstName || !lastName || !idNumber || !dobRaw || !group) {
       invalid.push({ row: excelRow, reason: 'חסרים שדות חובה בשורה.' });
       return;
     }
@@ -127,16 +127,11 @@ export async function parseStudentsExcel(file, existingUsernames = []) {
       invalid.push({ row: excelRow, reason: `תאריך לידה לא תקין ("${dobRaw}"). פורמט צפוי: DD/MM/YYYY.` });
       return;
     }
-    if (!VALID_STRATEGIES.includes(strategy)) {
-      invalid.push({ row: excelRow, reason: `אסטרטגיה לא מוכרת: "${strategy}" (צפוי: ${VALID_STRATEGIES.join('/')}).` });
-      return;
-    }
-
     const { username, last4 } = deriveUsername(firstName, idNumber, takenUsernames);
     const password = dob.dd + dob.mm + dob.yy;
     valid.push({
       excelRow, firstName, lastName, displayName: `${firstName} ${lastName}`,
-      last4Id: last4, birthDateLabel: `${dob.dd}/${dob.mm}/${dob.yy}`, group, bodyPart, strategy,
+      last4Id: last4, birthDateLabel: `${dob.dd}/${dob.mm}/${dob.yy}`, group, note,
       username, password,
     });
     // idNumber המלא לא נשמר באובייקט המוחזר - נזרק כאן.

@@ -4,7 +4,7 @@
 // 3 שאלות מוערכות משולבות + עזרה חופשית בלתי מוגבלת סביבן (FR-B/FR-F).
 // ==========================================================================
 import { escapeHtml, toast, logoMark } from './ui.js';
-import { getStudentContext, sendMentorMessage } from './api.js';
+import { getStudentContext, sendMentorMessage, setCurrentExperiment } from './api.js';
 
 // הקטנת תמונות לפני השליחה. צילומי טלפון/מסך מגיעים לעיתים במגה-בייטים,
 // ו-Gemini מחייב על תמונות לפי רזולוציה - ההקטנה חוסכת עלות טוקנים, זמן
@@ -42,10 +42,12 @@ function downscaleImage(file) {
   });
 }
 
-const STRATEGY_BLURB = {
-  'תקן': 'נתונים אידיאליים — התמונות הברורות והמאוזנות ביותר',
-  'הטיות': 'מאגר לא מאוזן — לחקר GIGO והטיה בנתונים',
-  'רעשים': 'תמונות קשות לפיענוח — חפצים זרים, גבס, חשיפה חסרה',
+// אותו אוצר מילים כמו בשרת וב-tools/notebook. שם אחד לכל מושג, בכל המערכת.
+const EXPERIMENT_BLURB = {
+  curve:        'כמה תמונות באמת צריך? איפה העקומה מתיישרת',
+  balance:      'מה קורה כשמחלקה אחת נדירה, ומה הדיוק הכולל מסתיר',
+  source:       'האם המודל למד את הממצא — או את המקור שממנו הגיעה התמונה',
+  intervention: 'מצאת חולשה. האם התיקון שלך עובד, ומה מחירו',
 };
 
 export async function mountStudentChat(app, session, onLogout) {
@@ -108,11 +110,27 @@ export async function mountStudentChat(app, session, onLogout) {
         </div>
       </div>
 
-      <div class="mission" data-strategy="${escapeHtml(ctx.strategy || '')}">
+      <div class="mission">
         <h4>המחקר שלי</h4>
-        <div class="mission-row"><span>איבר ההתמחות</span><b>${escapeHtml(ctx.bodyPart || '—')}</b></div>
-        <div class="mission-row"><span>אסטרטגיה</span><span class="s-chip">${escapeHtml(ctx.strategy || '—')}</span></div>
-        <p class="form-note" style="margin-top:8px;">${escapeHtml(STRATEGY_BLURB[ctx.strategy] || '')}</p>
+        <div class="mission-row"><span>המאגר הפעיל</span><b>${escapeHtml(ctx.moduleName || '—')}</b></div>
+        <p class="form-note" style="margin-top:6px;">המאגר נקבע על ידי המורה. הניסויים —
+          לפי הקצב שלך.</p>
+      </div>
+
+      <div class="ladder">
+        <h4>סולם הניסויים</h4>
+        ${(ctx.experiments || []).map((e, i) => {
+          const cur = e.key === ctx.currentExperiment;
+          const done = (ctx.experiments || []).findIndex(x => x.key === ctx.currentExperiment) > i;
+          return `<button class="exp${cur ? ' cur' : ''}${done ? ' done' : ''}"
+                    data-exp="${e.key}" ${cur ? 'aria-current="step"' : ''}>
+                    <span class="n">${done ? '✓' : i + 1}</span>
+                    <span class="t"><b>${escapeHtml(e.name)}</b>
+                      <span>${escapeHtml(EXPERIMENT_BLURB[e.key] || '')}</span></span>
+                  </button>`;
+        }).join('')}
+        <p class="form-note" style="margin-top:8px;">לחיצה מסמנת איפה את/ה עכשיו.
+          המנטור ישאל על הניסוי המסומן.</p>
       </div>
 
       <div class="steps">
@@ -272,6 +290,26 @@ export async function mountStudentChat(app, session, onLogout) {
   // ---------------------------------------------------------------- אירועים
   function wire() {
     document.getElementById('logout-btn').addEventListener('click', onLogout);
+
+    // סימון הניסוי הנוכחי. נשמר בשרת כדי שהמנטור ישאל על הדבר הנכון.
+    document.querySelectorAll('.ladder .exp').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const key = btn.dataset.exp;
+        if (key === ctx.currentExperiment) return;
+        const prev = ctx.currentExperiment;
+        ctx.currentExperiment = key;            // תגובה מיידית
+        const e = (ctx.experiments || []).find(x => x.key === key);
+        ctx.experimentName = e ? e.name : '';
+        render();
+        try {
+          await setCurrentExperiment(session.studentId, key);
+        } catch (err) {
+          ctx.currentExperiment = prev;         // החזרה למצב הקודם אם השמירה נכשלה
+          render();
+          toast('לא הצלחתי לשמור את הניסוי: ' + err.message);
+        }
+      });
+    });
 
     document.getElementById('rail-toggle').addEventListener('click', () => {
       state.railHidden = !state.railHidden;

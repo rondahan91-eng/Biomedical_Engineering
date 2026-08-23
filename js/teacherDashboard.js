@@ -31,7 +31,7 @@ export async function mountTeacherDashboard(app, session, onLogout) {
               <div class="table-scroll">
                 <table class="data-table">
                   <thead><tr>
-                    <th>שם</th><th>קבוצה</th><th>איבר</th><th>אסטרטגיה</th>
+                    <th>שם</th><th>קבוצה</th><th>ניסוי נוכחי</th><th>הערה</th>
                     <th>שבועות</th><th>ציון Mentor</th><th>השבוע</th><th></th>
                   </tr></thead>
                   <tbody>
@@ -40,8 +40,8 @@ export async function mountTeacherDashboard(app, session, onLogout) {
                         <td>${escapeHtml(`${s.firstName || ''} ${s.lastName || ''}`.trim()
                           || `⚠️ רשומה חסרת שם (${s.username || s.studentId})`)}</td>
                         <td>${escapeHtml(s.group || '—')}</td>
-                        <td>${escapeHtml(s.bodyPart || '—')}</td>
-                        <td>${escapeHtml(s.strategy || '—')}</td>
+                        <td>${escapeHtml(s.experimentName || '—')}</td>
+                        <td>${escapeHtml(s.note || '—')}</td>
                         <td>${s.weeksCompleted}</td>
                         <td>${s.mentorGrade}${s.surplusPoints > 0 ? ` <span class="pill ok">+${s.surplusPoints.toFixed(1)} בונוס</span>` : ''}</td>
                         <td>${s.doneThisWeek ? '<span class="pill ok">בוצע</span>' : '<span class="pill bad">חסר</span>'}</td>
@@ -70,7 +70,7 @@ export async function mountTeacherDashboard(app, session, onLogout) {
 
             <div class="panel glass">
               <h3>📥 ייבוא תלמידים מקובץ Excel</h3>
-              <p class="form-note" style="margin-top:0;">עמודות נדרשות: שם פרטי, שם משפחה, תעודת זהות מלאה, תאריך לידה, קבוצה, איבר התמחות קבוצתי, אסטרטגיית מודל.
+              <p class="form-note" style="margin-top:0;">עמודות נדרשות: שם פרטי, שם משפחה, תעודת זהות מלאה, תאריך לידה, קבוצה. עמודת "הערה" אופציונלית.
                 שם משתמש ייגזר משם פרטי + 4 ספרות אחרונות של ת"ז, וסיסמה ראשונית מתאריך הלידה. ת"ז המלאה לא עוזבת את הדפדפן.</p>
               <div class="field"><input type="file" id="excel-file-input" accept=".xlsx,.xls"></div>
               <button type="button" id="parse-excel-btn" class="secondary" style="width:100%;">ניתוח קובץ</button>

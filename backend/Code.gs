@@ -17,6 +17,43 @@ const SHEET_USAGE = 'Usage';
 const SHEET_ARTIFACTS = 'Artifacts';
 
 /**
+ * מבנה הקורס: שדרה אחת של שיטה, שרצה על מודולים מתחלפים של מאגרים.
+ *
+ * כל תלמיד/ה מריץ/ה את *כל* ארבעת הניסויים - זו הסיבה שאין כאן "אסטרטגיה
+ * אישית". מה שמשתנה בין תלמידים הוא הקצב וההסבר, לא המשימה. המורה קובע/ת
+ * את המאגר הפעיל (חלוקת ערכות האימון היא פיזית ממילא), והתלמיד/ה מתקדם/ת
+ * בסולם הניסויים בקצב שלו/ה.
+ *
+ * אותו אוצר מילים בדיוק מופיע גם ב-tools/notebook. שתי רשימות נפרדות כבר
+ * גרמו כאן פעם להיפוך מלא של תוצאות - שם אחד לכל מושג, בכל המערכת.
+ */
+const MODULES = {
+  malaria: 'מלריה — תאי דם',
+  chest:   'צילומי חזה',
+  mura:    'MURA — צילומי גפיים',
+};
+const DEFAULT_MODULE = 'malaria';
+
+const EXPERIMENTS = {
+  curve:        'עקומת למידה',
+  balance:      'יחסי איזון',
+  source:       'הכללה בין מקורות',
+  intervention: 'התערבות — תיקון הבעיה',
+};
+const EXPERIMENT_ORDER = ['curve', 'balance', 'source', 'intervention'];
+
+/** מה כל ניסוי בודק - נכנס לפרומפט כדי שהמנטור ישאל על הדבר הנכון. */
+const EXPERIMENT_QUESTION = {
+  curve:        'כמה תמונות באמת צריך, ואיפה העקומה מתיישרת',
+  balance:      'מה קורה כשמחלקה אחת נדירה, וכיצד דיוק כולל מסתיר זאת',
+  source:       'האם המודל למד את הממצא הרפואי או את המקור שממנו הגיעה התמונה',
+  intervention: 'האם תיקון שהתלמיד/ה הציע/ה באמת עובד, ומה מחירו',
+};
+
+const moduleName = k => MODULES[k] || MODULES[DEFAULT_MODULE];
+const experimentName = k => EXPERIMENTS[k] || EXPERIMENTS.curve;
+
+/**
  * תיקיית-על אחת, ובתוכה תיקייה לכל תלמיד/ה עם תת-תיקיות לפי סוג התוצר.
  * ה-kind מגיע מהדפדפן ולכן הוא נבדק מול הרשימה הזו בלבד - נתיב שנבנה
  * ממחרוזת חופשית של הלקוח מאפשר כתיבה לכל מקום ב-Drive.
@@ -103,6 +140,9 @@ function routeAction(action, payload) {
     case 'getCurrentWeek':
       requireAuth(payload);
       return getCurrentWeekInfo();
+    case 'setCurrentExperiment':
+      requireSelfOrAdmin(payload, payload.studentId);
+      return setCurrentExperiment(payload.studentId, payload.experiment);
     // התיוק נעשה תמיד לפי הזהות שבטוקן, ולעולם לא לפי studentId שנשלח
     // בבקשה - אחרת תלמיד/ה יכול/ה היה לתייק קבצים בתיקייה של אחר/ת.
     case 'saveArtifact':
@@ -121,7 +161,7 @@ function routeAction(action, payload) {
       return importRoster(payload.students);
     case 'startNewWeek':
       requireAdmin(payload);
-      return startNewWeek(payload.topicText);
+      return startNewWeek(payload.topicText, payload.module);
     case 'updateCurrentWeekTopic':
       requireAdmin(payload);
       return updateCurrentWeekTopic(payload.topicText);
@@ -206,8 +246,8 @@ function logout(token) {
 // שהמערכת לא תכתוב בשקט לגיליון של מערכת אחרת עם עמודות בשמות דומים.
 const SHEET_SCHEMAS = {};
 SHEET_SCHEMAS[SHEET_USERS] = ['studentId', 'username', 'passHash', 'mustChangePassword', 'role',
-  'firstName', 'lastName', 'last4Id', 'birthDate', 'group', 'bodyPart', 'strategy', 'createdAt'];
-SHEET_SCHEMAS[SHEET_TOPICS] = ['weekNumber', 'topicText', 'setAt'];
+  'firstName', 'lastName', 'last4Id', 'birthDate', 'group', 'note', 'currentExperiment', 'createdAt'];
+SHEET_SCHEMAS[SHEET_TOPICS] = ['weekNumber', 'topicText', 'module', 'setAt'];
 SHEET_SCHEMAS[SHEET_CHECKINS] = ['checkInId', 'studentId', 'weekNumber', 'date', 'image1Url', 'image2Url',
   'studentSummary', 'transcriptJson', 'aiMemorySummary', 'mentorFeedback', 'score',
   'teacherOverrideScore', 'teacherNote', 'docLink', 'sessionSeconds', 'status'];
@@ -328,7 +368,7 @@ function resetStudentPassword(studentId, newPassword) {
  * username/password ותחתוך ת"ז ל-4 ספרות אחרונות. תעודת הזהות המלאה **לא
  * מגיעה לשרת בכלל** - זו הגנת הפרטיות הראשונה (השנייה: גם אם הייתה מגיעה,
  * לא הייתה נכתבת לגיליון).
- * students: [{firstName, lastName, username, password, last4Id, group, bodyPart, strategy}]
+ * students: [{firstName, lastName, username, password, last4Id, birthDateLabel, group, note}]
  */
 function importRoster(students) {
   if (!students || !students.length) throw new Error('לא התקבלו תלמידים לייבוא');
@@ -346,7 +386,8 @@ function importRoster(students) {
     }
     const studentId = 's_' + Utilities.getUuid().slice(0, 8);
     usersSheet.appendRow([studentId, s.username, sha256(s.password), false, 'student', s.firstName, s.lastName || '',
-      s.last4Id || '', s.birthDateLabel || '', s.group || '', s.bodyPart || '', s.strategy || '', new Date()]);
+      s.last4Id || '', s.birthDateLabel || '', s.group || '', s.note || '',
+      EXPERIMENT_ORDER[0], new Date()]);
     existing.push({ username: s.username }); // מונע כפילויות בתוך אותו קובץ
     results.push({ firstName: s.firstName, username: s.username, ok: true, status: 'נוצר' });
   });
@@ -360,12 +401,33 @@ function getCurrentWeekInfo() {
   return topics[topics.length - 1];
 }
 
-function startNewWeek(topicText) {
+function startNewWeek(topicText, module) {
   const sheet = getSheet(SHEET_TOPICS);
   const current = getCurrentWeekInfo();
   const nextWeek = (Number(current.weekNumber) || 0) + 1;
-  sheet.appendRow([nextWeek, topicText || '', new Date()]);
-  return { weekNumber: nextWeek, topicText: topicText || '' };
+  // ברירת המחדל היא המאגר של השבוע הקודם: מעבר מודול הוא אירוע נדיר ומכוון,
+  // ולא משהו שצריך לבחור מחדש בכל שבוע.
+  const mod = MODULES[module] ? module : (current.module || DEFAULT_MODULE);
+  sheet.appendRow([nextWeek, topicText || '', mod, new Date()]);
+  return { weekNumber: nextWeek, topicText: topicText || '',
+           module: mod, moduleName: moduleName(mod) };
+}
+
+/** התלמיד/ה מסמן/ת באיזה ניסוי הוא/היא נמצא/ת. הקצב אישי, המשימות זהות. */
+function setCurrentExperiment(studentId, experiment) {
+  if (!EXPERIMENTS[experiment]) throw new Error('ניסוי לא מוכר: ' + experiment);
+  const sheet = getSheet(SHEET_USERS);
+  const headers = sheet.getDataRange().getValues()[0];
+  const col = headers.indexOf('currentExperiment') + 1;
+  const idCol = headers.indexOf('studentId');
+  const values = sheet.getDataRange().getValues();
+  for (let r = 1; r < values.length; r++) {
+    if (values[r][idCol] === studentId) {
+      sheet.getRange(r + 1, col).setValue(experiment);
+      return { ok: true, experiment: experiment, experimentName: EXPERIMENTS[experiment] };
+    }
+  }
+  throw new Error('תלמיד לא נמצא');
 }
 
 function updateCurrentWeekTopic(topicText) {
@@ -387,9 +449,13 @@ function getStudentContext(studentId) {
   const lastGraded = checkIns.filter(c => c.status === 'graded').sort((a, b) => b.weekNumber - a.weekNumber)[0];
   return {
     firstName: user.firstName,
-    bodyPart: user.bodyPart,
-    strategy: user.strategy,
     group: user.group,
+    note: user.note,
+    module: week.module || DEFAULT_MODULE,
+    moduleName: moduleName(week.module),
+    currentExperiment: user.currentExperiment || EXPERIMENT_ORDER[0],
+    experimentName: experimentName(user.currentExperiment),
+    experiments: EXPERIMENT_ORDER.map(k => ({ key: k, name: EXPERIMENTS[k] })),
     weekNumber: week.weekNumber,
     topicText: week.topicText,
     priorSummary: lastGraded ? lastGraded.aiMemorySummary : '',
@@ -402,19 +468,31 @@ function buildSystemPrompt(ctx) {
   return [
     '[זהות ותפקיד]',
     'אתה מנטור רפואי-טכנולוגי, מומחה למדעי הנתונים ובוחן פדגוגי. מטרתך היא לאתגר ולהעריך',
-    'תלמידי כיתה י\' המפתחים מודל AI לאבחון רנטגן, באמצעות תשאול סוקרטי - וגם לשמש עוזר',
-    'טכני/מקצועי חופשי מחוץ לחלק המוערך.',
+    'תלמידי כיתה י' החוקרים מודלי AI לאבחון תמונה רפואית, באמצעות תשאול סוקרטי -',
+    'וגם לשמש עוזר טכני/מקצועי חופשי מחוץ לחלק המוערך.',
+    '',
+    '[מבנה הקורס]',
+    'התלמידים אינם "בונים מודל" - הם מריצים ניסויים מבוקרים על מודל שאימנו, ובודקים',
+    'מה באמת משפיע על התוצאה. ארבעת הניסויים, שכל תלמיד/ה מריץ/ה את כולם:',
+    EXPERIMENT_ORDER.map(function (k, i) {
+      return '  ' + (i + 1) + '. ' + EXPERIMENTS[k] + ' - ' + EXPERIMENT_QUESTION[k];
+    }).join('
+'),
+    'לצד כל ניסוי יש כלי בדיקה: מפת קשב (איפה המודל הסתכל) וכלי הפרעות (האם זה באמת',
+    'מה שקובע). כל ניסוי מתועד במחברת ניסוי: השערה שננעלת *לפני* המדידה, תנאים',
+    'מבוקרים, מדידה, ומסקנה.',
     '',
     '[הקשר התלמיד - נשלף מהמערכת, לא מהתלמיד]',
     'שם התלמיד: ' + (ctx.firstName || '(חסר)'),
-    'איבר ההתמחות: ' + (ctx.bodyPart || '(חסר)'),
-    'אסטרטגיית מחקר אישית: ' + (ctx.strategy || '(חסר)') + ' (תקן = דאטה מושלם, הטיות = חוסר איזון, רעשים = הפרעות פיזיקליות)',
+    'המאגר הפעיל: ' + (ctx.moduleName || '(חסר)'),
+    'הניסוי הנוכחי: ' + (ctx.experimentName || '(חסר)') +
+      ' - בודק ' + (EXPERIMENT_QUESTION[ctx.currentExperiment] || ''),
     'נושא השיעור השבועי: ' + (ctx.topicText || '(לא הוזן)'),
-    'סיכום הצ\'ק-אין המוערך האחרון: ' + (ctx.priorSummary || '(אין - זה הצ\'ק-אין הראשון)'),
+    'סיכום הצ'ק-אין המוערך האחרון: ' + (ctx.priorSummary || '(אין - זה הצ'ק-אין הראשון)'),
     '',
-    'חשוב: הפרטים למעלה כבר ידועים לך. **אסור לשאול את התלמיד/ה מה איבר ההתמחות שלו/ה',
-    'או איזו אסטרטגיה בחר/ה** - זה משדר שהמערכת לא מכירה אותו/ה. פנה/י בשם הפרטי',
-    'והתייחס/י לאיבר ולאסטרטגיה כעובדה ידועה כבר מההודעה הראשונה.',
+    'חשוב: הפרטים למעלה כבר ידועים לך. **אסור לשאול את התלמיד/ה על איזה מאגר הוא/היא',
+    'עובד/ת או באיזה ניסוי הוא/היא נמצא/ת** - זה משדר שהמערכת לא מכירה אותו/ה. פנה/י',
+    'בשם הפרטי והתייחס/י למאגר ולניסוי כעובדה ידועה כבר מההודעה הראשונה.',
     'אם ערך כלשהו מופיע כ-"(חסר)" - אל תמציא אותו ואל תבקש מהתלמיד/ה להשלים אותו;',
     'ציין/י בקצרה שיש תקלה בנתונים ושכדאי לפנות למורה.',
     '',
@@ -426,15 +504,19 @@ function buildSystemPrompt(ctx) {
         'אם עוד לא הועלו 2 תמונות התקדמות + סיכום מילולי של השבוע - בקש זאת. הודע לתלמיד',
         'במפורש שאתה עומד לשאול אותו שאלות שיזכו אותו בציון.',
         '',
-        'בניית השאלה הפותחת (חובה): שאלה אחת בלבד, המשלבת שלושה אלמנטים - (1) איבר',
-        'ההתמחות, (2) מטרת האסטרטגיה האישית, (3) נושא השיעור השבועי. אסור שאלות "גוגל"',
+        'בניית השאלה הפותחת (חובה): שאלה אחת בלבד, המשלבת שלושה אלמנטים - (1) המאגר',
+        'הפעיל, (2) השאלה שהניסוי הנוכחי בודק, (3) נושא השיעור השבועי. אסור שאלות "גוגל"',
         '(שינון עובדתי, כמו "כמה עצמות יש בכתף?"). חובה שאלות מבוססות-תרחיש שמציגות',
-        'בעיה/קונפליקט קונקרטי מתוך העבודה שלו.',
+        'בעיה/קונפליקט קונקרטי מתוך המדידות שלו/ה.',
         'דוגמה גרועה: "מה זה פיקסל?"',
-        'דוגמה טובה (רעשים, אגן): "השבוע למדנו שרזולוציה היא רשת של פיקסלים. באסטרטגיית',
-        'הרעשים שלך על איבר האגן, אם תוריד צילום ברזולוציה נמוכה מאוד, האם לדעתך המודל',
-        'ייכשל בגלל חוסר יכולת לראות את קו השבר, או בגלל שהוא יבלבל פיקסלים גדולים עם',
-        'מבנה סחוס? נמק את עמדתך."',
+        'דוגמה טובה (עקומת למידה, מלריה): "אימנת על 50 תמונות וקיבלת 88%, ועל 400',
+        'וקיבלת 94%. במקביל, מפת הקשב הראתה שהמודל מסתכל גם על שולי התמונה ולא רק על',
+        'התא. איך שתי העובדות מתיישבות - האם ששת האחוזים הנוספים הם זיהוי טוב יותר של',
+        'הטפיל, או ניצול טוב יותר של הרקע? ואיזו בדיקה תכריע בין השתיים?"',
+        '',
+        'העדף/י שאלות שדורשות להתייחס למספרים שהתלמיד/ה עצמו/ה מדד/ה, ולסתירות בין',
+        'המספר לבין מה שכלי הבדיקה הראו. ההבחנה בין "המודל צדק" ל"המודל צדק מהסיבה',
+        'הנכונה" היא לב הקורס.',
         '',
         'ניהול השיחה: שאל שאלה אחת בלבד והמתן לתשובה. בלי פסקאות ארוכות. סולם סוקרטי לפי',
         'איכות התשובה:',
@@ -444,9 +526,10 @@ function buildSystemPrompt(ctx) {
         '    ש...?") כדי שהתלמיד יבין בעצמו שטעה.',
         'מקסימום 3 חילופי דברים (תורות).',
         '',
-        'מתן ציון (בסוף השיחה המוערכת בלבד): 40% דיוק מדעי/מושגי (מונחים כמו רזולוציה,',
-        'הנחתה, מטריצת פיקסלים, סחוס לעומת עצם, False Positives/Negatives) - 40% חיבור',
-        'לאסטרטגיה האישית - 20% ביסוס ונימוק. רמות: 9-10 מצוין, 7-8 טוב, 5-6 חלקי, 1-4',
+        'מתן ציון (בסוף השיחה המוערכת בלבד): 40% דיוק מדעי/מושגי (מונחים כמו רגישות',
+        'וספציפיות, דליפת נתונים, קיצור דרך, מפת קשב, False Positives/Negatives) - 40%',
+        'חיבור לניסוי שהוא/היא מריץ/ה ולמספרים שמדד/ה - 20% ביסוס ונימוק, כולל נכונות',
+        'לומר "המדידה לא מכריעה". רמות: 9-10 מצוין, 7-8 טוב, 5-6 חלקי, 1-4',
         'דורש שיפור ניכר. אזהרה: אל תהיה רך מדי - תשובות של מילה אחת/חוסר הבנה מוחלט',
         'מקבלות ציון נמוך (4-6) עם הסבר.',
         '',
@@ -468,8 +551,10 @@ function buildSystemPrompt(ctx) {
     '   מסקנת מחקר). אם הוא מבקש ישירות "תן לי את התשובה" - הכוון אותו לחשוב בשלבים.',
     '2. סיוע טכני בהפעלת כלי אימון חיצוניים (כגון Teachable Machine) - הסבר שלבים, עזרה',
     '   בפתרון תקלות נפוצות.',
-    '3. מענה מקצועי ומדויק על שאלות בתחום הרפואה והדימות הרפואי (אנטומיה, פיזיקת קרינת',
-    '   רנטגן, מינוח), ברמה המתאימה לתלמיד תיכון.',
+    '3. מענה מקצועי ומדויק על שאלות בתחום הרפואה והדימות (אנטומיה, מיקרוסקופיה,',
+    '   פיזיקת קרינת רנטגן, מינוח), ברמה המתאימה לתלמיד תיכון.',
+    '4. עזרה בקריאת תוצאות הכלים: מטריצת בלבול, בחירת סף, מפת קשב, טבלת ההפרעות.',
+    '   מותר להסביר מה *מודד* כל מדד; אסור לומר מה המסקנה מהמספרים שלו/ה.',
     'במצב ב\' אל תזכיר ציונים ואל תיתן ציון.',
     '',
     'לגבי היקף העזרה: היה נדיב ופרשני לטובת התלמיד. שאלות על הצגת התוצאות, על ניתוח',
@@ -847,7 +932,9 @@ function getDashboard() {
     const doneThisWeek = mine.some(c => Number(c.weekNumber) === Number(week.weekNumber) && c.status === 'graded');
     return {
       studentId: u.studentId, firstName: u.firstName, lastName: u.lastName,
-      group: u.group, bodyPart: u.bodyPart, strategy: u.strategy,
+      group: u.group, note: u.note,
+      currentExperiment: u.currentExperiment || EXPERIMENT_ORDER[0],
+      experimentName: experimentName(u.currentExperiment),
       weeksCompleted: mine.length, mentorGrade: grade, surplusPoints,
       doneThisWeek, lastScore: mine.length ? scores[scores.length - 1] : null,
     };
