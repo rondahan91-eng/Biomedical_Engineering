@@ -25,8 +25,10 @@
 import argparse
 import csv
 import random
+import re
 import shutil
 import sys
+from collections import defaultdict
 from pathlib import Path
 
 CURVE_SIZES = [25, 50, 100, 200, 400]
@@ -71,8 +73,12 @@ def main():
     ap.add_argument('--out', required=True)
     ap.add_argument('--experiment', required=True, choices=['curve', 'balance', 'source'])
     ap.add_argument('--exclude', nargs='*', default=[], help='תיקיות שתמונותיהן אסורות (benchmark)')
-    ap.add_argument('--group-a', default=None, help='קידומת/מחרוזת שמזהה מקור א׳')
-    ap.add_argument('--group-b', default=None)
+    ap.add_argument('--group-a', default=None, help='ביטוי רגולרי שמזהה מקור א׳')
+    ap.add_argument('--group-b', default=None, help='ביטוי רגולרי שמזהה מקור ב׳')
+    ap.add_argument('--group-regex', default=None,
+                    help='חילוץ מזהה שקופית/מטופל משם הקובץ, למשל "(.+?)_cell_"')
+    ap.add_argument('--source-bench', type=int, default=50, help='גודל ערכת מבחן לכל מקור')
+    ap.add_argument('--source-cap', type=int, default=200, help='תקרת אימון לכל מקור')
     ap.add_argument('--dry-run', action='store_true')
     args = ap.parse_args()
 
@@ -132,31 +138,73 @@ def main():
         if not (args.group_a and args.group_b):
             sys.exit('ניסוי ההכללה דורש --group-a ו---group-b')
 
-        # מחלקה שאין בה את הדפוס אינה מסוננת אלא נשארת קבועה בשני התנאים.
-        # כך היא משמשת בקרה, ומה שמשתנה הוא רק המקור של המחלקה השנייה -
-        # וזה בדיוק מה שהניסוי אמור לבודד. מאגרים רפואיים כמעט תמיד מתחלקים
-        # למקורות באופן שונה בכל מחלקה, ולכן סינון גורף היה מפיל את הניסוי.
-        split_classes = [c for c, fs in pools.items()
-                         if any(args.group_a.lower() in f.name.lower() for f in fs)
-                         or any(args.group_b.lower() in f.name.lower() for f in fs)]
-        fixed = [c for c in pools if c not in split_classes]
-        if not split_classes:
-            sys.exit(f'אף מחלקה לא מכילה "{args.group_a}" או "{args.group_b}".')
-        print(f'  מפוצל לפי מקור: {", ".join(split_classes)}')
-        if fixed:
-            print(f'  קבוע כבקרה:     {", ".join(fixed)}')
+        # ההתאמה היא ביטוי רגולרי ולא תת-מחרוזת. במלריה המקורות נבדלים
+        # בווריאנט של שם הקובץ, ו-"ThinF" מוכל בתוך "NThinF" - התאמת
+        # תת-מחרוזת הייתה משייכת את אותם קבצים לשני המקורות.
+        try:
+            rx_a = re.compile(args.group_a, re.I)
+            rx_b = re.compile(args.group_b, re.I)
+        except re.error as e:
+            sys.exit(f'ביטוי רגולרי שגוי: {e}')
+
+        grp = re.compile(args.group_regex) if args.group_regex else None
+        def slide_of(f):
+            m = grp.match(f.name) if grp else None
+            return m.group(1) if m else f.name
+
+        # פיצול לפי מקור, ובתוך כל מקור - קיבוץ לפי שקופית/מטופל
+        srcs = {}
+        for tag, rx in (('a', rx_a), ('b', rx_b)):
+            srcs[tag] = {}
+            for cls, files in pools.items():
+                by = defaultdict(list)
+                for f in files:
+                    if rx.search(f.name):
+                        by[slide_of(f)].append(f)
+                srcs[tag][cls] = by
+
+        # שקופית שנופלת בשני המקורות תשבור את הניסוי
+        for cls in pools:
+            both = set(srcs['a'][cls]) & set(srcs['b'][cls])
+            if both:
+                sys.exit(f'{len(both)} שקופיות ב-{cls} תואמות את שני הביטויים. '
+                         'המקורות חייבים להיות זרים.')
+
+        # ערכת מבחן נפרדת לכל מקור, נלקחת ראשונה וברמת שקופית. בלי זה אי אפשר
+        # למדוד הכללה: הערכה המשותפת מכילה תערובת, וציון עליה מערבב מקור מוכר
+        # עם מקור חדש.
+        def carve(by, n):
+            keys = sorted(by); rng.shuffle(keys)
+            bench, rest, used = [], [], set()
+            for k in keys:
+                if len(bench) < n:
+                    bench.extend(by[k]); used.add(k)
+                else:
+                    rest.extend(by[k])
+            return bench[:n], rest
+
+        nb = args.source_bench
+        carved = {t: {c: carve(srcs[t][c], nb) for c in pools} for t in ('a', 'b')}
+
+        # גודל אימון זהה לשני המקורות - אחרת ההפרש בין הרצות משקף גם כמות
+        # וגם מקור, ולא נדע מי אחראי.
+        avail = [len(carved[t][c][1]) for t in ('a', 'b') for c in pools]
+        n_train = min(min(avail), args.source_cap)
+        print(f'  מקור א׳: /{args.group_a}/   מקור ב׳: /{args.group_b}/')
+        for t in ('a', 'b'):
+            for c in pools:
+                b, r = carved[t][c]
+                print(f'    {t}·{c:<14} מבחן {len(b):>3}  זמין לאימון {len(r):>4}')
+        print(f'  גודל אימון אחיד: {n_train} לכל מחלקה')
+        if n_train < 25:
+            print('  [!] ערכה קטנה מאוד - התוצאה תהיה רועשת')
         print()
 
-        cap = 200
-        for tag, needle in (('only_a', args.group_a), ('only_b', args.group_b)):
-            for cls in split_classes:
-                sub = [f for f in pools[cls] if needle.lower() in f.name.lower()]
-                if len(sub) < 25:
-                    print(f'  [!] "{needle}" ב-{cls}: רק {len(sub)} תמונות - ערכה קטנה')
-                if sub:
-                    sets.append((Path(f'source/{tag}') / cls, sub[:cap]))
-            for cls in fixed:
-                sets.append((Path(f'source/{tag}') / cls, pools[cls][:cap]))
+        for t, label in (('a', args.group_a), ('b', args.group_b)):
+            for cls in pools:
+                bench, rest = carved[t][cls]
+                sets.append((Path(f'source/train_{t}') / cls, rest[:n_train]))
+                sets.append((Path(f'source/bench_{t}') / cls, bench))
 
     if not sets:
         sys.exit('לא נוצרה אף ערכה - בדקו את הפרמטרים.')
