@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>מחברת ניסוי — מה התלמיד מתעד, ואיך אתה קורא את זה</title><style>
+:root{--bg:#fff;--ink:#0d1f2b;--ink2:#4a6478;--ink3:#8aa2b3;--line:#e0e9f0;
+ --brand:#0891b2;--brand2:#0e7490;--soft:#e6fafd;--ok:#059669;--warn:#b45309;--surface:#f7fafc}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);direction:rtl;
+ font:16px/1.75 'Segoe UI','Assistant',Arial,sans-serif;
+ -webkit-print-color-adjust:exact;print-color-adjust:exact}
+.wrap{max-width:860px;margin:0 auto;padding:44px 28px 90px}
+h1{font-size:30px;line-height:1.3;margin:0 0 6px;letter-spacing:-.4px}
+h1+p{color:var(--ink2);margin:0 0 30px}
+h2{font-size:21px;margin:38px 0 12px;padding-bottom:8px;border-bottom:2px solid var(--line)}
+h3{font-size:17px;margin:26px 0 8px;color:var(--brand2)}
+p,li{font-size:15.5px}
+hr{border:none;border-top:1px solid var(--line);margin:34px 0}
+table{width:100%;border-collapse:collapse;margin:16px 0;font-size:14.5px}
+th,td{border:1px solid var(--line);padding:9px 12px;text-align:right;vertical-align:top}
+th{background:var(--surface);font-weight:700;font-size:13.5px;color:var(--ink2)}
+tr:nth-child(even) td{background:#fcfdfe}
+code{background:var(--surface);border:1px solid var(--line);border-radius:5px;
+ padding:1px 6px;font-family:Consolas,monospace;font-size:13.5px;direction:ltr;display:inline-block}
+pre{background:var(--surface);border:1px solid var(--line);border-radius:10px;
+ padding:14px 16px;overflow-x:auto;direction:ltr;text-align:left}
+pre code{background:none;border:none;padding:0;font-size:13px;line-height:1.65}
+blockquote{margin:18px 0;padding:13px 17px;background:var(--soft);
+ border-inline-start:4px solid var(--brand);border-radius:0 9px 9px 0;color:var(--ink2)}
+blockquote p{margin:0}
+blockquote strong{color:var(--ink)}
+a{color:var(--brand2)}
+ul,ol{padding-inline-start:24px}
+li{margin:5px 0}
+strong{color:var(--ink)}
+@media print{
+  body{font-size:11.5pt}
+  .wrap{max-width:none;padding:0}
+  h2{break-after:avoid;page-break-after:avoid}
+  table,blockquote,pre{break-inside:avoid;page-break-inside:avoid}
+}
+</style></head><body><div class="wrap"><h1>מחברת ניסוי — מה התלמיד מתעד, ואיך אתה קורא את זה</h1><p><code>tools/notebook/</code> · הכלי שהופך &quot;אימנתי מודל וראיתי מה יצא&quot; לניסוי.</p><hr><h2>למה זה כלי ולא טופס Word</h2><p>שלוש התנהגויות שטופס לא יכול לספק:</p><ol><li><strong>נועל את ההשערה בחותמת זמן</strong> לפני שסעיף המדידה נפתח</li><li><strong>שולף את המספרים</strong> מההרצות השמורות — לא מוקלדים ביד</li><li><strong>מסרב לתת לסתירה לעבור בשקט</strong> — בודק את הרשומה לפני הגשה</li></ol><hr><h2>שבעת השלבים</h2><h3>1 · איזה ניסוי</h3><p>ארבעה צ׳יפים, מאגר, שם, תאריך. <strong>לכל ניסוי טופס משלו</strong> — שאלה, משתנה, צ׳קליסט ומלכודת ייעודיים.</p><blockquote><p><strong>למה לא טופס גנרי:</strong> טופס גנרי מייצר תיעוד גנרי, והמלכודות הן עיקר הלמידה.</p></blockquote><h3>2 · השערה — ננעלת לפני המדידה</h3><p>התלמיד כותב מה הוא צופה <strong>ולמה</strong>, ולוחץ נעילה. סעיפים 3–6 <strong>נעולים</strong> עד אז.</p><p><strong>פתיחה מחדש מותרת</strong> — אבל מסומנת בייצוא: <code>[שימו לב: ההשערה נערכה אחרי שהמדידה החלה]</code></p><blockquote><p><strong>החלטת עיצוב שכדאי להסביר לתלמידים:</strong> חסימה מוחלטת רק הייתה שולחת אותם לפתוח רשומה חדשה, והעובדה הייתה נעלמת. <strong>שקיפות עדיפה על מניעה.</strong></p></blockquote><p><strong>איך לקרוא השערה:</strong> האם היא <strong>ניתנת להפרכה</strong>?</p><table><thead><tr><th>השערה</th><th>הערכה</th></tr></thead><tbody><tr><td>&quot;הדיוק ימשיך להשתפר&quot;</td><td>❌ כל תוצאה חיובית מאשרת אותה</td></tr><tr><td>&quot;העקומה תתיישר סביב n=100; מ-100 ל-400 יתווספו פחות מ-3 נקודות&quot;</td><td>✅ אפשר להפריך</td></tr></tbody></table><p>הרמז בכלי דורש <strong>מספר</strong>, לא כיוון.</p><h3>3 · תנאים</h3><p>המשתנה שהשתנה (מוצג אוטומטית) + צ׳קליסט מה נשמר קבוע + המלכודת של הניסוי.</p><p><strong>מה לבדוק:</strong> האם כל התיבות סומנו? תיבה לא מסומנת מופיעה בייצוא כ-<code>[ ]</code> — כלומר התלמיד <strong>הצהיר שלא וידא</strong>. זה עדיף על סימון אוטומטי.</p><h3>4 · מדידה</h3><p>טבלה עם שורה לכל תנאי. לכל שורה בוחרים <strong>הרצה שמורה</strong>, והמספרים נשלפים.</p><p><strong>מקור ההרצות:</strong> אותו דפדפן (אם הכלים נפתחו מאותה כתובת), או ייבוא <code>runs_comparison.csv</code>.</p><p><strong>סיכום אוטומטי</strong> — וכל ניסוי עוקב אחרי <strong>המדד שנושא את הממצא שלו</strong>:</p><table><thead><tr><th>ניסוי</th><th>המדד</th></tr></thead><tbody><tr><td>עקומת למידה</td><td>דיוק</td></tr><tr><td><strong>יחסי איזון</strong></td><td><strong>רגישות</strong></td></tr><tr><td>הכללה בין מקורות</td><td>דיוק</td></tr><tr><td>התערבות</td><td>דיוק</td></tr></tbody></table><blockquote><p><strong>למה זה קריטי:</strong> בניסוי האיזון הדיוק הכולל הוא בדיוק מה שמסתיר את הבעיה. בתרחיש 90/10 הדיוק ירד רק ל-89% בזמן שהרגישות קרסה ל-34%.</p></blockquote><p><strong>זיהוי &quot;לא השפיע&quot;:</strong> אם הטווח קטן מ-2%, הכלי אומר:</p><blockquote><p><em>הערכים כמעט זהים. המשתנה שבדקתם כמעט לא השפיע — <strong>וזה ממצא בפני עצמו, לא כישלון של הניסוי</strong>.</em></p></blockquote><p>זה נכתב עבור מלריה, שעקומתה שטוחה יחסית.</p><h3>5 · תצפית בכלי הבדיקה</h3><p>מפת קשב + האם נמצא קיצור דרך.</p><p><strong>מה לחפש:</strong> תיאור מספרי, לא רושם כללי. &quot;בדקתי 6 תמונות, הקשב על הכתם הכהה במרכז, שינוי מרבי 34%&quot; — לעומת &quot;המודל הסתכל על התא&quot;.</p><h3>6 · מסקנה</h3><p>האם ההשערה התאמתה (התאמתה / חלקית / הופרכה / <strong>לא הכריעה</strong>), מה למדתי, <strong>מה הניסוי לא מוכיח</strong>, והשאלה הבאה.</p><blockquote><p><strong>&quot;מה הניסוי לא מוכיח&quot; הוא השדה שמפריד בין דיווח למחקר.</strong> כמעט תמיד יש תשובה: מאגר יחיד, ערכת מבחן קטנה, אימון יחיד ללא חזרות.</p></blockquote><h3>7 · שמירה וייצוא</h3><p>טקסט מובנה להדבקה ביומן, הורדה כקובץ, הדפסה ל-PDF. הרשומות נשמרות בדפדפן.</p><hr><h2>בדיקת העקביות — מה שאתה מקבל בחינם</h2><p>הכלי בודק חמישה דברים לפני ההגשה, וההתראות <strong>נכנסות לקובץ הייצוא</strong> אם לא טופלו — כך שאתה רואה מה נשאר פתוח.</p><table><thead><tr><th>התראה</th><th>מתי</th></tr></thead><tbody><tr><td><strong>פחות מ-3 תנאים</strong></td><td>&quot;דרך שתי נקודות עובר תמיד קו ישר, ולקו ישר אין נקודת התיישרות&quot;</td></tr><tr><td><strong>קיצור דרך + השערה אוששה</strong></td><td>סתירה — ראו למטה</td></tr><tr><td><strong>השפעה מתונה + אישוש מלא</strong></td><td>ייתכן שזה רעש בין הרצות</td></tr><tr><td><strong>&quot;מה לא מוכיח&quot; ריק</strong></td><td></td></tr><tr><td><strong>&quot;השאלה הבאה&quot; ריקה</strong></td><td></td></tr></tbody></table><h3>הסתירה שההתראה השנייה תופסת</h3><p>זה נולד מרשומה אמיתית מהפיילוט:</p><ul><li>סעיף 5: <strong>&quot;אזור הקשב התמקד במסגרת · קיצור דרך: כן&quot;</strong></li><li>סעיף 6: <strong>&quot;ההשערה התאמתה · כמות התמונות השפיעה&quot;</strong></li></ul><p>אם המודל נשען על קיצור דרך, ייתכן ששיפור המספרים משקף <strong>ניצול טוב יותר של אותו קיצור</strong> ולא למידה טובה יותר. <strong>שתי המסקנות מתאימות לאותם נתונים.</strong></p><p>הכלי לא מכריע במקום התלמיד — הוא דורש שיכריע במפורש, או שיכתוב שאי אפשר להכריע עדיין.</p><hr><h2>איך לתת ציון לרשומה</h2><table><thead><tr><th>מה לחפש</th><th>סימן טוב</th><th>סימן מדאיג</th></tr></thead><tbody><tr><td><strong>השערה</strong></td><td>נוקבת במספר, נכתבה לפני</td><td>&quot;ימשיך להשתפר&quot; · נערכה אחרי</td></tr><tr><td><strong>תנאים</strong></td><td>כל התיבות מסומנות</td><td>תיבות ריקות בלי הסבר</td></tr><tr><td><strong>מדידה</strong></td><td>4–5 תנאים</td><td>2 תנאים ומסקנה נחרצת</td></tr><tr><td><strong>תצפית</strong></td><td>תיאור מספרי</td><td>&quot;המודל הסתכל על התא&quot;</td></tr><tr><td><strong>מסקנה</strong></td><td>מתייחסת למספרים שמדד</td><td>הצהרה כללית</td></tr><tr><td><strong>מגבלות</strong></td><td>לפחות שתיים קונקרטיות</td><td>&quot;—&quot;</td></tr><tr><td><strong>בדיקת עקביות</strong></td><td>&quot;עברה&quot;</td><td>התראות שנגררו לייצוא</td></tr></tbody></table><blockquote><p><strong>השערה שהופרכה אינה כישלון.</strong> ניסוי שמפריך מלמד יותר מניסוי שמאשר את המובן מאליו, ובדוח הוא שווה יותר. שווה לומר את זה מפורשות, אחרת תלמידים יכתבו השערות בטוחות בכוונה.</p></blockquote><hr><h2>הקשר לצ׳ק-אין השבועי</h2><p>הכלי מזכיר מה לצרף: <strong>תרשים אחד</strong> מכלי ההערכה ו<strong>מפת קשב אחת</strong> שמדגימה את הממצא. הטקסט מהמחברת הוא הסיכום הנלווה.</p><p>כל ייצוא מתויק אוטומטית ב-<code>04_מחברת ניסוי</code> שבתיקיית התלמיד ב-Drive.</p><hr><h2>תבנית הרשומה — לתלייה בכיתה</h2><pre><code>1. השאלה        מה אני בודק/ת
+2. השערה        מה אני צופה, ולמה — עם מספר. ננעל לפני המדידה.
+3. תנאים        מה השתנה · מה נשמר קבוע
+4. מדידה        המספרים, מההרצות
+5. תצפית        מה כלי הבדיקה הראו
+6. מסקנה        מה אני יודע/ת עכשיו · מה הניסוי לא מוכיח · השאלה הבאה</code></pre></div></body></html>
