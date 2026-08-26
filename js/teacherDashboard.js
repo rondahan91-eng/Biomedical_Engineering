@@ -62,6 +62,13 @@ export async function mountTeacherDashboard(app, session, onLogout) {
               <h3>🗓️ נושא שבועי נוכחי</h3>
               <p class="form-note" style="margin-top:0;">שבוע ${state.week.weekNumber}${state.week.topicText ? ' · ' + escapeHtml(state.week.topicText) : ' · טרם הוזן נושא'}</p>
               <div class="field"><textarea id="topic-input" rows="2" placeholder="נושא השיעור השבועי...">${escapeHtml(state.week.topicText || '')}</textarea></div>
+              <div class="field">
+                <label for="dataset-url">קישור לערכות האימון (Drive)</label>
+                <input type="text" id="dataset-url" placeholder="https://drive.google.com/..."
+                  value="${escapeHtml(state.week.datasetUrl || '')}">
+                <p class="form-note" style="margin-top:4px;">מוצג לתלמידים במסילה. נשמר
+                  בפתיחת שבוע חדש, ונגרר משבוע לשבוע כל עוד המאגר לא השתנה.</p>
+              </div>
               <div style="display:flex;gap:8px;">
                 <button type="button" id="update-topic-btn" class="secondary" style="flex:1;">עדכון נושא לשבוע הנוכחי</button>
                 <button type="button" id="new-week-btn" style="flex:1;">שבוע חדש ▶</button>
@@ -180,7 +187,8 @@ export async function mountTeacherDashboard(app, session, onLogout) {
       const text = document.getElementById('topic-input').value.trim();
       if (!confirm('להתחיל שבוע חדש (' + (state.week.weekNumber + 1) + ')? זה יאפשר לכל התלמידים לבצע צ\'ק-אין מוערך חדש.')) return;
       try {
-        state.week = await startNewWeek(text);
+        const dsUrl = (document.getElementById('dataset-url').value || '').trim();
+        state.week = await startNewWeek(text, undefined, dsUrl);
         toast('שבוע ' + state.week.weekNumber + ' התחיל');
         await refresh();
       } catch (err) { toast('שגיאה: ' + err.message, true); }

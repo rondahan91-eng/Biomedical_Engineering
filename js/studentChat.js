@@ -113,8 +113,15 @@ export async function mountStudentChat(app, session, onLogout) {
       <div class="mission">
         <h4>המחקר שלי</h4>
         <div class="mission-row"><span>המאגר הפעיל</span><b>${escapeHtml(ctx.moduleName || '—')}</b></div>
-        <p class="form-note" style="margin-top:6px;">המאגר נקבע על ידי המורה. הניסויים —
-          לפי הקצב שלך.</p>
+        ${ctx.datasetUrl
+          ? `<a class="tool-link" style="margin-top:8px" href="${escapeHtml(ctx.datasetUrl)}"
+                target="_blank" rel="noopener noreferrer">
+               <b>ערכות האימון ↗</b><span>מחולקות מראש לפי גודל ויחס</span></a>
+             <p class="form-note" style="margin-top:6px;">אל תורידו את המאגר הגולמי ממקור
+               אחר — הערכות כאן בנויות כך שכל גודל מכיל את הקטן ממנו, ואותה שקופית לא
+               מופיעה גם באימון וגם במבחן.</p>`
+          : `<p class="form-note" style="margin-top:6px;">המאגר נקבע על ידי המורה.
+               קישור לערכות האימון טרם הוזן.</p>`}
       </div>
 
       <div class="ladder">

@@ -161,7 +161,7 @@ function routeAction(action, payload) {
       return importRoster(payload.students);
     case 'startNewWeek':
       requireAdmin(payload);
-      return startNewWeek(payload.topicText, payload.module);
+      return startNewWeek(payload.topicText, payload.module, payload.datasetUrl);
     case 'updateCurrentWeekTopic':
       requireAdmin(payload);
       return updateCurrentWeekTopic(payload.topicText);
@@ -247,7 +247,7 @@ function logout(token) {
 const SHEET_SCHEMAS = {};
 SHEET_SCHEMAS[SHEET_USERS] = ['studentId', 'username', 'passHash', 'mustChangePassword', 'role',
   'firstName', 'lastName', 'last4Id', 'birthDate', 'group', 'note', 'currentExperiment', 'createdAt'];
-SHEET_SCHEMAS[SHEET_TOPICS] = ['weekNumber', 'topicText', 'module', 'setAt'];
+SHEET_SCHEMAS[SHEET_TOPICS] = ['weekNumber', 'topicText', 'module', 'datasetUrl', 'setAt'];
 SHEET_SCHEMAS[SHEET_CHECKINS] = ['checkInId', 'studentId', 'weekNumber', 'date', 'image1Url', 'image2Url',
   'studentSummary', 'transcriptJson', 'aiMemorySummary', 'mentorFeedback', 'score',
   'teacherOverrideScore', 'teacherNote', 'docLink', 'sessionSeconds', 'status'];
@@ -401,16 +401,29 @@ function getCurrentWeekInfo() {
   return topics[topics.length - 1];
 }
 
-function startNewWeek(topicText, module) {
+function startNewWeek(topicText, module, datasetUrl) {
   const sheet = getSheet(SHEET_TOPICS);
   const current = getCurrentWeekInfo();
   const nextWeek = (Number(current.weekNumber) || 0) + 1;
   // ברירת המחדל היא המאגר של השבוע הקודם: מעבר מודול הוא אירוע נדיר ומכוון,
-  // ולא משהו שצריך לבחור מחדש בכל שבוע.
+  // ולא משהו שצריך לבחור מחדש בכל שבוע. אותו היגיון לקישור ערכות האימון.
   const mod = MODULES[module] ? module : (current.module || DEFAULT_MODULE);
-  sheet.appendRow([nextWeek, topicText || '', mod, new Date()]);
+  const url = safeHttpUrl(datasetUrl) || (mod === current.module ? current.datasetUrl || '' : '');
+  sheet.appendRow([nextWeek, topicText || '', mod, url, new Date()]);
   return { weekNumber: nextWeek, topicText: topicText || '',
-           module: mod, moduleName: moduleName(mod) };
+           module: mod, moduleName: moduleName(mod), datasetUrl: url };
+}
+
+/**
+ * מקבל רק http/https. הקישור מוצג לתלמידים כקישור לחיץ, ולכן ערך חופשי
+ * כאן היה מאפשר להזריק javascript: או data: לדף שלהם.
+ */
+function safeHttpUrl(u) {
+  const s = String(u || '').trim();
+  if (!s) return '';
+  if (!/^https?:\/\//i.test(s)) throw new Error('קישור חייב להתחיל ב-http:// או https://');
+  if (/[\s<>"']/.test(s)) throw new Error('הקישור מכיל תווים לא חוקיים');
+  return s;
 }
 
 /** התלמיד/ה מסמן/ת באיזה ניסוי הוא/היא נמצא/ת. הקצב אישי, המשימות זהות. */
@@ -453,6 +466,7 @@ function getStudentContext(studentId) {
     note: user.note,
     module: week.module || DEFAULT_MODULE,
     moduleName: moduleName(week.module),
+    datasetUrl: week.datasetUrl || '',
     currentExperiment: user.currentExperiment || EXPERIMENT_ORDER[0],
     experimentName: experimentName(user.currentExperiment),
     experiments: EXPERIMENT_ORDER.map(k => ({ key: k, name: EXPERIMENTS[k] })),
@@ -492,6 +506,13 @@ function buildSystemPrompt(ctx) {
     'חשוב: הפרטים למעלה כבר ידועים לך. **אסור לשאול את התלמיד/ה על איזה מאגר הוא/היא',
     'עובד/ת או באיזה ניסוי הוא/היא נמצא/ת** - זה משדר שהמערכת לא מכירה אותו/ה. פנה/י',
     'בשם הפרטי והתייחס/י למאגר ולניסוי כעובדה ידועה כבר מההודעה הראשונה.',
+    '',
+    'ערכות האימון: הן מחולקות מראש ומקושרות מהמסילה בצד המסך, תחת "המאגר',
+    'הפעיל". אם נשאלת היכן להשיג תמונות - הפנה/י לשם. **אסור להציע להוריד',
+    'את המאגר הגולמי מ-Kaggle, מ-NIH או מכל מקור אחר**, ואסור להמציא כתובת.',
+    'הערכות המחולקות בנויות כך שכל גודל מכיל את הקטן ממנו, וכל שקופית/מטופל',
+    'נמצא בצד אחד בלבד. הורדה עצמאית הורסת את שתי התכונות האלה בשקט, והניסוי',
+    'מפסיק למדוד את מה שהוא אמור למדוד.',
     'אם ערך כלשהו מופיע כ-"(חסר)" - אל תמציא אותו ואל תבקש מהתלמיד/ה להשלים אותו;',
     'ציין/י בקצרה שיש תקלה בנתונים ושכדאי לפנות למורה.',
     '',

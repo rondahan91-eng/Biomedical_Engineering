@@ -158,6 +158,7 @@ async function callLocal(action, payload) {
       currentExperiment: u.currentExperiment || 'curve',
       experimentName: (DEV_EXPERIMENTS.find(e => e.key === (u.currentExperiment || 'curve')) || {}).name,
       weekNumber: db.week.weekNumber, topicText: db.week.topicText,
+      datasetUrl: db.week.datasetUrl || '',
       priorSummary: lastGraded ? lastGraded.aiMemorySummary : '', gradedThisWeek: doneThisWeek,
     };
   }
@@ -186,7 +187,12 @@ async function callLocal(action, payload) {
   }
 
   if (action === 'startNewWeek') {
-    db.week = { weekNumber: db.week.weekNumber + 1, topicText: payload.topicText || '' };
+    db.week = {
+      weekNumber: db.week.weekNumber + 1,
+      topicText: payload.topicText || '',
+      // נגרר משבוע לשבוע, כמו בשרת
+      datasetUrl: (payload.datasetUrl || '').trim() || db.week.datasetUrl || '',
+    };
     saveDB(db);
     return db.week;
   }
@@ -301,8 +307,8 @@ export async function sendMentorMessage(studentId, history, images, elapsedSecon
 export async function getCurrentWeek() {
   return dispatch('getCurrentWeek', {});
 }
-export async function startNewWeek(topicText) {
-  return dispatch('startNewWeek', { topicText });
+export async function startNewWeek(topicText, module, datasetUrl) {
+  return dispatch('startNewWeek', { topicText, module, datasetUrl });
 }
 export async function updateCurrentWeekTopic(topicText) {
   return dispatch('updateCurrentWeekTopic', { topicText });
