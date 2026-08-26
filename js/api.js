@@ -199,6 +199,8 @@ async function callLocal(action, payload) {
 
   if (action === 'updateCurrentWeekTopic') {
     db.week.topicText = payload.topicText || '';
+    if (payload.datasetUrl !== undefined && payload.datasetUrl !== null)
+      db.week.datasetUrl = String(payload.datasetUrl).trim();
     saveDB(db);
     return db.week;
   }
@@ -310,8 +312,8 @@ export async function getCurrentWeek() {
 export async function startNewWeek(topicText, module, datasetUrl) {
   return dispatch('startNewWeek', { topicText, module, datasetUrl });
 }
-export async function updateCurrentWeekTopic(topicText) {
-  return dispatch('updateCurrentWeekTopic', { topicText });
+export async function updateCurrentWeekTopic(topicText, datasetUrl) {
+  return dispatch('updateCurrentWeekTopic', { topicText, datasetUrl });
 }
 export async function getDashboard() {
   return dispatch('getDashboard', {});

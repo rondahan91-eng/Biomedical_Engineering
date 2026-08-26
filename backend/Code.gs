@@ -164,7 +164,7 @@ function routeAction(action, payload) {
       return startNewWeek(payload.topicText, payload.module, payload.datasetUrl);
     case 'updateCurrentWeekTopic':
       requireAdmin(payload);
-      return updateCurrentWeekTopic(payload.topicText);
+      return updateCurrentWeekTopic(payload.topicText, payload.datasetUrl);
     case 'getDashboard':
       requireAdmin(payload);
       return getDashboard();
@@ -443,13 +443,31 @@ function setCurrentExperiment(studentId, experiment) {
   throw new Error('תלמיד לא נמצא');
 }
 
-function updateCurrentWeekTopic(topicText) {
+/**
+ * מעדכן את השבוע הנוכחי במקום לפתוח חדש.
+ *
+ * מעדכן גם את קישור ערכות האימון: קודם הוא נשמר רק בפתיחת שבוע, והשדה
+ * בפאנל יושב ליד שני הכפתורים - כך שלחיצה על "עדכון נושא" בלעה את הקישור
+ * בשקט. שדה שמוצג ואינו נשמר הוא באג, לא אי-הבנה של המשתמש.
+ */
+function updateCurrentWeekTopic(topicText, datasetUrl) {
   const sheet = getSheet(SHEET_TOPICS);
   const values = sheet.getDataRange().getValues();
-  if (values.length < 2) return startNewWeek(topicText);
+  if (values.length < 2) return startNewWeek(topicText, null, datasetUrl);
   const lastRow = values.length; // 1-based, כולל header
-  sheet.getRange(lastRow, 2).setValue(topicText || '');
-  return { weekNumber: values[lastRow - 1][0], topicText: topicText || '' };
+  const headers = values[0];
+  sheet.getRange(lastRow, headers.indexOf('topicText') + 1).setValue(topicText || '');
+
+  // undefined = הלקוח לא שלח את השדה, ואז לא נוגעים בערך הקיים.
+  // מחרוזת ריקה = בקשה מפורשת לנקות.
+  let url = values[lastRow - 1][headers.indexOf('datasetUrl')] || '';
+  if (datasetUrl !== undefined && datasetUrl !== null) {
+    url = safeHttpUrl(datasetUrl);
+    sheet.getRange(lastRow, headers.indexOf('datasetUrl') + 1).setValue(url);
+  }
+  const mod = values[lastRow - 1][headers.indexOf('module')] || DEFAULT_MODULE;
+  return { weekNumber: values[lastRow - 1][0], topicText: topicText || '',
+           module: mod, moduleName: moduleName(mod), datasetUrl: url };
 }
 
 // -------------------------------------------------------------- הקשר תלמיד

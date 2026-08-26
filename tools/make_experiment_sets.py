@@ -24,6 +24,7 @@
 """
 import argparse
 import csv
+import io
 import random
 import re
 import shutil
@@ -219,10 +220,30 @@ def main():
 
     if not args.dry_run:
         out.mkdir(parents=True, exist_ok=True)
-        with open(out / 'manifest.csv', 'w', newline='', encoding='utf-8-sig') as f:
+        # המניפסט מצטבר ואינו נדרס. כל ניסוי נבנה בהרצה נפרדת, וכתיבה במצב 'w'
+        # מחקה את התיעוד של הניסויים הקודמים - אחרי שלוש הרצות נשאר תיעוד של
+        # האחרונה בלבד. שורה מזוהה לפי (set, filename), כך שהרצה חוזרת של אותו
+        # ניסוי מעדכנת במקום לשכפל.
+        man = out / 'manifest.csv'
+        merged, seen = [], set()
+        if man.exists():
+            with io.open(man, encoding='utf-8-sig', newline='') as f:
+                for r in csv.reader(f):
+                    if len(r) == 4 and r[0] != 'set':
+                        merged.append(r); seen.add((r[0], r[2]))
+        kept = len(merged)
+        replaced = 0
+        new_keys = {(r[0], r[2]) for r in rows}
+        if new_keys & seen:
+            merged = [r for r in merged if (r[0], r[2]) not in new_keys]
+            replaced = kept - len(merged)
+        merged.extend(rows)
+        with io.open(man, 'w', newline='', encoding='utf-8-sig') as f:
             w = csv.writer(f)
             w.writerow(['set', 'class', 'filename', 'source_path'])
-            w.writerows(rows)
+            w.writerows(merged)
+        print(f'\nManifest: {len(rows)} חדשות + {kept - replaced} קיימות'
+              f'{f" ({replaced} הוחלפו)" if replaced else ""} = {len(merged)} שורות')
         print('\nOn disk:')
         for d in sorted(p for p in out.rglob('*') if p.is_dir()):
             n = len([f for f in d.iterdir() if f.suffix.lower() in EXTS])

@@ -66,11 +66,11 @@ export async function mountTeacherDashboard(app, session, onLogout) {
                 <label for="dataset-url">קישור לערכות האימון (Drive)</label>
                 <input type="text" id="dataset-url" placeholder="https://drive.google.com/..."
                   value="${escapeHtml(state.week.datasetUrl || '')}">
-                <p class="form-note" style="margin-top:4px;">מוצג לתלמידים במסילה. נשמר
-                  בפתיחת שבוע חדש, ונגרר משבוע לשבוע כל עוד המאגר לא השתנה.</p>
+                <p class="form-note" style="margin-top:4px;">מוצג לתלמידים במסילה. נשמר בשני
+                  הכפתורים, ונגרר משבוע לשבוע כל עוד המאגר לא השתנה.</p>
               </div>
               <div style="display:flex;gap:8px;">
-                <button type="button" id="update-topic-btn" class="secondary" style="flex:1;">עדכון נושא לשבוע הנוכחי</button>
+                <button type="button" id="update-topic-btn" class="secondary" style="flex:1;">שמירה לשבוע הנוכחי</button>
                 <button type="button" id="new-week-btn" style="flex:1;">שבוע חדש ▶</button>
               </div>
             </div>
@@ -176,8 +176,9 @@ export async function mountTeacherDashboard(app, session, onLogout) {
 
     document.getElementById('update-topic-btn').addEventListener('click', async () => {
       const text = document.getElementById('topic-input').value.trim();
+      const dsUrl = (document.getElementById('dataset-url').value || '').trim();
       try {
-        state.week = await updateCurrentWeekTopic(text);
+        state.week = await updateCurrentWeekTopic(text, dsUrl);
         toast('הנושא עודכן');
         render();
       } catch (err) { toast('שגיאה: ' + err.message, true); }
