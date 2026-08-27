@@ -108,9 +108,12 @@ def main():
         print('\nDry run only.')
         return
 
-    if out.exists():
-        shutil.rmtree(out)
-    out.mkdir(parents=True)
+    # מוחקים תמונות ולא את התיקייה: ב-Windows נשאר בה desktop.ini עם תכונת
+    # מערכת, ו-rmtree נכשל עליו בשגיאת הרשאה.
+    out.mkdir(parents=True, exist_ok=True)
+    for f in out.iterdir():
+        if f.is_file() and f.suffix.lower() in EXTS:
+            f.unlink()
     keydir.mkdir(parents=True, exist_ok=True)
 
     for r in rows:

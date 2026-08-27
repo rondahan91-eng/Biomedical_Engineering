@@ -69,6 +69,29 @@ def main():
     print(f'Mode:   {"DRY RUN" if args.dry_run else "COPY"}')
     print(f'Group:  {args.group_regex or "(none - each image independent)"}\n')
 
+    # שיוך מקורות לצדדים - חוצה מחלקות.
+    # קודם הקיבוץ נעשה בתוך כל מחלקה בנפרד, ולכן שקופית שיש לה תאים בשתי
+    # המחלקות יכלה לנחות בערכת המבחן דרך מחלקה אחת ובבריכה דרך השנייה.
+    # נמדד מקרה כזה במלריה. השיוך כאן גלובלי: מקור שלם הולך לצד אחד בלבד.
+    all_groups = {}
+    for d in classes:
+        for f in sorted(d.iterdir()):
+            if f.is_file() and f.suffix.lower() in EXTS:
+                m = rx.match(f.name) if rx else None
+                all_groups.setdefault(m.group(1) if m else f.name, []).append((d.name, f))
+    gkeys = sorted(all_groups)
+    rng.shuffle(gkeys)
+
+    # מקורות לערכת המבחן נבחרים ראשונים, עד שכל מחלקה מילאה את המכסה
+    need = {d.name: args.bench_per_class for d in classes}
+    bench_keys = set()
+    for k in gkeys:
+        if all(v <= 0 for v in need.values()):
+            break
+        bench_keys.add(k)
+        for cls, _ in all_groups[k]:
+            need[cls] -= 1
+
     rows, summary = [], []
     for d in classes:
         files = [f for f in sorted(d.iterdir())
@@ -92,9 +115,10 @@ def main():
                 picked.extend(groups[k])
             return set(used), picked[:target]
 
-        bench_keys, bench = take(keys, args.bench_per_class)
-        rest = [k for k in keys if k not in bench_keys]
-        _, pool = take(rest, args.pool_per_class)
+        mine_bench = [k for k in keys if k in bench_keys]
+        mine_pool = [k for k in keys if k not in bench_keys]
+        _, bench = take(mine_bench, args.bench_per_class)
+        _, pool = take(mine_pool, args.pool_per_class)
 
         for dest, imgs in (('benchmark', bench), ('pool', pool)):
             dd = out / SET_HE.get(dest, dest) / he(d.name)

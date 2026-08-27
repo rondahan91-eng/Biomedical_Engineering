@@ -72,6 +72,18 @@ def excluded_names(paths):
 
 
 def write(sets, out_root, manifest_rows, dry):
+    # מנקים כל תיקיית יעד לפני הכתיבה. בלי זה הרצה חוזרת *מוסיפה* לקיים,
+    # וכשהבחירה משתנה בין הרצות התיקייה מתמלאת בתערובת של שתיהן - נמדדו 323
+    # תמונות בערכה שאמורה להכיל 200. מוחקים קבצים ולא תיקיות: ב-Windows
+    # נשאר בהן desktop.ini עם תכונת מערכת, ו-rmtree נכשל עליו.
+    if not dry:
+        for rel, _ in sets:
+            dest = out_root / rel
+            if dest.is_dir():
+                for f in dest.iterdir():
+                    if f.is_file() and f.suffix.lower() in EXTS:
+                        f.unlink()
+
     for rel, files in sets:
         dest = out_root / rel
         if not dry:
@@ -90,8 +102,9 @@ def main():
     ap.add_argument('--exclude', nargs='*', default=[], help='תיקיות שתמונותיהן אסורות (benchmark)')
     ap.add_argument('--group-a', default=None, help='ביטוי רגולרי שמזהה מקור א׳')
     ap.add_argument('--group-b', default=None, help='ביטוי רגולרי שמזהה מקור ב׳')
-    ap.add_argument('--group-regex', default=None,
-                    help='חילוץ מזהה שקופית/מטופל משם הקובץ, למשל "(.+?)_cell_"')
+    ap.add_argument('--group-regex', nargs='*', default=None,
+                    help='ביטוי אחד או יותר לחילוץ מזהה מקור משם הקובץ. '
+                         'נבדקים לפי הסדר, הראשון שתואם קובע.')
     ap.add_argument('--source-bench', type=int, default=50, help='גודל ערכת מבחן לכל מקור')
     ap.add_argument('--source-cap', type=int, default=200, help='תקרת אימון לכל מקור')
     ap.add_argument('--dry-run', action='store_true')
@@ -162,44 +175,103 @@ def main():
         except re.error as e:
             sys.exit(f'ביטוי רגולרי שגוי: {e}')
 
-        grp = re.compile(args.group_regex) if args.group_regex else None
-        def slide_of(f):
-            m = grp.match(f.name) if grp else None
-            return m.group(1) if m else f.name
+        # אפשר לתת כמה ביטויים: מאגר אחד יכול להכיל כמה משפחות שמות, ומחלקת
+        # בקרה בדרך כלל נקראת אחרת מהמחלקה שמתפצלת. ביטוי יחיד שאינו תואם
+        # אותה גורם לכל קובץ בה להיחשב מקור נפרד, וההפרדה ברמת מטופל נשברת
+        # בלי שאיש ישים לב - נמדדו 34 מטופלים שנפלו כך לשני הצדדים.
+        grps = [re.compile(g) for g in (args.group_regex or [])]
 
-        # פיצול לפי מקור, ובתוך כל מקור - קיבוץ לפי שקופית/מטופל
-        srcs = {}
-        for tag, rx in (('a', rx_a), ('b', rx_b)):
-            srcs[tag] = {}
-            for cls, files in pools.items():
+        def slide_of(f):
+            for g in grps:
+                m = g.search(f.name)
+                if m:
+                    return m.group(1)
+            return f.name
+
+        if grps:
+            unmatched = {cls: sum(1 for f in fs if not any(g.search(f.name) for g in grps))
+                         for cls, fs in pools.items()}
+            miss = {c: n for c, n in unmatched.items() if n}
+            if miss:
+                print('  [!] קבצים שאף ביטוי קיבוץ לא תואם, ולכן כל אחד מהם '
+                      'ייחשב מקור נפרד:')
+                for c, n in miss.items():
+                    print(f'      {c}: {n} מתוך {len(pools[c])}')
+                print()
+
+        # פיצול לפי מקור, ובתוך כל מקור - קיבוץ לפי שקופית/מטופל.
+        #
+        # מחלקה שאינה תואמת אף אחד מהדפוסים היא מחלקת *בקרה*: היא קיימת בשני
+        # המקורות, ולכן היא מחולקת ביניהם לשני חצאים זרים. בלי זה, ניסוי שבו
+        # רק המחלקה החריגה מתפצלת (bacteria מול virus, בעוד "תקין" משותף)
+        # היה מייצר ערכות אימון בעלות מחלקה אחת בלבד.
+        srcs = {'a': {}, 'b': {}}
+        controls = []
+        for cls, files in pools.items():
+            hit_a = [f for f in files if rx_a.search(f.name)]
+            hit_b = [f for f in files if rx_b.search(f.name)]
+            if hit_a or hit_b:
+                for tag, hits in (('a', hit_a), ('b', hit_b)):
+                    by = defaultdict(list)
+                    for f in hits:
+                        by[slide_of(f)].append(f)
+                    srcs[tag][cls] = by
+            else:
+                controls.append(cls)
                 by = defaultdict(list)
                 for f in files:
-                    if rx.search(f.name):
-                        by[slide_of(f)].append(f)
-                srcs[tag][cls] = by
+                    by[slide_of(f)].append(f)
+                keys = sorted(by)
+                rng.shuffle(keys)
+                half = len(keys) // 2
+                srcs['a'][cls] = {k: by[k] for k in keys[:half]}
+                srcs['b'][cls] = {k: by[k] for k in keys[half:]}
 
-        # שקופית שנופלת בשני המקורות תשבור את הניסוי
+        # מקור שנופל בשני הצדדים ישבור את הניסוי
         for cls in pools:
             both = set(srcs['a'][cls]) & set(srcs['b'][cls])
             if both:
-                sys.exit(f'{len(both)} שקופיות ב-{cls} תואמות את שני הביטויים. '
-                         'המקורות חייבים להיות זרים.')
+                sys.exit(f'{len(both)} מקורות ב-{cls} תואמים את שני הביטויים. '
+                         'המקורות חייבים להיות זרים - בדקו את --group-regex: '
+                         'הוא צריך לחלץ מזהה ייחודי, כולל מה שמבדיל בין הדפוסים.')
+        if controls:
+            print(f'  מחלקות בקרה (מחולקות בין המקורות): {", ".join(controls)}')
 
         # ערכת מבחן נפרדת לכל מקור, נלקחת ראשונה וברמת שקופית. בלי זה אי אפשר
         # למדוד הכללה: הערכה המשותפת מכילה תערובת, וציון עליה מערבב מקור מוכר
         # עם מקור חדש.
-        def carve(by, n):
-            keys = sorted(by); rng.shuffle(keys)
-            bench, rest, used = [], [], set()
+        #
+        # החלוקה חוצה מחלקות בתוך כל מקור. שקופית אחת יכולה לתרום תאים לשתי
+        # המחלקות, ולכן חלוקה נפרדת לכל מחלקה הייתה מציבה אותה במבחן דרך אחת
+        # ובאימון דרך השנייה - נמדד מקרה כזה במלריה.
+        def carve_source(by_cls, n):
+            """מחלק את מקורות המקור בין מבחן לאימון, פעם אחת לכל המחלקות."""
+            owners = defaultdict(list)          # מקור -> [(מחלקה, קבצים)]
+            for cls, by in by_cls.items():
+                for k, fs in by.items():
+                    owners[k].append((cls, fs))
+            keys = sorted(owners)
+            rng.shuffle(keys)
+
+            need = {c: n for c in by_cls}
+            bench_keys = set()
             for k in keys:
-                if len(bench) < n:
-                    bench.extend(by[k]); used.add(k)
-                else:
-                    rest.extend(by[k])
-            return bench[:n], rest
+                if all(v <= 0 for v in need.values()):
+                    break
+                bench_keys.add(k)
+                for cls, fs in owners[k]:
+                    need[cls] -= len(fs)
+
+            out = {}
+            for cls, by in by_cls.items():
+                b = [f for k in by if k in bench_keys for f in by[k]]
+                r = [f for k in by if k not in bench_keys for f in by[k]]
+                out[cls] = (b[:n], r)
+            return out
 
         nb = args.source_bench
-        carved = {t: {c: carve(srcs[t][c], nb) for c in pools} for t in ('a', 'b')}
+        carved_by_src = {t: carve_source(srcs[t], nb) for t in ('a', 'b')}
+        carved = {t: {c: carved_by_src[t][c] for c in pools} for t in ('a', 'b')}
 
         # גודל אימון זהה לשני המקורות - אחרת ההפרש בין הרצות משקף גם כמות
         # וגם מקור, ולא נדע מי אחראי.
