@@ -18,7 +18,7 @@
     py tools/make_experiment_sets.py --source <pool> --out <dir> --experiment curve
     py tools/make_experiment_sets.py --source <pool> --out <dir> --experiment balance
     py tools/make_experiment_sets.py --source <pool> --out <dir> --experiment source \
-        --group-a "IM-" --group-b "NORMAL2-"
+        --group-a "NThinF" --group-b "(?<!N)ThinF" --group-regex "(.+?)_cell_"
 
     הוסיפו --exclude <benchmark_dir> כדי לוודא שאף תמונת מבחן לא נכנסת.
 """
@@ -31,6 +31,20 @@ import shutil
 import sys
 from collections import defaultdict
 from pathlib import Path
+
+# שמות התיקיות בעברית. שם התיקייה נכנס ל-Teachable Machine כשם המחלקה
+# ומשם ל-metadata.json, ולכן הוא חייב להיות מזוהה על ידי LABEL_RULES שבכלים -
+# ראו tools/rename_to_hebrew.py, שמאמת בדיוק את זה לפני שהוא נוגע בדיסק.
+CLASS_HE = {'Parasitized': 'נגוע', 'Uninfected': 'תקין',
+            'PNEUMONIA': 'דלקת ריאות', 'NORMAL': 'תקין'}
+EXP_HE = {'curve': 'עקומת למידה', 'balance': 'יחסי איזון',
+          'source': 'הכללה בין מקורות'}
+
+
+def he(name):
+    """שם עברי אם ידוע, אחרת השם כפי שהוא."""
+    return CLASS_HE.get(name, name)
+
 
 CURVE_SIZES = [25, 50, 100, 200, 400]
 BALANCE_TOTAL = 400            # סך הכל קבוע, רק היחס משתנה
@@ -119,7 +133,7 @@ def main():
                 print(f'  [!] רק {short} זמינות - מדלג על {n}')
                 continue
             for cls, files in pools.items():
-                sets.append((Path(f'curve/n{n:04d}') / cls, files[:n]))
+                sets.append((Path(EXP_HE['curve']) / f'גודל {n:04d}' / he(cls), files[:n]))
 
     elif exp == 'balance':
         names = list(pools)
@@ -131,9 +145,9 @@ def main():
             if len(pools[names[0]]) < na or len(pools[names[1]]) < nb:
                 print(f'  [!] אין מספיק תמונות ליחס {a_pct}/{b_pct} - מדלג')
                 continue
-            tag = f'balance/r{a_pct}_{b_pct}'
-            sets.append((Path(tag) / names[0], pools[names[0]][:na]))
-            sets.append((Path(tag) / names[1], pools[names[1]][:nb]))
+            tag = Path(EXP_HE['balance']) / f'יחס {a_pct}-{b_pct}'
+            sets.append((tag / he(names[0]), pools[names[0]][:na]))
+            sets.append((tag / he(names[1]), pools[names[1]][:nb]))
 
     else:  # source
         if not (args.group_a and args.group_b):
@@ -204,8 +218,10 @@ def main():
         for t, label in (('a', args.group_a), ('b', args.group_b)):
             for cls in pools:
                 bench, rest = carved[t][cls]
-                sets.append((Path(f'source/train_{t}') / cls, rest[:n_train]))
-                sets.append((Path(f'source/bench_{t}') / cls, bench))
+                side = 'א' if t == 'a' else 'ב'
+                root = Path(EXP_HE['source'])
+                sets.append((root / f'אימון מקור {side}' / he(cls), rest[:n_train]))
+                sets.append((root / f'מבחן מקור {side}' / he(cls), bench))
 
     if not sets:
         sys.exit('לא נוצרה אף ערכה - בדקו את הפרמטרים.')

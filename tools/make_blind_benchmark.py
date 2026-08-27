@@ -12,9 +12,9 @@
 img_001 ... img_200 ותו לא.
 
 הפלט מתפצל לשניים בכוונה:
-  <out>/                        לשיתוף - התמונות בלבד
-  <out>_worksheet.csv           לשיתוף - דף עבודה ריק
-  <key-dir>/<name>_key.csv      לא לשיתוף - התווית והשם המקורי
+  <out>/                                 לשיתוף - התמונות בלבד
+  דף עבודה - ערכת מבחן עיוורת.csv        לשיתוף - דף עבודה ריק
+  <key-dir>/מפתח - ערכת מבחן עיוורת.csv  לא לשיתוף - התווית והשם המקורי
 
 הרצה:
     py tools/make_blind_benchmark.py \
@@ -117,7 +117,7 @@ def main():
         shutil.copy2(r['source_path'], out / r['blind'])
 
     # דף עבודה - ליד התמונות, לשיתוף
-    ws = out.parent / (out.name + '_worksheet.csv')
+    ws = out.parent / 'דף עבודה - ערכת מבחן עיוורת.csv'
     with io.open(ws, 'w', encoding='utf-8-sig', newline='') as fh:
         w = csv.writer(fh)
         w.writerow(['image', 'my_label', 'confidence_1_5', 'notes'])
@@ -125,7 +125,7 @@ def main():
             w.writerow([r['blind'], '', '', ''])
 
     # מפתח - הרחק משם
-    key = keydir / (out.name + '_key.csv')
+    key = keydir / 'מפתח - ערכת מבחן עיוורת.csv'
     with io.open(key, 'w', encoding='utf-8-sig', newline='') as fh:
         w = csv.writer(fh)
         w.writerow(['blind_name', 'true_label', 'original_name'])

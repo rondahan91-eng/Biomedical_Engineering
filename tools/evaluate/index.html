@@ -129,8 +129,8 @@
       <div style="flex:1">
         <label class="pick">תיקיית ערכת המבחן</label>
         <input type="file" id="benchFiles" webkitdirectory directory multiple>
-        <div class="hint">בחרו את התיקייה <b>benchmark</b> של האיבר שלכם. התוויות האמיתיות
-          נלקחות משמות תתי-התיקיות <b>abnormal</b> ו-<b>normal</b> — אין צורך לתייג כלום.</div>
+        <div class="hint">בחרו את התיקייה <b>ערכת מבחן</b> של המאגר שלכם. התוויות האמיתיות
+          נלקחות משמות תתי-התיקיות (למשל <b>נגוע</b> ו-<b>תקין</b>) — אין צורך לתייג כלום.</div>
       </div>
     </div>
 
@@ -325,7 +325,7 @@ const LABEL_RULES = [
   [/uninfected|unaffected/, 'normal'],
   [/abnormal/,              'abnormal'],
   [/^normal|[^b]normal/,    'normal'],
-  [/pneumonia|parasitized|positive|tumou?r|malignant|diseased|sick|fracture|חריג|חיובי/, 'abnormal'],
+  [/pneumonia|parasitized|positive|tumou?r|malignant|diseased|sick|fracture|חריג|חיובי|נגוע|דלקת|שבר/, 'abnormal'],
   [/negative|healthy|benign|תקין|שלילי/, 'normal'],
 ];
 
@@ -362,7 +362,8 @@ $('benchFiles').addEventListener('change', e => {
   if (!benchList.length) {
     showError('לא זוהתה אף תווית משמות התיקיות.<br>' +
       (nSkipped ? 'תיקיות שלא זוהו: <b>' + Object.keys(skipped).join(', ') + '</b><br>' : '') +
-      'שם תת-התיקייה צריך לרמז על המחלקה (למשל abnormal/normal, PNEUMONIA/NORMAL). ' +
+      'שם תת-התיקייה צריך לרמז על המחלקה. שמות מוכרים: נגוע / תקין / דלקת ריאות / ' +
+      'חריג, וגם באנגלית Parasitized / Uninfected / PNEUMONIA / NORMAL / abnormal / normal. ' +
       'בחרו את תיקיית ערכת המבחן עצמה, לא תיקייה שמעליה או מתחתיה.');
   } else {
     $('n2').classList.add('done');

@@ -29,6 +29,12 @@ from pathlib import Path
 EXTS = ('.png', '.jpg', '.jpeg')
 SEED = 20260817
 
+# ראו ההערה ב-make_experiment_sets: שם התיקייה הוא שם המחלקה במודל.
+CLASS_HE = {'Parasitized': 'נגוע', 'Uninfected': 'תקין',
+            'PNEUMONIA': 'דלקת ריאות', 'NORMAL': 'תקין'}
+SET_HE = {'benchmark': 'ערכת מבחן', 'pool': 'בריכת תמונות'}
+he = lambda n: CLASS_HE.get(n, n)
+
 
 def class_dirs(root: Path):
     out = []
@@ -91,7 +97,7 @@ def main():
         _, pool = take(rest, args.pool_per_class)
 
         for dest, imgs in (('benchmark', bench), ('pool', pool)):
-            dd = out / dest / d.name
+            dd = out / SET_HE.get(dest, dest) / he(d.name)
             if not args.dry_run:
                 dd.mkdir(parents=True, exist_ok=True)
                 for f in imgs:
@@ -126,7 +132,7 @@ def main():
         print('\nOn disk:')
         for dest in ('benchmark', 'pool'):
             for d in classes:
-                dd = out / dest / d.name
+                dd = out / SET_HE.get(dest, dest) / he(d.name)
                 n = len([f for f in dd.iterdir() if f.suffix.lower() in EXTS]) if dd.is_dir() else 0
                 print(f'  {dest}/{d.name}: {n}')
         print('\n[OK] Done.')

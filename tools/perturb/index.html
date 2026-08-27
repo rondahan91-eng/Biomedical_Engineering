@@ -119,7 +119,8 @@
       <div style="flex:1">
         <label class="pick">תיקיית ערכת המבחן</label>
         <input type="file" id="benchFiles" webkitdirectory directory multiple>
-        <div class="hint">אותה ערכת <b>benchmark</b> — אחרת ההשוואה לבסיס חסרת משמעות.</div>
+        <div class="hint">אותה <b>ערכת מבחן</b> שהרצתם בכלי ההערכה — אחרת ההשוואה לבסיס
+          חסרת משמעות.</div>
       </div>
     </div>
 
@@ -230,7 +231,7 @@ const LABEL_RULES = [
   [/uninfected|unaffected/, 'normal'],
   [/abnormal/,              'abnormal'],
   [/^normal|[^b]normal/,    'normal'],
-  [/pneumonia|parasitized|positive|tumou?r|malignant|diseased|sick|fracture|חריג|חיובי/, 'abnormal'],
+  [/pneumonia|parasitized|positive|tumou?r|malignant|diseased|sick|fracture|חריג|חיובי|נגוע|דלקת|שבר/, 'abnormal'],
   [/negative|healthy|benign|תקין|שלילי/, 'normal'],
 ];
 const labelFromFolder = n => {
@@ -410,7 +411,8 @@ $('benchFiles').addEventListener('change', e=>{
   if(skipped.length){
     const u=[...new Set(skipped)];
     showError(`תיקיות שלא זוהו ולכן דולגו: ${u.join(', ')}. ` +
-      'שמות מוכרים: normal / abnormal / Parasitized / Uninfected / NORMAL / PNEUMONIA.');
+      'שמות מוכרים: נגוע / תקין / דלקת ריאות / חריג, וגם באנגלית: '+
+      'Parasitized / Uninfected / NORMAL / PNEUMONIA / abnormal / normal.');
   }
   if(benchList.length) $('n2').classList.add('done');
   setStatus(benchList.length ? `${benchList.length} תמונות נטענו.` : '');
