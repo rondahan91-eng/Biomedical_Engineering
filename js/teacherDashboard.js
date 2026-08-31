@@ -6,6 +6,7 @@ import { escapeHtml, toast, topbarHtml, wireLogout } from './ui.js';
 import {
   getDashboard, getCurrentWeek, startNewWeek, updateCurrentWeekTopic,
   getStudentTranscripts, setManualGrade, exportWeeklyReport, importRoster, resetStudentPassword,
+  changePassword,
 } from './api.js';
 import { parseStudentsExcel } from './excelImport.js';
 
@@ -84,6 +85,17 @@ export async function mountTeacherDashboard(app, session, onLogout) {
               ${renderImportPreview()}
             </div>
 
+            <div class="panel glass" id="pw-panel">
+              <h3>🔒 סיסמת המורה</h3>
+              <p class="form-note" style="margin-top:0;">
+                סיסמת ברירת המחדל <code>admin123</code> מתועדת ב-README שבמאגר הציבורי.
+                כל עוד היא בתוקף, מי שמוצא את כתובת האתר יכול להיכנס כמורה.
+              </p>
+              <div class="field"><input type="password" id="pw-new" placeholder="סיסמה חדשה" autocomplete="new-password"></div>
+              <div class="field"><input type="password" id="pw-again" placeholder="שוב, לאימות" autocomplete="new-password"></div>
+              <button type="button" id="pw-save-btn" style="width:100%;">שינוי סיסמה</button>
+            </div>
+
             <div class="panel glass">
               <h3>📤 ייצוא נתונים</h3>
               <p class="form-note" style="margin-top:0;">דוח Excel (גיליון לכל תלמיד) נשמר אוטומטית מדי שבוע ל-Drive. אפשר גם להריץ ידנית עכשיו.</p>
@@ -153,6 +165,20 @@ export async function mountTeacherDashboard(app, session, onLogout) {
           toast('הסיסמה אופסה');
         } catch (err) { toast('שגיאה: ' + err.message, true); }
       });
+    });
+
+    document.getElementById('pw-save-btn').addEventListener('click', async () => {
+      const a = document.getElementById('pw-new').value;
+      const b = document.getElementById('pw-again').value;
+      if (a.length < 8) { toast('סיסמה של פחות מ-8 תווים — בחרו ארוכה יותר', true); return; }
+      if (a !== b) { toast('שתי הסיסמאות אינן זהות', true); return; }
+      if (a === 'admin123') { toast('זו בדיוק הסיסמה שצריך להחליף', true); return; }
+      try {
+        await changePassword(session.studentId, a);
+        document.getElementById('pw-new').value = '';
+        document.getElementById('pw-again').value = '';
+        toast('הסיסמה הוחלפה. בכניסה הבאה השתמשו בחדשה.');
+      } catch (err) { toast('שגיאה: ' + err.message, true); }
     });
 
     const closeBtn = document.getElementById('close-detail-btn');
