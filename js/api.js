@@ -137,6 +137,17 @@ async function callLocal(action, payload) {
     return { ok: true };
   }
 
+  if (action === 'deleteStudent') {
+    const u = findStudent(db, payload.studentId);
+    if (u.role === 'admin') throw new Error('אי אפשר למחוק חשבון מורה מהפאנל.');
+    db.users = db.users.filter(x => x.studentId !== payload.studentId);
+    saveDB(db);
+    return { ok: true, username: u.username, sessionsRemoved: 0,
+      checkInsKept: db.checkIns.filter(c => c.studentId === payload.studentId).length,
+      helpChatsKept: db.helpChats.filter(c => c.studentId === payload.studentId).length,
+      artifactsKept: 0 };
+  }
+
   if (action === 'resetStudentPassword') {
     const { studentId, newPassword } = payload;
     const u = findStudent(db, studentId);
@@ -290,6 +301,10 @@ export async function changePassword(studentId, newPassword) {
 export async function logout() {
   try { await dispatch('logout', {}); } catch { /* ניתוק מקומי גם אם השרת לא ענה */ }
 }
+export async function deleteStudent(studentId) {
+  return dispatch('deleteStudent', { studentId });
+}
+
 export async function resetStudentPassword(studentId, newPassword) {
   return dispatch('resetStudentPassword', { studentId, newPassword });
 }

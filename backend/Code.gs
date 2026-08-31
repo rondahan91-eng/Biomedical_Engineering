@@ -156,6 +156,9 @@ function routeAction(action, payload) {
     case 'resetStudentPassword':
       requireAdmin(payload);
       return resetStudentPassword(payload.studentId, payload.newPassword);
+    case 'deleteStudent':
+      requireAdmin(payload);
+      return deleteStudent(payload.studentId);
     case 'importRoster':
       requireAdmin(payload);
       return importRoster(payload.students);
@@ -343,6 +346,60 @@ function changePassword(studentId, newPassword) {
     }
   }
   throw new Error('תלמיד לא נמצא');
+}
+
+/**
+ * מסיר תלמיד/ה מהמערכת.
+ *
+ * שתי החלטות מכוונות:
+ * 1. חשבון מורה אינו נמחק. לחיצה שגויה על השורה הלא נכונה הייתה נועלת את
+ *    המערכת בפני מי שמנהל אותה, בלי דרך חזרה מלבד עריכת הגיליון.
+ * 2. הצ׳ק-אינים, שיחות העזרה והתוצרים *נשארים*. הם רשומת ההערכה, ומחיקת
+ *    חשבון אינה סיבה להשמיד אותה. הפונקציה מחזירה כמה נשארו, כדי שהמורה
+ *    יראה מה נותר בגיליון ולא יופתע.
+ */
+function deleteStudent(studentId) {
+  if (!studentId) throw new Error('לא צוין תלמיד');
+  const sheet = getSheet(SHEET_USERS);
+  const values = sheet.getDataRange().getValues();
+  const headers = values[0];
+  const idCol = headers.indexOf('studentId');
+  const roleCol = headers.indexOf('role');
+  const userCol = headers.indexOf('username');
+
+  let row = -1, username = '';
+  for (let r = 1; r < values.length; r++) {
+    if (values[r][idCol] === studentId) {
+      if (values[r][roleCol] === 'admin') {
+        throw new Error('אי אפשר למחוק חשבון מורה מהפאנל. ' +
+          'אם זו הכוונה, ערכו ישירות את גיליון Users.');
+      }
+      row = r + 1;
+      username = values[r][userCol];
+      break;
+    }
+  }
+  if (row === -1) throw new Error('תלמיד לא נמצא');
+  sheet.deleteRow(row);
+
+  // מוחקים גם את החיבורים הפעילים, אחרת טוקן קיים ימשיך לעבוד עד לפקיעתו
+  const ses = getSheet(SHEET_SESSIONS);
+  const sv = ses.getDataRange().getValues();
+  const sIdCol = sv[0].indexOf('studentId');
+  let killed = 0;
+  for (let r = sv.length - 1; r >= 1; r--) {
+    if (sv[r][sIdCol] === studentId) { ses.deleteRow(r + 1); killed++; }
+  }
+
+  const count = (name, field) =>
+    sheetToObjects(getSheet(name)).filter(x => x[field] === studentId).length;
+  return {
+    ok: true, username: username,
+    sessionsRemoved: killed,
+    checkInsKept: count(SHEET_CHECKINS, 'studentId'),
+    helpChatsKept: count(SHEET_HELPCHATS, 'studentId'),
+    artifactsKept: count(SHEET_ARTIFACTS, 'studentId'),
+  };
 }
 
 function resetStudentPassword(studentId, newPassword) {

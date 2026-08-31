@@ -6,7 +6,7 @@ import { escapeHtml, toast, topbarHtml, wireLogout } from './ui.js';
 import {
   getDashboard, getCurrentWeek, startNewWeek, updateCurrentWeekTopic,
   getStudentTranscripts, setManualGrade, exportWeeklyReport, importRoster, resetStudentPassword,
-  changePassword,
+  changePassword, deleteStudent,
 } from './api.js';
 import { parseStudentsExcel } from './excelImport.js';
 
@@ -49,6 +49,7 @@ export async function mountTeacherDashboard(app, session, onLogout) {
                         <td style="white-space:nowrap;">
                           <button class="secondary view-student-btn" data-id="${s.studentId}" style="padding:5px 10px;font-size:12px;">תמלולים</button>
                           <button class="secondary reset-pw-btn" data-id="${s.studentId}" data-name="${escapeHtml(s.firstName || s.username || '')}" style="padding:5px 10px;font-size:12px;">🔑</button>
+                          <button class="secondary del-student-btn" data-id="${s.studentId}" data-name="${escapeHtml(`${s.firstName || ''} ${s.lastName || ''}`.trim() || s.username || '')}" data-weeks="${s.weeksCompleted}" style="padding:5px 10px;font-size:12px;">🗑</button>
                         </td>
                       </tr>`).join('')}
                   </tbody>
@@ -179,6 +180,27 @@ export async function mountTeacherDashboard(app, session, onLogout) {
         document.getElementById('pw-again').value = '';
         toast('הסיסמה הוחלפה. בכניסה הבאה השתמשו בחדשה.');
       } catch (err) { toast('שגיאה: ' + err.message, true); }
+    });
+
+    document.querySelectorAll('.del-student-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const weeks = Number(btn.dataset.weeks) || 0;
+        // מזהירים לפי מה שכבר נצבר: מחיקה של תלמיד/ה עם היסטוריה היא
+        // החלטה אחרת לגמרי ממחיקה של רשומת בדיקה ריקה.
+        const warn = weeks
+          ? `ל${btn.dataset.name} יש ${weeks} שבועות מוערכים. הצ׳ק-אינים והציונים `
+            + `יישארו בגיליון, אבל החשבון יימחק והכניסה תיחסם.
+
+למחוק?`
+          : `למחוק את ${btn.dataset.name}? אין לו/ה עדיין צ׳ק-אין מוערך.`;
+        if (!confirm(warn)) return;
+        try {
+          const r = await deleteStudent(btn.dataset.id);
+          const kept = r.checkInsKept + r.helpChatsKept + r.artifactsKept;
+          toast(`${r.username} נמחק/ה` + (kept ? ` · ${kept} רשומות נשארו בגיליון` : ''));
+          await refresh();
+        } catch (err) { toast('שגיאה: ' + err.message, true); }
+      });
     });
 
     const closeBtn = document.getElementById('close-detail-btn');
