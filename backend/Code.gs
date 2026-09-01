@@ -139,7 +139,10 @@ function routeAction(action, payload) {
       return sendMentorMessage(payload.studentId, payload.history, payload.images, payload.elapsedSeconds);
     case 'getCurrentWeek':
       requireAuth(payload);
-      return getCurrentWeekInfo();
+      return getCurrentWeekInfo(payload.group);
+    case 'getGroupWeeks':
+      requireAdmin(payload);
+      return getGroupWeeks();
     case 'setCurrentExperiment':
       requireSelfOrAdmin(payload, payload.studentId);
       return setCurrentExperiment(payload.studentId, payload.experiment);
@@ -164,10 +167,10 @@ function routeAction(action, payload) {
       return importRoster(payload.students);
     case 'startNewWeek':
       requireAdmin(payload);
-      return startNewWeek(payload.topicText, payload.module, payload.datasetUrl);
+      return startNewWeek(payload.group, payload.topicText, payload.module, payload.datasetUrl);
     case 'updateCurrentWeekTopic':
       requireAdmin(payload);
-      return updateCurrentWeekTopic(payload.topicText, payload.datasetUrl);
+      return updateCurrentWeekTopic(payload.group, payload.topicText, payload.datasetUrl);
     case 'getDashboard':
       requireAdmin(payload);
       return getDashboard();
@@ -250,7 +253,7 @@ function logout(token) {
 const SHEET_SCHEMAS = {};
 SHEET_SCHEMAS[SHEET_USERS] = ['studentId', 'username', 'passHash', 'mustChangePassword', 'role',
   'firstName', 'lastName', 'last4Id', 'birthDate', 'group', 'note', 'currentExperiment', 'createdAt'];
-SHEET_SCHEMAS[SHEET_TOPICS] = ['weekNumber', 'topicText', 'module', 'datasetUrl', 'setAt'];
+SHEET_SCHEMAS[SHEET_TOPICS] = ['group', 'weekNumber', 'topicText', 'module', 'datasetUrl', 'setAt'];
 SHEET_SCHEMAS[SHEET_CHECKINS] = ['checkInId', 'studentId', 'weekNumber', 'date', 'image1Url', 'image2Url',
   'studentSummary', 'transcriptJson', 'aiMemorySummary', 'mentorFeedback', 'score',
   'teacherOverrideScore', 'teacherNote', 'docLink', 'sessionSeconds', 'status'];
@@ -264,9 +267,45 @@ function getSheet(name) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(name);
   if (!sheet) return createSheet(ss, name);
+  if (SHEET_MIGRATIONS[name]) SHEET_MIGRATIONS[name](sheet);
   assertSchema(sheet, name);
   return sheet;
 }
+
+/**
+ * שדרוגי מבנה שרצים לבד בקריאה הראשונה אחרי פריסה.
+ *
+ * assertSchema מפילה כל גיליון שהעמודות שלו אינן מה שהקוד מצפה לו - וזו
+ * ההתנהגות הנכונה - אבל היא הופכת כל הוספת עמודה לתקלה חיה עד שמישהו יתקן
+ * את הגיליון ביד. הפונקציות כאן סוגרות את הפער: הן חייבות להיות אידמפוטנטיות
+ * (רצות בכל קריאה), ולזהות במפורש את המבנה הישן שהן יודעות לשדרג - מבנה לא
+ * מוכר נשאר לטיפול של assertSchema ולא נוגעים בו.
+ */
+const SHEET_MIGRATIONS = {};
+
+// הוספת עמודת group ל-WeeklyTopics: מכאן ואילך לכל קבוצה שבוע ונושא משלה.
+// השורות שהיו קיימות לפני ההפרדה מסומנות ב-'*' = "חל על כל קבוצה שאין לה
+// עדיין שורה משלה", כך שהנושא שכבר הוזן ממשיך לשרת את כל הכיתות עד שנקבע
+// להן נושא נפרד, ואין רגע שבו לתלמיד אין נושא.
+//
+// '*' ולא תא ריק, כי sheetToObjects מדלגת על שורה שהעמודה הראשונה שלה ריקה -
+// שורה בלי סימון פשוט הייתה נעלמת בשקט.
+const GROUP_ALL = '*';
+
+SHEET_MIGRATIONS[SHEET_TOPICS] = function (sheet) {
+  const width = Math.max(1, sheet.getLastColumn());
+  const header = sheet.getRange(1, 1, 1, width).getValues()[0].map(h => String(h || '').trim());
+  if (header[0] === 'group') return false;      // כבר שודרג
+  if (header[0] !== 'weekNumber') return false; // מבנה לא מוכר - assertSchema תטפל
+  sheet.insertColumnBefore(1);
+  sheet.getRange(1, 1).setValue('group');
+  const dataRows = sheet.getLastRow() - 1;
+  if (dataRows > 0) {
+    sheet.getRange(2, 1, dataRows, 1)
+      .setValues(Array.from({ length: dataRows }, () => [GROUP_ALL]));
+  }
+  return true;
+};
 
 /**
  * נכשל ברעש אם הגיליון קיים אבל העמודות שלו אינן מה שהמערכת מצפה לו.
@@ -469,23 +508,76 @@ function importRoster(students) {
 }
 
 // -------------------------------------------------------------- נושא שבועי (FR-C6)
-function getCurrentWeekInfo() {
-  const topics = sheetToObjects(getSheet(SHEET_TOPICS));
-  if (!topics.length) return { weekNumber: 0, topicText: '' };
-  return topics[topics.length - 1];
+function normGroup(g) { return String(g == null ? '' : g).trim(); }
+
+/**
+ * השבוע הנוכחי של קבוצה מסוימת.
+ *
+ * לכל קבוצה מסלול משלה: אחת יכולה להיות בשבוע 5 בזמן שהשנייה בשבוע 2, וזו
+ * בדיוק מטרת ההפרדה. כל עוד לא נקבע לקבוצה נושא משלה היא נופלת לשורות
+ * הגלובליות (קבוצה ריקה) - כך שמה שהוזן לפני ההפרדה ממשיך לעבוד לכולן, ולא
+ * נוצר רגע שבו לתלמידים אין נושא.
+ */
+function getCurrentWeekInfo(group) {
+  const g = normGroup(group);
+  const rows = sheetToObjects(getSheet(SHEET_TOPICS));
+  const own = g ? rows.filter(r => normGroup(r.group) === g) : [];
+  const shared = rows.filter(r => normGroup(r.group) === GROUP_ALL);
+  const pool = own.length ? own : shared;
+  if (!pool.length) {
+    return { group: g, weekNumber: 0, topicText: '', module: DEFAULT_MODULE,
+             moduleName: moduleName(DEFAULT_MODULE), datasetUrl: '', isOwn: false };
+  }
+  const latest = pool.reduce((a, b) => (Number(b.weekNumber) >= Number(a.weekNumber) ? b : a));
+  return {
+    group: g, weekNumber: Number(latest.weekNumber) || 0, topicText: latest.topicText || '',
+    module: latest.module || DEFAULT_MODULE, moduleName: moduleName(latest.module),
+    datasetUrl: latest.datasetUrl || '', setAt: latest.setAt,
+    isOwn: own.length > 0,
+  };
 }
 
-function startNewWeek(topicText, module, datasetUrl) {
+/** רשימת הקבוצות בפועל - נגזרת מהתלמידים, ואין מה לתחזק בנפרד. */
+function listGroups() {
+  const seen = {};
+  sheetToObjects(getSheet(SHEET_USERS))
+    .filter(u => u.role === 'student')
+    .forEach(u => { const g = normGroup(u.group); seen[g] = (seen[g] || 0) + 1; });
+  return Object.keys(seen).sort().map(g => ({ group: g, studentCount: seen[g] }));
+}
+
+/** מצב כל הקבוצות במכה אחת - זה מה שהפאנל מצייר. */
+function getGroupWeeks() {
+  return listGroups().map(g => {
+    const week = getCurrentWeekInfo(g.group);
+    week.studentCount = g.studentCount;
+    return week;
+  });
+}
+
+function startNewWeek(group, topicText, module, datasetUrl) {
+  const g = requireGroup(group);
   const sheet = getSheet(SHEET_TOPICS);
-  const current = getCurrentWeekInfo();
+  const current = getCurrentWeekInfo(g);
   const nextWeek = (Number(current.weekNumber) || 0) + 1;
   // ברירת המחדל היא המאגר של השבוע הקודם: מעבר מודול הוא אירוע נדיר ומכוון,
   // ולא משהו שצריך לבחור מחדש בכל שבוע. אותו היגיון לקישור ערכות האימון.
   const mod = MODULES[module] ? module : (current.module || DEFAULT_MODULE);
   const url = safeHttpUrl(datasetUrl) || (mod === current.module ? current.datasetUrl || '' : '');
-  sheet.appendRow([nextWeek, topicText || '', mod, url, new Date()]);
-  return { weekNumber: nextWeek, topicText: topicText || '',
-           module: mod, moduleName: moduleName(mod), datasetUrl: url };
+  sheet.appendRow([g, nextWeek, topicText || '', mod, url, new Date()]);
+  return { group: g, weekNumber: nextWeek, topicText: topicText || '',
+           module: mod, moduleName: moduleName(mod), datasetUrl: url, isOwn: true };
+}
+
+/**
+ * קבוצה היא שדה חובה בכל פעולה על נושא שבועי. בלי זה קל מדי לכתוב בטעות
+ * שורה גלובלית שמשנה את הנושא לכל הכיתות בבת אחת - וזה בדיוק מה שההפרדה
+ * באה למנוע.
+ */
+function requireGroup(group) {
+  const g = normGroup(group);
+  if (!g) throw new Error('לא נבחרה קבוצה. נושא שבועי נקבע לקבוצה מסוימת.');
+  return g;
 }
 
 /**
@@ -524,31 +616,46 @@ function setCurrentExperiment(studentId, experiment) {
  * בפאנל יושב ליד שני הכפתורים - כך שלחיצה על "עדכון נושא" בלעה את הקישור
  * בשקט. שדה שמוצג ואינו נשמר הוא באג, לא אי-הבנה של המשתמש.
  */
-function updateCurrentWeekTopic(topicText, datasetUrl) {
+function updateCurrentWeekTopic(group, topicText, datasetUrl) {
+  const g = requireGroup(group);
   const sheet = getSheet(SHEET_TOPICS);
-  const values = sheet.getDataRange().getValues();
-  if (values.length < 2) return startNewWeek(topicText, null, datasetUrl);
-  const lastRow = values.length; // 1-based, כולל header
-  const headers = values[0];
-  sheet.getRange(lastRow, headers.indexOf('topicText') + 1).setValue(topicText || '');
+  const current = getCurrentWeekInfo(g);
 
-  // undefined = הלקוח לא שלח את השדה, ואז לא נוגעים בערך הקיים.
+  // undefined/null = הלקוח לא שלח את השדה ולא נוגעים בקיים.
   // מחרוזת ריקה = בקשה מפורשת לנקות.
-  let url = values[lastRow - 1][headers.indexOf('datasetUrl')] || '';
-  if (datasetUrl !== undefined && datasetUrl !== null) {
-    url = safeHttpUrl(datasetUrl);
-    sheet.getRange(lastRow, headers.indexOf('datasetUrl') + 1).setValue(url);
+  const url = (datasetUrl === undefined || datasetUrl === null)
+    ? (current.datasetUrl || '') : safeHttpUrl(datasetUrl);
+
+  // הקבוצה עדיין רוכבת על השורה המשותפת: יוצרים לה שורה משלה במקום לערוך
+  // את המשותפת, שמשרתת גם את הקבוצות האחרות. עריכה שם הייתה משנה נושא
+  // לכיתה שלא נגעו בה.
+  if (!current.isOwn) {
+    const week = current.weekNumber || 1;
+    sheet.appendRow([g, week, topicText || '', current.module, url, new Date()]);
+    return { group: g, weekNumber: week, topicText: topicText || '',
+             module: current.module, moduleName: moduleName(current.module),
+             datasetUrl: url, isOwn: true };
   }
-  const mod = values[lastRow - 1][headers.indexOf('module')] || DEFAULT_MODULE;
-  return { weekNumber: values[lastRow - 1][0], topicText: topicText || '',
-           module: mod, moduleName: moduleName(mod), datasetUrl: url };
+
+  const rows = sheetToObjects(sheet).filter(r => normGroup(r.group) === g);
+  const latest = rows.reduce((a, b) => (Number(b.weekNumber) >= Number(a.weekNumber) ? b : a));
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  sheet.getRange(latest.__row, headers.indexOf('topicText') + 1).setValue(topicText || '');
+  if (datasetUrl !== undefined && datasetUrl !== null) {
+    sheet.getRange(latest.__row, headers.indexOf('datasetUrl') + 1).setValue(url);
+  }
+  const mod = latest.module || DEFAULT_MODULE;
+  return { group: g, weekNumber: Number(latest.weekNumber) || 0, topicText: topicText || '',
+           module: mod, moduleName: moduleName(mod), datasetUrl: url, isOwn: true };
 }
 
 // -------------------------------------------------------------- הקשר תלמיד
 function getStudentContext(studentId) {
   const user = sheetToObjects(getSheet(SHEET_USERS)).find(u => u.studentId === studentId);
   if (!user) throw new Error('תלמיד לא נמצא');
-  const week = getCurrentWeekInfo();
+  // השבוע נקבע לפי הקבוצה של התלמיד/ה, ולכן קבוצה שמתקדמת מהר לא גוררת
+  // איתה את האחרות ולהפך.
+  const week = getCurrentWeekInfo(user.group);
   const checkIns = sheetToObjects(getSheet(SHEET_CHECKINS)).filter(c => c.studentId === studentId);
   const thisWeekCheckIn = checkIns.find(c => Number(c.weekNumber) === Number(week.weekNumber));
   const lastGraded = checkIns.filter(c => c.status === 'graded').sort((a, b) => b.weekNumber - a.weekNumber)[0];
@@ -957,7 +1064,10 @@ function saveArtifact(studentId, kind, filename, mimeType, base64) {
       'המותר עד ' + (ARTIFACT_MAX_BYTES / 1024 / 1024) + 'MB.');
   }
 
-  const week = Number(getCurrentWeekInfo().weekNumber) || 0;
+  // השבוע של הקבוצה של התלמיד/ה, ולא שבוע כללי: גם התיוג של הקובץ וגם
+  // התקרה השבועית נמדדים מול השבוע שהוא/היא באמת נמצא/ת בו.
+  const owner = sheetToObjects(getSheet(SHEET_USERS)).find(u => u.studentId === studentId);
+  const week = Number(getCurrentWeekInfo(owner && owner.group).weekNumber) || 0;
   const lock = LockService.getScriptLock();
   lock.waitLock(20000);
   try {
@@ -1035,8 +1145,16 @@ function computeMentorGrade(scores, totalWeeksSoFar) {
 function getDashboard() {
   const users = sheetToObjects(getSheet(SHEET_USERS)).filter(u => u.role === 'student');
   const checkIns = sheetToObjects(getSheet(SHEET_CHECKINS));
-  const week = getCurrentWeekInfo();
+  // שבוע לכל קבוצה, ולא שבוע אחד לכיתה: הציון נמדד מול מספר השבועות שהקבוצה
+  // *שלה* עברה. אחרת קבוצה שנמצאת בשבוע 2 הייתה נענשת על שבועות שקבוצה
+  // אחרת הספיקה לעבור.
+  const weekByGroup = {};
+  users.forEach(u => {
+    const g = normGroup(u.group);
+    if (!(g in weekByGroup)) weekByGroup[g] = getCurrentWeekInfo(g);
+  });
   return users.map(u => {
+    const week = weekByGroup[normGroup(u.group)];
     const mine = checkIns.filter(c => c.studentId === u.studentId);
     const scores = mine.map(c => Number(c.teacherOverrideScore || c.score) || 0);
     const totalWeeksSoFar = Number(week.weekNumber) || mine.length || 1;
@@ -1050,6 +1168,7 @@ function getDashboard() {
       studentId: u.studentId, username: u.username, last4Id: u.last4Id,
       firstName: u.firstName, lastName: u.lastName,
       group: u.group, note: u.note,
+      groupWeekNumber: week.weekNumber,
       currentExperiment: u.currentExperiment || EXPERIMENT_ORDER[0],
       experimentName: experimentName(u.currentExperiment),
       weeksCompleted: mine.length, mentorGrade: grade, surplusPoints,
@@ -1093,8 +1212,15 @@ function exportWeeklyReport() {
     DriveApp.getFileById(ss.getId()).moveTo(folder);
   }
 
+  // ממוין לפי קבוצה ואז שם, והקבוצה בשם הלשונית: כשכל קבוצה בשבוע אחר,
+  // "שבוע 3" של אחת אינו אותו שבוע של השנייה, ובלי הקבוצה הדוח מטעה.
+  users.sort((a, b) => normGroup(a.group).localeCompare(normGroup(b.group), 'he')
+    || (a.firstName + a.lastName).localeCompare(b.firstName + b.lastName, 'he'));
+
   users.forEach(u => {
-    const name = (u.firstName + ' ' + u.lastName).trim().slice(0, 90) || u.studentId;
+    const who = (u.firstName + ' ' + u.lastName).trim() || u.studentId;
+    const g = normGroup(u.group);
+    const name = ((g ? g + ' · ' : '') + who).slice(0, 90);
     let sheet = ss.getSheetByName(name);
     if (!sheet) {
       sheet = ss.insertSheet(name);

@@ -4,22 +4,42 @@
 // ==========================================================================
 import { escapeHtml, toast, topbarHtml, wireLogout, passwordField, wirePasswordEyes } from './ui.js';
 import {
-  getDashboard, getCurrentWeek, startNewWeek, updateCurrentWeekTopic,
+  getDashboard, getGroupWeeks, startNewWeek, updateCurrentWeekTopic,
   getStudentTranscripts, setManualGrade, exportWeeklyReport, importRoster, resetStudentPassword,
   changePassword, deleteStudent,
 } from './api.js';
 import { parseStudentsExcel } from './excelImport.js';
 
 export async function mountTeacherDashboard(app, session, onLogout) {
-  const state = { students: [], week: { weekNumber: 0, topicText: '' }, selectedStudentId: null,
-                  transcripts: null, importPreview: null, checked: new Set() };
+  // כל קבוצה מתקדמת בקצב שלה, ולכן אין "השבוע" אחד לכיתה: groups מחזיק שורה
+  // לכל קבוצה, ו-selectedGroup הוא זו שהפאנל עורך כרגע. filterGroup הוא סינון
+  // תצוגה בלבד של טבלת התלמידים ואינו קשור לעריכה.
+  const state = { students: [], groups: [], selectedGroup: null, filterGroup: null,
+                  selectedStudentId: null, transcripts: null, importPreview: null,
+                  checked: new Set() };
   await refresh();
 
   async function refresh() {
-    const [students, week] = await Promise.all([getDashboard(), getCurrentWeek()]);
+    const [students, groups] = await Promise.all([getDashboard(), getGroupWeeks()]);
     state.students = students;
-    state.week = week;
+    state.groups = groups;
+    if (!groups.some(g => g.group === state.selectedGroup)) {
+      state.selectedGroup = groups.length ? groups[0].group : null;
+    }
+    if (state.filterGroup !== null && !groups.some(g => g.group === state.filterGroup)) {
+      state.filterGroup = null;
+    }
     render();
+  }
+
+  function groupLabel(g) { return g ? g : 'ללא קבוצה'; }
+  function currentGroupWeek() {
+    return state.groups.find(g => g.group === state.selectedGroup)
+      || { group: state.selectedGroup, weekNumber: 0, topicText: '', datasetUrl: '', isOwn: false };
+  }
+  function visibleStudents() {
+    if (state.filterGroup === null) return state.students;
+    return state.students.filter(s => (s.group || '') === state.filterGroup);
   }
 
   function render() {
@@ -29,7 +49,13 @@ export async function mountTeacherDashboard(app, session, onLogout) {
         <div class="dash-grid">
           <div>
             <div class="panel glass">
-              <h3>👥 תלמידים (${state.students.length})</h3>
+              <h3>👥 תלמידים (${visibleStudents().length}${state.filterGroup !== null ? ` מתוך ${state.students.length}` : ''})</h3>
+              ${state.groups.length > 1 ? `<div class="group-filter">
+                <button type="button" class="chip filter-pick${state.filterGroup === null ? ' active' : ''}"
+                        data-group="">הכול</button>
+                ${state.groups.map(g => `<button type="button" class="chip filter-pick${state.filterGroup === g.group ? ' active' : ''}"
+                        data-group="${escapeHtml(g.group)}">${escapeHtml(groupLabel(g.group))} · שבוע ${g.weekNumber}</button>`).join('')}
+              </div>` : ''}
               ${state.checked.size ? `<div class="bulk-bar">
                   <span>${state.checked.size} מסומנים</span>
                   <button type="button" id="bulk-clear" class="ghost">ניקוי הבחירה</button>
@@ -44,14 +70,15 @@ export async function mountTeacherDashboard(app, session, onLogout) {
                     <th>שבועות</th><th>ציון Mentor</th><th>השבוע</th><th></th>
                   </tr></thead>
                   <tbody>
-                    ${state.students.map(s => `
+                    ${visibleStudents().map(s => `
                       <tr>
                         <td class="check-cell"><input type="checkbox" class="row-check" data-id="${s.studentId}"
                             ${state.checked.has(s.studentId) ? 'checked' : ''}
                             style="margin:0"></td>
                         <td>${escapeHtml(`${s.firstName || ''} ${s.lastName || ''}`.trim()
                           || `⚠️ רשומה חסרת שם (${s.username || s.studentId})`)}</td>
-                        <td>${escapeHtml(s.group || '—')}</td>
+                        <td>${escapeHtml(s.group || '—')}${s.groupWeekNumber
+                          ? ` <span class="muted-week">· שבוע ${s.groupWeekNumber}</span>` : ''}</td>
                         <td>${escapeHtml(s.experimentName || '—')}</td>
                         <td>${escapeHtml(s.note || '—')}</td>
                         <td>${s.weeksCompleted}</td>
@@ -71,22 +98,7 @@ export async function mountTeacherDashboard(app, session, onLogout) {
           </div>
 
           <div>
-            <div class="panel glass">
-              <h3>🗓️ נושא שבועי נוכחי</h3>
-              <p class="form-note" style="margin-top:0;">שבוע ${state.week.weekNumber}${state.week.topicText ? ' · ' + escapeHtml(state.week.topicText) : ' · טרם הוזן נושא'}</p>
-              <div class="field"><textarea id="topic-input" rows="2" placeholder="נושא השיעור השבועי...">${escapeHtml(state.week.topicText || '')}</textarea></div>
-              <div class="field">
-                <label for="dataset-url">קישור לערכות האימון (Drive)</label>
-                <input type="text" id="dataset-url" placeholder="https://drive.google.com/..."
-                  value="${escapeHtml(state.week.datasetUrl || '')}">
-                <p class="form-note" style="margin-top:4px;">מוצג לתלמידים במסילה. נשמר בשני
-                  הכפתורים, ונגרר משבוע לשבוע כל עוד המאגר לא השתנה.</p>
-              </div>
-              <div style="display:flex;gap:8px;">
-                <button type="button" id="update-topic-btn" class="secondary" style="flex:1;">שמירה לשבוע הנוכחי</button>
-                <button type="button" id="new-week-btn" style="flex:1;">שבוע חדש ▶</button>
-              </div>
-            </div>
+            ${renderWeekPanel()}
 
             <div class="panel glass">
               <h3>📥 ייבוא תלמידים מקובץ Excel</h3>
@@ -120,6 +132,45 @@ export async function mountTeacherDashboard(app, session, onLogout) {
     wireLogout(onLogout);
     wirePasswordEyes();
     wireActions();
+  }
+
+  function renderWeekPanel() {
+    if (!state.groups.length) {
+      return `<div class="panel glass">
+        <h3>🗓️ נושא שבועי לפי קבוצה</h3>
+        <p class="form-note" style="margin-top:0;">אין עדיין תלמידים, ולכן אין קבוצות.
+          הקבוצות נגזרות מעמודת "קבוצה" בקובץ הייבוא.</p>
+      </div>`;
+    }
+    const w = currentGroupWeek();
+    return `
+      <div class="panel glass">
+        <h3>🗓️ נושא שבועי לפי קבוצה</h3>
+        <div class="group-tabs">
+          ${state.groups.map(g => `
+            <button type="button" class="group-tab group-pick${g.group === state.selectedGroup ? ' active' : ''}"
+                    data-group="${escapeHtml(g.group)}">
+              <b>${escapeHtml(groupLabel(g.group))}</b>
+              <span>שבוע ${g.weekNumber} · ${g.studentCount} תלמידים</span>
+            </button>`).join('')}
+        </div>
+        <p class="form-note">שבוע ${w.weekNumber}${w.topicText ? ' · ' + escapeHtml(w.topicText) : ' · טרם הוזן נושא'}</p>
+        ${!w.isOwn ? `<p class="form-note warn-note">הקבוצה הזו עדיין על הנושא המשותף
+          שנקבע לפני ההפרדה. שמירה כאן תיצור לה מסלול משלה, בלי לגעת בקבוצות האחרות.</p>` : ''}
+        <div class="field"><textarea id="topic-input" rows="2"
+          placeholder="נושא השיעור השבועי של ${escapeHtml(groupLabel(w.group))}...">${escapeHtml(w.topicText || '')}</textarea></div>
+        <div class="field">
+          <label for="dataset-url">קישור לערכות האימון (Drive)</label>
+          <input type="text" id="dataset-url" placeholder="https://drive.google.com/..."
+            value="${escapeHtml(w.datasetUrl || '')}">
+          <p class="form-note" style="margin-top:4px;">מוצג לתלמידי הקבוצה הזו בלבד. נשמר בשני
+            הכפתורים, ונגרר משבוע לשבוע כל עוד המאגר לא השתנה.</p>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button type="button" id="update-topic-btn" class="secondary" style="flex:1;">שמירה לשבוע הנוכחי</button>
+          <button type="button" id="new-week-btn" style="flex:1;">שבוע חדש ▶</button>
+        </div>
+      </div>`;
   }
 
   function renderImportPreview() {
@@ -211,15 +262,31 @@ export async function mountTeacherDashboard(app, session, onLogout) {
     // --- בחירה מרובה ---
     const allBox = document.getElementById('check-all');
     if (allBox) {
-      const ids = state.students.map(x => x.studentId);
+      // רק מה שנראה על המסך. עם סינון פעיל, "סימון הכול" שסימן גם תלמידים
+      // מוסתרים היה הופך מחיקה מרובה למחיקה של קבוצה שלא מוצגת בכלל.
+      const ids = visibleStudents().map(x => x.studentId);
       allBox.checked = ids.length > 0 && ids.every(i => state.checked.has(i));
       allBox.indeterminate = !allBox.checked && ids.some(i => state.checked.has(i));
       allBox.addEventListener('change', () => {
         if (allBox.checked) ids.forEach(i => state.checked.add(i));
-        else state.checked.clear();
+        else ids.forEach(i => state.checked.delete(i));
         render();
       });
     }
+
+    // החלפת סינון מנקה סימונים שיצאו מהתצוגה: מה שנמחק צריך להיות מה שנראה.
+    document.querySelectorAll('.filter-pick').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.filterGroup = btn.dataset.group === '' ? null : btn.dataset.group;
+        const visible = new Set(visibleStudents().map(x => x.studentId));
+        [...state.checked].forEach(id => { if (!visible.has(id)) state.checked.delete(id); });
+        render();
+      });
+    });
+
+    document.querySelectorAll('.group-pick').forEach(btn => {
+      btn.addEventListener('click', () => { state.selectedGroup = btn.dataset.group; render(); });
+    });
     // לחיצה בכל מקום בתא מסמנת, לא רק על הריבוע עצמו
     document.querySelectorAll('td.check-cell').forEach(td => {
       td.addEventListener('click', e => {
@@ -309,23 +376,30 @@ ${names}`;
       });
     });
 
-    document.getElementById('update-topic-btn').addEventListener('click', async () => {
+    const updateTopicBtn = document.getElementById('update-topic-btn');
+    if (updateTopicBtn) updateTopicBtn.addEventListener('click', async () => {
       const text = document.getElementById('topic-input').value.trim();
       const dsUrl = (document.getElementById('dataset-url').value || '').trim();
       try {
-        state.week = await updateCurrentWeekTopic(text, dsUrl);
-        toast('הנושא עודכן');
-        render();
+        await updateCurrentWeekTopic(state.selectedGroup, text, dsUrl);
+        toast('הנושא עודכן ל' + groupLabel(state.selectedGroup));
+        await refresh();
       } catch (err) { toast('שגיאה: ' + err.message, true); }
     });
 
-    document.getElementById('new-week-btn').addEventListener('click', async () => {
+    const newWeekBtn = document.getElementById('new-week-btn');
+    if (newWeekBtn) newWeekBtn.addEventListener('click', async () => {
       const text = document.getElementById('topic-input').value.trim();
-      if (!confirm('להתחיל שבוע חדש (' + (state.week.weekNumber + 1) + ')? זה יאפשר לכל התלמידים לבצע צ\'ק-אין מוערך חדש.')) return;
+      const w = currentGroupWeek();
+      // שם הקבוצה באישור, לא רק המספר: שתי הקבוצות בשבועות שונים, ו"שבוע חדש"
+      // בלי לומר למי הוא שייך הוא בדיוק הלחיצה שמקדמת את הקבוצה הלא נכונה.
+      if (!confirm(`להתחיל שבוע ${w.weekNumber + 1} עבור ${groupLabel(w.group)} (${
+        state.students.filter(s => (s.group || '') === w.group).length} תלמידים)?\n` +
+        'שאר הקבוצות לא יושפעו.')) return;
       try {
         const dsUrl = (document.getElementById('dataset-url').value || '').trim();
-        state.week = await startNewWeek(text, undefined, dsUrl);
-        toast('שבוע ' + state.week.weekNumber + ' התחיל');
+        const res = await startNewWeek(state.selectedGroup, text, undefined, dsUrl);
+        toast(`${groupLabel(res.group)} · שבוע ${res.weekNumber} התחיל`);
         await refresh();
       } catch (err) { toast('שגיאה: ' + err.message, true); }
     });

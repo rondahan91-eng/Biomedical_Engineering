@@ -59,10 +59,36 @@ function loadDB() {
 function saveDB(db) { localStorage.setItem(DB_KEY, JSON.stringify(db)); }
 function delay(ms = 250) { return new Promise(r => setTimeout(r, ms)); }
 
+// '*' = "חל על כל קבוצה שאין לה שבוע משלה" - אותה סמנטיקה כמו בשרת.
+const DEV_GROUP_ALL = '*';
+
+function devNormGroup(g) { return String(g == null ? '' : g).trim(); }
+
+/** השבוע של קבוצה, עם נפילה לשבוע המשותף. מקביל ל-getCurrentWeekInfo בשרת. */
+function devWeek(db, group) {
+  const g = devNormGroup(group);
+  const own = g && db.weeks[g];
+  const w = own || db.weeks[DEV_GROUP_ALL];
+  if (!w) return { group: g, weekNumber: 0, topicText: '', datasetUrl: '', isOwn: false };
+  return { ...w, group: g, isOwn: !!own };
+}
+
+function devGroups(db) {
+  const seen = {};
+  db.users.filter(u => u.role === 'student')
+    .forEach(u => { const g = devNormGroup(u.group); seen[g] = (seen[g] || 0) + 1; });
+  return Object.keys(seen).sort().map(g => ({ group: g, studentCount: seen[g] }));
+}
+
 async function ensureSeeded() {
   let db = loadDB();
-  if (db) return db;
-  db = { users: [], week: { weekNumber: 1, topicText: 'ייצוג דיגיטלי, פיקסלים 0-255' }, checkIns: [], helpChats: [] };
+  if (db) {
+    // מסדי נתונים מקומיים מלפני ההפרדה לקבוצות מחזיקים week יחיד.
+    if (!db.weeks) { db.weeks = { [DEV_GROUP_ALL]: db.week || { weekNumber: 1, topicText: '' } }; delete db.week; saveDB(db); }
+    return db;
+  }
+  db = { users: [], weeks: { [DEV_GROUP_ALL]: { weekNumber: 1, topicText: 'ייצוג דיגיטלי, פיקסלים 0-255' } },
+         checkIns: [], helpChats: [] };
   db.users.push({
     studentId: 'admin', username: 'admin', passHash: await sha256Hex('admin123'),
     mustChangePassword: false, role: 'admin', firstName: 'מורה', lastName: 'ראשי',
@@ -162,73 +188,88 @@ async function callLocal(action, payload) {
     const u = findStudent(db, studentId);
     const mine = db.checkIns.filter(c => c.studentId === studentId);
     const lastGraded = mine.filter(c => c.status === 'graded').slice(-1)[0];
-    const doneThisWeek = mine.some(c => c.weekNumber === db.week.weekNumber && c.status === 'graded');
+    const week = devWeek(db, u.group);
+    const doneThisWeek = mine.some(c => c.weekNumber === week.weekNumber && c.status === 'graded');
     return {
       firstName: u.firstName, group: u.group, note: u.note,
       moduleName: 'מלריה — תאי דם', experiments: DEV_EXPERIMENTS,
       currentExperiment: u.currentExperiment || 'curve',
       experimentName: (DEV_EXPERIMENTS.find(e => e.key === (u.currentExperiment || 'curve')) || {}).name,
-      weekNumber: db.week.weekNumber, topicText: db.week.topicText,
-      datasetUrl: db.week.datasetUrl || '',
+      weekNumber: week.weekNumber, topicText: week.topicText,
+      datasetUrl: week.datasetUrl || '',
       priorSummary: lastGraded ? lastGraded.aiMemorySummary : '', gradedThisWeek: doneThisWeek,
     };
   }
 
   if (action === 'sendMentorMessage') {
     const { studentId, history } = payload;
+    const week = devWeek(db, findStudent(db, studentId).group);
     const result = await mockMentorReply(db, studentId, history || []);
     const fullHistory = (history || []).concat([{ role: 'model', text: result.reply }]);
     if (result.graded) {
       db.checkIns.push({
-        checkInId: 'ci_' + Date.now(), studentId, weekNumber: db.week.weekNumber,
-        transcript: fullHistory, aiMemorySummary: 'סיכום מדומה של שיחת שבוע ' + db.week.weekNumber,
+        checkInId: 'ci_' + Date.now(), studentId, weekNumber: week.weekNumber,
+        transcript: fullHistory, aiMemorySummary: 'סיכום מדומה של שיחת שבוע ' + week.weekNumber,
         mentorFeedback: result.reply, score: result.score, status: 'graded',
       });
     } else {
-      const existing = db.helpChats.find(h => h.studentId === studentId && h.weekNumber === db.week.weekNumber);
+      const existing = db.helpChats.find(h => h.studentId === studentId && h.weekNumber === week.weekNumber);
       if (existing) existing.transcript = fullHistory;
-      else db.helpChats.push({ logId: 'hc_' + Date.now(), studentId, weekNumber: db.week.weekNumber, transcript: fullHistory });
+      else db.helpChats.push({ logId: 'hc_' + Date.now(), studentId, weekNumber: week.weekNumber, transcript: fullHistory });
     }
     saveDB(db);
     return result;
   }
 
   if (action === 'getCurrentWeek') {
-    return db.week;
+    return devWeek(db, payload.group);
+  }
+
+  if (action === 'getGroupWeeks') {
+    return devGroups(db).map(g => ({ ...devWeek(db, g.group), studentCount: g.studentCount }));
   }
 
   if (action === 'startNewWeek') {
-    db.week = {
-      weekNumber: db.week.weekNumber + 1,
+    const g = devNormGroup(payload.group);
+    if (!g) throw new Error('לא נבחרה קבוצה. נושא שבועי נקבע לקבוצה מסוימת.');
+    const cur = devWeek(db, g);
+    db.weeks[g] = {
+      weekNumber: (cur.weekNumber || 0) + 1,
       topicText: payload.topicText || '',
       // נגרר משבוע לשבוע, כמו בשרת
-      datasetUrl: (payload.datasetUrl || '').trim() || db.week.datasetUrl || '',
+      datasetUrl: (payload.datasetUrl || '').trim() || cur.datasetUrl || '',
     };
     saveDB(db);
-    return db.week;
+    return devWeek(db, g);
   }
 
   if (action === 'updateCurrentWeekTopic') {
-    db.week.topicText = payload.topicText || '';
-    if (payload.datasetUrl !== undefined && payload.datasetUrl !== null)
-      db.week.datasetUrl = String(payload.datasetUrl).trim();
+    const g = devNormGroup(payload.group);
+    if (!g) throw new Error('לא נבחרה קבוצה. נושא שבועי נקבע לקבוצה מסוימת.');
+    const cur = devWeek(db, g);
+    // קבוצה שעדיין רוכבת על השבוע המשותף מקבלת שבוע משלה, ולא דורסת אותו
+    // לשאר הקבוצות.
+    const url = (payload.datasetUrl === undefined || payload.datasetUrl === null)
+      ? (cur.datasetUrl || '') : String(payload.datasetUrl).trim();
+    db.weeks[g] = { weekNumber: cur.weekNumber || 1, topicText: payload.topicText || '', datasetUrl: url };
     saveDB(db);
-    return db.week;
+    return devWeek(db, g);
   }
 
   if (action === 'getDashboard') {
     return db.users.filter(u => u.role === 'student').map(u => {
+      const week = devWeek(db, u.group);
       const mine = db.checkIns.filter(c => c.studentId === u.studentId);
       const scores = mine.map(c => c.teacherOverrideScore || c.score || 0);
       const accumulated = scores.reduce((s, v) => s + v, 0);
-      const pointsFor100 = 0.8 * (db.week.weekNumber || 1) * 10;
+      const pointsFor100 = 0.8 * (week.weekNumber || 1) * 10;
       const grade = pointsFor100 > 0 ? Math.min(100, Math.round((accumulated / pointsFor100) * 100)) : 0;
       const surplusPoints = Math.max(0, accumulated - pointsFor100);
-      const doneThisWeek = mine.some(c => c.weekNumber === db.week.weekNumber && c.status === 'graded');
+      const doneThisWeek = mine.some(c => c.weekNumber === week.weekNumber && c.status === 'graded');
       return {
         studentId: u.studentId, firstName: u.firstName, lastName: u.lastName,
         username: u.username, last4Id: u.last4Id,
-        group: u.group, note: u.note,
+        group: u.group, note: u.note, groupWeekNumber: week.weekNumber,
         currentExperiment: u.currentExperiment || 'curve',
         experimentName: (DEV_EXPERIMENTS.find(e => e.key === (u.currentExperiment || 'curve')) || {}).name,
         weeksCompleted: mine.length, mentorGrade: grade, surplusPoints,
@@ -322,14 +363,17 @@ export async function getStudentContext(studentId) {
 export async function sendMentorMessage(studentId, history, images, elapsedSeconds) {
   return dispatch('sendMentorMessage', { studentId, history, images, elapsedSeconds });
 }
-export async function getCurrentWeek() {
-  return dispatch('getCurrentWeek', {});
+export async function getCurrentWeek(group) {
+  return dispatch('getCurrentWeek', { group });
 }
-export async function startNewWeek(topicText, module, datasetUrl) {
-  return dispatch('startNewWeek', { topicText, module, datasetUrl });
+export async function getGroupWeeks() {
+  return dispatch('getGroupWeeks', {});
 }
-export async function updateCurrentWeekTopic(topicText, datasetUrl) {
-  return dispatch('updateCurrentWeekTopic', { topicText, datasetUrl });
+export async function startNewWeek(group, topicText, module, datasetUrl) {
+  return dispatch('startNewWeek', { group, topicText, module, datasetUrl });
+}
+export async function updateCurrentWeekTopic(group, topicText, datasetUrl) {
+  return dispatch('updateCurrentWeekTopic', { group, topicText, datasetUrl });
 }
 export async function getDashboard() {
   return dispatch('getDashboard', {});

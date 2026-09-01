@@ -109,6 +109,34 @@ label { display: block; font-size: 12.5px; font-weight: 600; color: var(--ink-2)
 .bulk-bar span { margin-inline-end: auto; }
 .bulk-bar button { padding: 6px 13px; font-size: 12.5px; }
 
+/* בחירת קבוצה - כל קבוצה מתקדמת בקצב שלה, ולכן הבחירה היא הקשר של הפאנל
+   כולו ולא עוד פילטר. לכן כרטיס ולא צ׳יפ: השבוע ומספר התלמידים נראים לפני
+   שלוחצים, כך שאי אפשר לקדם שבוע לקבוצה הלא נכונה בלי לראות את זה. */
+.group-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 12px; }
+.group-tab {
+  flex: 1 1 120px; display: flex; flex-direction: column; gap: 2px;
+  padding: 9px 12px; text-align: start;
+  background: var(--surface); color: var(--ink-2);
+  border: 1.5px solid var(--line-2); border-radius: var(--r-sm);
+  font-size: 13px; font-weight: 600; line-height: 1.35;
+}
+.group-tab span { font-size: 11.5px; font-weight: 500; color: var(--ink-3); }
+.group-tab.active {
+  background: var(--brand-soft); border-color: var(--brand); color: var(--brand-2);
+}
+.group-tab.active span { color: var(--brand-2); opacity: .85; }
+
+/* סינון תצוגה של טבלת התלמידים - נפרד מבחירת הקבוצה לעריכה */
+.group-filter { display: flex; gap: 6px; flex-wrap: wrap; margin: 0 0 12px; }
+.group-filter .chip {
+  padding: 5px 12px; font-size: 12.5px; font-weight: 600;
+  background: var(--surface); color: var(--ink-3);
+  border: 1px solid var(--line-2); border-radius: 999px;
+}
+.group-filter .chip.active { background: var(--brand); color: #fff; border-color: var(--brand); }
+.muted-week { color: var(--ink-3); font-size: 12px; white-space: nowrap; }
+.warn-note { color: var(--warn, #b45309); }
+
 /* שדה סיסמה עם כפתור הצגה */
 .pw-wrap { position: relative; }
 .pw-wrap input { padding-inline-end: 42px; }
