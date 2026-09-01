@@ -2,7 +2,7 @@
 // teacherDashboard.js - פאנל ניהול: ייבוא תלמידים, נושא שבועי, מעקב ציונים,
 // צפייה בתמלולים, דריסת ציון, ייצוא (FR-C).
 // ==========================================================================
-import { escapeHtml, toast, topbarHtml, wireLogout } from './ui.js';
+import { escapeHtml, toast, topbarHtml, wireLogout, passwordField, wirePasswordEyes } from './ui.js';
 import {
   getDashboard, getCurrentWeek, startNewWeek, updateCurrentWeekTopic,
   getStudentTranscripts, setManualGrade, exportWeeklyReport, importRoster, resetStudentPassword,
@@ -92,8 +92,8 @@ export async function mountTeacherDashboard(app, session, onLogout) {
                 סיסמת ברירת המחדל <code>admin123</code> מתועדת ב-README שבמאגר הציבורי.
                 כל עוד היא בתוקף, מי שמוצא את כתובת האתר יכול להיכנס כמורה.
               </p>
-              <div class="field"><input type="password" id="pw-new" placeholder="סיסמה חדשה" autocomplete="new-password"></div>
-              <div class="field"><input type="password" id="pw-again" placeholder="שוב, לאימות" autocomplete="new-password"></div>
+              ${passwordField({ id: 'pw-new', placeholder: 'סיסמה חדשה', autocomplete: 'new-password' })}
+              ${passwordField({ id: 'pw-again', placeholder: 'שוב, לאימות', autocomplete: 'new-password' })}
               <button type="button" id="pw-save-btn" style="width:100%;">שינוי סיסמה</button>
             </div>
 
@@ -107,6 +107,7 @@ export async function mountTeacherDashboard(app, session, onLogout) {
       </div>
       <div id="toast" class="toast"></div>`;
     wireLogout(onLogout);
+    wirePasswordEyes();
     wireActions();
   }
 

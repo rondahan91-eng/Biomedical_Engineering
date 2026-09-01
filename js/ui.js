@@ -62,3 +62,54 @@ export function wireLogout(onLogout) {
   const btn = document.getElementById('logout-btn');
   if (btn) btn.addEventListener('click', onLogout);
 }
+
+// ---------------------------------------------------------------- שדה סיסמה
+/**
+ * שדה סיסמה עם כפתור הצגה.
+ *
+ * הסיסמאות כאן נגזרות מתאריך לידה (DDMMYY), ותלמיד שמקליד ספרה שגויה
+ * בטלפון אינו יכול לראות מה כתב - הוא רק מקבל "שם משתמש או סיסמה שגויים"
+ * ואין לו דרך להבחין בין טעות הקלדה לסיסמה שגויה.
+ */
+export function passwordField({ id, label, placeholder = '', autocomplete = 'current-password', required = false }) {
+  return `
+    <div class="field">
+      ${label ? `<label for="${id}">${escapeHtml(label)}</label>` : ''}
+      <div class="pw-wrap">
+        <input type="password" id="${id}" autocomplete="${autocomplete}"
+               ${placeholder ? `placeholder="${escapeHtml(placeholder)}"` : ''}
+               ${required ? 'required' : ''}>
+        <button type="button" class="pw-eye" data-for="${id}"
+                aria-label="הצגת הסיסמה" aria-pressed="false" title="הצגת הסיסמה">${EYE}</button>
+      </div>
+    </div>`;
+}
+
+const EYE = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" ' +
+  'stroke-width="1.8" stroke-linecap="round"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/>' +
+  '<circle cx="12" cy="12" r="2.6"/></svg>';
+const EYE_OFF = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" ' +
+  'stroke-width="1.8" stroke-linecap="round"><path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z"/>' +
+  '<circle cx="12" cy="12" r="2.6"/><path d="M3 3l18 18"/></svg>';
+
+/** מחבר את כל כפתורי ההצגה שבמסך. יש לקרוא אחרי כל render. */
+export function wirePasswordEyes(root = document) {
+  root.querySelectorAll('.pw-eye').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const input = root.getElementById
+        ? root.getElementById(btn.dataset.for)
+        : root.querySelector('#' + btn.dataset.for);
+      if (!input) return;
+      const show = input.type === 'password';
+      input.type = show ? 'text' : 'password';
+      btn.innerHTML = show ? EYE_OFF : EYE;
+      btn.setAttribute('aria-pressed', String(show));
+      btn.setAttribute('aria-label', show ? 'הסתרת הסיסמה' : 'הצגת הסיסמה');
+      btn.title = show ? 'הסתרת הסיסמה' : 'הצגת הסיסמה';
+      // הסמן חוזר לסוף, אחרת החלפת סוג השדה מקפיצה אותו להתחלה
+      const v = input.value;
+      input.focus();
+      input.setSelectionRange?.(v.length, v.length);
+    });
+  });
+}

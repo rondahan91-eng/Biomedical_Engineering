@@ -1,7 +1,7 @@
 // מסך התחברות - פאנל מפוצל (אזור מיתוג + טופס).
 // אין חיוב להחליף סיסמה בכניסה הראשונה: התלמיד/ה נשאר/ת עם הסיסמה שהמערכת
 // גזרה מתאריך הלידה, והמורה עם סיסמת ברירת המחדל.
-import { logoMark } from './ui.js';
+import { logoMark, passwordField, wirePasswordEyes } from './ui.js';
 import { authenticateUser, isDevMode } from './api.js';
 
 function artPanel() {
@@ -35,10 +35,8 @@ export function renderLogin(app, onLoggedIn) {
           <label for="username">שם משתמש</label>
           <input type="text" id="username" autocomplete="username" required>
         </div>
-        <div class="field">
-          <label for="password">סיסמה</label>
-          <input type="password" id="password" autocomplete="current-password" required>
-        </div>
+        ${passwordField({ id: 'password', label: 'סיסמה',
+                          autocomplete: 'current-password', required: true })}
         <button type="submit" id="login-btn">כניסה</button>
         ${isDevMode() ? `<div class="auth-hint"><b>מצב פיתוח מקומי</b> (ללא שרת מחובר)<br>
           מורה: <code>admin</code> / <code>admin123</code><br>
@@ -47,6 +45,7 @@ export function renderLogin(app, onLoggedIn) {
     </div>
   </div>`;
 
+  wirePasswordEyes();
   const form = document.getElementById('login-form');
   const err = document.getElementById('login-error');
   form.addEventListener('submit', async (e) => {
