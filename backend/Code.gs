@@ -1026,7 +1026,12 @@ function getDashboard() {
     const { grade, surplusPoints } = computeMentorGrade(scores, totalWeeksSoFar);
     const doneThisWeek = mine.some(c => Number(c.weekNumber) === Number(week.weekNumber) && c.status === 'graded');
     return {
-      studentId: u.studentId, firstName: u.firstName, lastName: u.lastName,
+      // username ו-last4Id נדרשים בפאנל לזיהוי כפילויות בייבוא:
+      // שם פרטי + שם משפחה + 4 ספרות הוא מפתח הזהות שמבדיל בין "אותו
+      // אדם, ייבוא חוזר" (מדלגים) לבין "אדם אחר, אותן 4 ספרות" (יוצרים
+      // עם סיומת). בלעדיהם המפתח חסר וכל שורה נראית חדשה.
+      studentId: u.studentId, username: u.username, last4Id: u.last4Id,
+      firstName: u.firstName, lastName: u.lastName,
       group: u.group, note: u.note,
       currentExperiment: u.currentExperiment || EXPERIMENT_ORDER[0],
       experimentName: experimentName(u.currentExperiment),

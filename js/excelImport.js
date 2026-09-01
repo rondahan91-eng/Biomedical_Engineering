@@ -56,6 +56,18 @@ export function parseDob(value) {
   return { dd: String(day).padStart(2, '0'), mm: String(month).padStart(2, '0'), yy: year };
 }
 
+/**
+ * מפתח זהות של תלמיד/ה.
+ *
+ * שם המשתמש אינו זהות אלא נגזרת שלה, ולכן אי אפשר להסתמך עליו: שתי דנה
+ * שונות ש-4 ספרות ת״ז שלהן זהות יקבלו את אותו שם משתמש, ואותה דנה בייבוא
+ * חוזר תיראה כמו התנגשות. שם פרטי + שם משפחה + 4 ספרות מבדיל בין השניים -
+ * אותו אדם מתאים בדיוק, אדם אחר נופל למפתח אחר.
+ */
+export function identityKey(firstName, lastName, last4) {
+  return [firstName, lastName, last4].map(x => String(x || '').trim().toLowerCase()).join('|');
+}
+
 /** שם משתמש = שם פרטי + 4 הספרות האחרונות של ת.ז, עם דה-דופ (_2, _3...). */
 export function deriveUsername(firstName, idNumber, takenSet) {
   const digits = String(idNumber || '').replace(/\D/g, '');
@@ -76,11 +88,12 @@ function isBlankRow(row, fieldMap) {
 }
 
 /**
- * מפרש קובץ Excel של תלמידים ומחזיר { valid, invalid }.
- * @param {File} file
- * @param {string[]} existingUsernames - שמות משתמש קיימים כבר במערכת (למניעת התנגשות)
+ * מפרש קובץ Excel של תלמידים ומחזיר { valid, invalid, duplicates }.
+ *
+ * existing: רשימת התלמידים שכבר במערכת - אובייקטים עם firstName, lastName,
+ * last4Id ו-username. מקבל גם מערך מחרוזות (שמות משתמש בלבד) לתאימות לאחור.
  */
-export async function parseStudentsExcel(file, existingUsernames = []) {
+export async function parseStudentsExcel(file, existing = []) {
   if (typeof XLSX === 'undefined') {
     throw new Error('ספריית קריאת ה-Excel לא נטענה. ודאו חיבור אינטרנט ורעננו את הדף.');
   }
@@ -103,8 +116,12 @@ export async function parseStudentsExcel(file, existingUsernames = []) {
     };
   }
 
-  const takenUsernames = new Set(existingUsernames);
-  const valid = [];
+  const asObjects = existing.map(e => typeof e === 'string' ? { username: e } : e);
+  const takenUsernames = new Set(asObjects.map(e => e.username).filter(Boolean));
+  const knownPeople = new Map(asObjects
+    .filter(e => e.firstName || e.lastName || e.last4Id)
+    .map(e => [identityKey(e.firstName, e.lastName, e.last4Id), e]));
+  const valid = [], duplicates = [];
   const invalid = [];
 
   rows.forEach((row, i) => {
@@ -127,6 +144,16 @@ export async function parseStudentsExcel(file, existingUsernames = []) {
       invalid.push({ row: excelRow, reason: `תאריך לידה לא תקין ("${dobRaw}"). פורמט צפוי: DD/MM/YYYY.` });
       return;
     }
+    const digits = String(idNumber).replace(/\D/g, '');
+    const rowLast4 = digits.slice(-4).padStart(4, '0');
+    const known = knownPeople.get(identityKey(firstName, lastName, rowLast4));
+    if (known) {
+      // אותו אדם בדיוק - לא יוצרים חשבון שני. ייבוא חוזר של אותו קובץ
+      // אינו משנה דבר, וזו ההתנהגות הנכונה.
+      duplicates.push({ excelRow, firstName, lastName,
+        displayName: `${firstName} ${lastName}`, username: known.username || '' });
+      return;
+    }
     const { username, last4 } = deriveUsername(firstName, idNumber, takenUsernames);
     const password = dob.dd + dob.mm + dob.yy;
     valid.push({
@@ -137,5 +164,5 @@ export async function parseStudentsExcel(file, existingUsernames = []) {
     // idNumber המלא לא נשמר באובייקט המוחזר - נזרק כאן.
   });
 
-  return { valid, invalid };
+  return { valid, invalid, duplicates };
 }

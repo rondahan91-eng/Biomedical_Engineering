@@ -11,7 +11,8 @@ import {
 import { parseStudentsExcel } from './excelImport.js';
 
 export async function mountTeacherDashboard(app, session, onLogout) {
-  const state = { students: [], week: { weekNumber: 0, topicText: '' }, selectedStudentId: null, transcripts: null, importPreview: null };
+  const state = { students: [], week: { weekNumber: 0, topicText: '' }, selectedStudentId: null,
+                  transcripts: null, importPreview: null, checked: new Set() };
   await refresh();
 
   async function refresh() {
@@ -29,15 +30,25 @@ export async function mountTeacherDashboard(app, session, onLogout) {
           <div>
             <div class="panel glass">
               <h3>👥 תלמידים (${state.students.length})</h3>
+              ${state.checked.size ? `<div class="bulk-bar">
+                  <span>${state.checked.size} מסומנים</span>
+                  <button type="button" id="bulk-clear" class="ghost">ניקוי הבחירה</button>
+                  <button type="button" id="bulk-delete" class="danger">מחיקת המסומנים</button>
+                </div>` : ''}
               <div class="table-scroll">
                 <table class="data-table">
                   <thead><tr>
+                    <th class="check-cell" style="width:38px"><input type="checkbox" id="check-all"
+                        title="סימון הכול" style="margin:0"></th>
                     <th>שם</th><th>קבוצה</th><th>ניסוי נוכחי</th><th>הערה</th>
                     <th>שבועות</th><th>ציון Mentor</th><th>השבוע</th><th></th>
                   </tr></thead>
                   <tbody>
                     ${state.students.map(s => `
                       <tr>
+                        <td class="check-cell"><input type="checkbox" class="row-check" data-id="${s.studentId}"
+                            ${state.checked.has(s.studentId) ? 'checked' : ''}
+                            style="margin:0"></td>
                         <td>${escapeHtml(`${s.firstName || ''} ${s.lastName || ''}`.trim()
                           || `⚠️ רשומה חסרת שם (${s.username || s.studentId})`)}</td>
                         <td>${escapeHtml(s.group || '—')}</td>
@@ -113,14 +124,28 @@ export async function mountTeacherDashboard(app, session, onLogout) {
 
   function renderImportPreview() {
     if (!state.importPreview) return '';
-    const { valid, invalid } = state.importPreview;
+    const { valid, invalid, duplicates = [] } = state.importPreview;
+    // הפרסר כבר הבחין בין אדם חדש לאדם שכבר במערכת, לפי שם פרטי + שם משפחה
+    // + 4 ספרות. כאן רק מציגים את ההבחנה *לפני* האישור, כדי שהמורה יראה מה
+    // ייווצר ומה ידולג ולא יגלה זאת רק אחרי הייבוא.
+    const fresh = valid, dupes = duplicates;
+
+    const rows = list => list.map(v =>
+      `<div class="import-row"><span>${escapeHtml(v.displayName)}</span>
+         <span>${escapeHtml(v.username)}</span></div>`).join('');
+
     return `
       <div style="margin-top:12px;">
-        ${valid.length ? `<p class="form-note">${valid.length} תלמידים תקינים:</p>
-          ${valid.map(v => `<div class="import-row"><span>${escapeHtml(v.displayName)}</span><span>${escapeHtml(v.username)}</span></div>`).join('')}
-          <button type="button" id="confirm-import-btn" style="width:100%;margin-top:10px;">ייבוא ${valid.length} תלמידים</button>` : ''}
-        ${invalid.length ? `<p class="form-note" style="color:var(--red);">${invalid.length} שורות נכשלו:</p>
-          ${invalid.map(v => `<div class="import-row"><span>שורה ${v.row}</span><span>${escapeHtml(v.reason)}</span></div>`).join('')}` : ''}
+        ${fresh.length ? `<p class="form-note"><b>${fresh.length} ייווצרו:</b></p>${rows(fresh)}` : ''}
+        ${dupes.length ? `<p class="form-note" style="color:var(--warn);">
+             <b>${dupes.length} כבר במערכת</b> ולא ייווצרו שוב:</p>${rows(dupes)}` : ''}
+        ${invalid.length ? `<p class="form-note" style="color:var(--err);">
+             <b>${invalid.length} שורות נכשלו:</b></p>
+          ${invalid.map(v => `<div class="import-row"><span>שורה ${v.row}</span>
+             <span>${escapeHtml(v.reason)}</span></div>`).join('')}` : ''}
+        ${fresh.length
+          ? `<button type="button" id="confirm-import-btn" style="width:100%;margin-top:10px;">ייבוא ${fresh.length} תלמידים</button>`
+          : `<p class="form-note" style="margin-top:10px;">אין מה לייבא — כל השורות התקינות כבר קיימות במערכת.</p>`}
       </div>`;
   }
 
@@ -181,6 +206,67 @@ export async function mountTeacherDashboard(app, session, onLogout) {
         document.getElementById('pw-again').value = '';
         toast('הסיסמה הוחלפה. בכניסה הבאה השתמשו בחדשה.');
       } catch (err) { toast('שגיאה: ' + err.message, true); }
+    });
+
+    // --- בחירה מרובה ---
+    const allBox = document.getElementById('check-all');
+    if (allBox) {
+      const ids = state.students.map(x => x.studentId);
+      allBox.checked = ids.length > 0 && ids.every(i => state.checked.has(i));
+      allBox.indeterminate = !allBox.checked && ids.some(i => state.checked.has(i));
+      allBox.addEventListener('change', () => {
+        if (allBox.checked) ids.forEach(i => state.checked.add(i));
+        else state.checked.clear();
+        render();
+      });
+    }
+    // לחיצה בכל מקום בתא מסמנת, לא רק על הריבוע עצמו
+    document.querySelectorAll('td.check-cell').forEach(td => {
+      td.addEventListener('click', e => {
+        if (e.target.tagName !== 'INPUT') td.querySelector('input')?.click();
+      });
+    });
+    document.querySelectorAll('.row-check').forEach(cb => {
+      cb.addEventListener('change', () => {
+        if (cb.checked) state.checked.add(cb.dataset.id);
+        else state.checked.delete(cb.dataset.id);
+        render();
+      });
+    });
+    const clearBtn = document.getElementById('bulk-clear');
+    if (clearBtn) clearBtn.addEventListener('click', () => { state.checked.clear(); render(); });
+
+    const bulkBtn = document.getElementById('bulk-delete');
+    if (bulkBtn) bulkBtn.addEventListener('click', async () => {
+      const picked = state.students.filter(x => state.checked.has(x.studentId));
+      if (!picked.length) return;
+      const withWork = picked.filter(x => x.weeksCompleted > 0);
+      const names = picked.map(x => `${x.firstName || ''} ${x.lastName || ''}`.trim()).join(', ');
+      let msg = `למחוק ${picked.length} תלמידים?
+
+${names}`;
+      if (withWork.length) {
+        const weeks = withWork.reduce((n, x) => n + x.weeksCompleted, 0);
+        msg += `
+
+ל-${withWork.length} מהם יש יחד ${weeks} שבועות מוערכים. `
+             + 'הצ׳ק-אינים והציונים יישארו בגיליון, אבל החשבונות יימחקו.';
+      }
+      if (!confirm(msg)) return;
+
+      bulkBtn.disabled = true;
+      // אחד-אחד ולא במקביל: Apps Script נועל את הגיליון, ובקשות מקבילות
+      // נכשלות על נעילה במקום למחוק.
+      const done = [], failed = [];
+      for (const st of picked) {
+        try { await deleteStudent(st.studentId); done.push(st.studentId); }
+        catch (err) { failed.push(`${st.firstName}: ${err.message}`); }
+      }
+      done.forEach(i => state.checked.delete(i));
+      toast(failed.length
+        ? `נמחקו ${done.length} · נכשלו ${failed.length} — ${failed[0]}`
+        : `${done.length} תלמידים נמחקו`, failed.length > 0);
+      await refresh();
     });
 
     document.querySelectorAll('.del-student-btn').forEach(btn => {
@@ -249,8 +335,7 @@ export async function mountTeacherDashboard(app, session, onLogout) {
       const file = input.files && input.files[0];
       if (!file) { toast('נא לבחור קובץ Excel קודם', true); return; }
       try {
-        const existingUsernames = state.students.map(s => s.username).filter(Boolean);
-        state.importPreview = await parseStudentsExcel(file, existingUsernames);
+        state.importPreview = await parseStudentsExcel(file, state.students);
         render();
       } catch (err) {
         toast('שגיאה בקריאת הקובץ: ' + err.message, true);

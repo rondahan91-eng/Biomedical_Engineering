@@ -227,6 +227,7 @@ async function callLocal(action, payload) {
       const doneThisWeek = mine.some(c => c.weekNumber === db.week.weekNumber && c.status === 'graded');
       return {
         studentId: u.studentId, firstName: u.firstName, lastName: u.lastName,
+        username: u.username, last4Id: u.last4Id,
         group: u.group, note: u.note,
         currentExperiment: u.currentExperiment || 'curve',
         experimentName: (DEV_EXPERIMENTS.find(e => e.key === (u.currentExperiment || 'curve')) || {}).name,
