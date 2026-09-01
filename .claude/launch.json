@@ -4,8 +4,8 @@
     {
       "name": "ai-mentor-local",
       "runtimeExecutable": "py",
-      "runtimeArgs": ["-m", "http.server", "8010"],
-      "port": 8010
+      "runtimeArgs": ["-m", "http.server", "8231"],
+      "port": 8231
     }
   ]
 }

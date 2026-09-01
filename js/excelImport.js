@@ -65,7 +65,23 @@ export function parseDob(value) {
  * אותו אדם מתאים בדיוק, אדם אחר נופל למפתח אחר.
  */
 export function identityKey(firstName, lastName, last4) {
-  return [firstName, lastName, last4].map(x => String(x || '').trim().toLowerCase()).join('|');
+  const name = [firstName, lastName].map(x => String(x || '').trim().toLowerCase());
+  return name.concat(normalizeLast4(last4)).join('|');
+}
+
+/**
+ * 4 הספרות כמחרוזת בת 4 תווים - או מחרוזת ריקה אם אין ספרות כלל.
+ *
+ * Google Sheets שומר "0330" כמספר 330 ובולע את האפס המוביל, ולכן הערך שחוזר
+ * מהשרת אינו זהה לזה שנגזר מהקובץ. בלי ההשוואה המנורמלת, כל תלמיד שת״ז שלו
+ * מסתיימת באפס מוביל היה נראה כאדם חדש בכל ייבוא חוזר ומקבל חשבון כפול.
+ *
+ * ריק נשאר ריק ולא הופך ל-"0000": אחרת כל מי שאין לו 4 ספרות (למשל שורת
+ * המורה) היה מתמזג לאותה זהות.
+ */
+function normalizeLast4(value) {
+  const digits = String(value ?? '').replace(/\D/g, '');
+  return digits ? digits.slice(-4).padStart(4, '0') : '';
 }
 
 /** שם משתמש = שם פרטי + 4 הספרות האחרונות של ת.ז, עם דה-דופ (_2, _3...). */

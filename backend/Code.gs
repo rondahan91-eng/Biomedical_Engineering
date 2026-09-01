@@ -294,6 +294,7 @@ function createSheet(ss, name) {
   const sheet = ss.insertSheet(name);
   sheet.appendRow(SHEET_SCHEMAS[name]);
   if (name === SHEET_USERS) {
+    forceTextColumns(sheet, name, USERS_TEXT_COLUMNS);
     sheet.appendRow(['admin', 'admin', sha256('admin123'), false, 'admin', 'מורה', 'ראשי', '', '', '', '', '', new Date()]);
   }
   sheet.setFrozenRows(1);
@@ -427,9 +428,25 @@ function resetStudentPassword(studentId, newPassword) {
  * לא הייתה נכתבת לגיליון).
  * students: [{firstName, lastName, username, password, last4Id, birthDateLabel, group, note}]
  */
+/**
+ * עמודות שחייבות להישאר טקסט. "0330" ו-"05/10/11" הם מחרוזות, אבל Sheets
+ * ממיר אותן לבד למספר ולתאריך ובולע את האפס המוביל - וכך 4 הספרות שחוזרות
+ * מהשרת אינן זהות לאלה שנגזרות מקובץ הייבוא, ואותו תלמיד נראה כאדם חדש.
+ */
+const USERS_TEXT_COLUMNS = ['last4Id', 'birthDate'];
+
+function forceTextColumns(sheet, name, fieldNames) {
+  const schema = SHEET_SCHEMAS[name];
+  fieldNames.forEach(field => {
+    const col = schema.indexOf(field) + 1;
+    if (col > 0) sheet.getRange(1, col, sheet.getMaxRows(), 1).setNumberFormat('@');
+  });
+}
+
 function importRoster(students) {
   if (!students || !students.length) throw new Error('לא התקבלו תלמידים לייבוא');
   const usersSheet = getSheet(SHEET_USERS);
+  forceTextColumns(usersSheet, SHEET_USERS, USERS_TEXT_COLUMNS);
   const existing = sheetToObjects(usersSheet);
   const results = [];
   students.forEach(s => {
