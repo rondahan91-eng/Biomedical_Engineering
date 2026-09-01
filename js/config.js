@@ -6,8 +6,12 @@
 // השרת באמצעות localStorage - כך אפשר לבדוק הכל בלי לפרוס שום דבר בגוגל.
 // שימו לב: שיחת ה-AI Mentor עצמה דורשת שרת אמיתי (מפתח Gemini) - במצב פיתוח
 // היא מוצגת כתשובות מדומות קבועות, לצורך בדיקת הממשק בלבד.
+// לפני שמחליפים את הכתובת כאן - פותחים אותה בדפדפן ומוודאים שהיא עונה
+// "AI Mentor - הנדסה ביו-רפואית - API פעיל". באותו חשבון יש פרויקט Apps Script
+// כמעט זהה של מגמת האלקטרוניקה, וכתובת שלו נראית בדיוק אותו דבר אבל עונה
+// "פעולה לא מוכרת" לכל פעולה של המערכת הזו.
 export const CONFIG = {
-  API_URL: 'https://script.google.com/macros/s/AKfycbxwa0_By_LIzoiYkHu7ML8VXUar1C-6Y0extJ8AbszQTQgPvjlyH3gOBYe4tirzeh9G/exec',
+  API_URL: 'https://script.google.com/macros/s/AKfycbx3VCn1KSNlCAAE4kTJNa6b85VoDVB2Y6k-uPrgm2G8UVWuiuelTZYuEZxgRvzAeX7T/exec',
   APP_NAME: 'AI Mentor - הנדסה ביו-רפואית',
   SESSION_KEY: 'ai-mentor-biorefua-session',
 };
