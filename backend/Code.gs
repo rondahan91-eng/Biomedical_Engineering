@@ -474,12 +474,29 @@ function resetStudentPassword(studentId, newPassword) {
  */
 const USERS_TEXT_COLUMNS = ['last4Id', 'birthDate'];
 
+/**
+ * 4 הספרות תמיד כמחרוזת בת 4 תווים, גם אם בגיליון הן שמורות כמספר.
+ *
+ * הפורמט של העמודה אמור למנוע את זה מלכתחילה, אבל שורות שנוצרו לפניו קיימות
+ * ולא נוגעים בהן. הנרמול כאן הופך את זה לחסין: מי שקורא מה-API מקבל תמיד
+ * ארבעה תווים, ולא צריך לדעת איך Sheets במקרה שמר את התא. ריק נשאר ריק ולא
+ * הופך ל-0000, אחרת כל מי שאין לו ת״ז היה מתמזג לאותה זהות.
+ */
+function pad4(value) {
+  const digits = String(value == null ? '' : value).replace(/\D/g, '');
+  return digits ? ('0000' + digits).slice(-4) : '';
+}
+
 function forceTextColumns(sheet, name, fieldNames) {
   const schema = SHEET_SCHEMAS[name];
   fieldNames.forEach(field => {
     const col = schema.indexOf(field) + 1;
     if (col > 0) sheet.getRange(1, col, sheet.getMaxRows(), 1).setNumberFormat('@');
   });
+  // בלי flush, שינוי הפורמט נשאר בתור הכתיבות של Apps Script ועלול להיות
+  // מוחל *אחרי* ה-appendRow שאמור היה ליהנות ממנו - וכך "0528" עדיין נכנס
+  // כמספר 528. זה בדיוק מה שקרה בייבוא הראשון אחרי התיקון.
+  SpreadsheetApp.flush();
 }
 
 function importRoster(students) {
@@ -1165,7 +1182,7 @@ function getDashboard() {
       // שם פרטי + שם משפחה + 4 ספרות הוא מפתח הזהות שמבדיל בין "אותו
       // אדם, ייבוא חוזר" (מדלגים) לבין "אדם אחר, אותן 4 ספרות" (יוצרים
       // עם סיומת). בלעדיהם המפתח חסר וכל שורה נראית חדשה.
-      studentId: u.studentId, username: u.username, last4Id: u.last4Id,
+      studentId: u.studentId, username: u.username, last4Id: pad4(u.last4Id),
       firstName: u.firstName, lastName: u.lastName,
       group: u.group, note: u.note,
       groupWeekNumber: week.weekNumber,
