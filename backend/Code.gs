@@ -459,6 +459,61 @@ function resetStudentPassword(studentId, newPassword) {
   throw new Error('תלמיד לא נמצא');
 }
 
+/**
+ * סיסמה ראשונית = שם פרטי + 3 הספרות האחרונות של ת״ז. חייבת להישאר זהה
+ * לנוסחה ב-js/excelImport.js (derivePassword) - שתי נוסחאות שונות פירושן
+ * שהסיסמה שהמורה מחלק אינה זו ששמורה בשרת.
+ *
+ * 3 הספרות נלקחות מ-last4Id ולא מהת״ז המלאה, שאינה נשמרת כלל. זה עובד גם על
+ * השורות שבהן Sheets בלע אפס מוביל (0330 שמור כ-330): מכיוון שלוקחים את
+ * *הסוף*, האפס המוביל לא משנה דבר.
+ */
+function initialPassword(firstName, last4Id) {
+  return String(firstName || '').trim() + pad4(last4Id).slice(-3);
+}
+
+/**
+ * הרצה חד-פעמית מעורך Apps Script אחרי שינוי שיטת הסיסמאות.
+ *
+ * שינוי הנוסחה בקוד משפיע רק על ייבוא הבא - התלמידים שכבר קיימים נשארים עם
+ * ה-hash הישן שנגזר מתאריך הלידה. הפונקציה הזו מיישרת את כולם לשיטה החדשה,
+ * וכותבת גיליון "סיסמאות" לחלוקה.
+ *
+ * **למחוק את הגיליון "סיסמאות" מיד אחרי החלוקה.** הסיסמאות שם אינן חושפות
+ * דבר שלא ניתן לגזור מ-firstName ו-last4Id שכבר בגיליון, אבל אין סיבה
+ * להשאיר רשימה מרוכזת פתוחה.
+ *
+ * אינה חשופה כפעולת רשת בכוונה: איפוס גורף של כל הסיסמאות אינו דבר שצריך
+ * להיות אפשרי דרך כתובת ה-/exec.
+ */
+function resetAllStudentPasswordsToNewScheme() {
+  const sheet = getSheet(SHEET_USERS);
+  const rows = sheetToObjects(sheet);
+  const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+  const passCol = headers.indexOf('passHash') + 1;
+  const out = [['שם מלא', 'קבוצה', 'שם משתמש', 'סיסמה']];
+  let n = 0;
+
+  rows.forEach(u => {
+    if (u.role !== 'student') return;           // שורת המורה לא נוגעים בה
+    const pw = initialPassword(u.firstName, u.last4Id);
+    sheet.getRange(u.__row, passCol).setValue(sha256(pw));
+    out.push([(u.firstName + ' ' + u.lastName).trim(), u.group, u.username, pw]);
+    n++;
+  });
+
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const old = ss.getSheetByName('סיסמאות');
+  if (old) ss.deleteSheet(old);
+  const list = ss.insertSheet('סיסמאות');
+  list.getRange(1, 1, out.length, 4).setValues(out);
+  list.setFrozenRows(1);
+  list.autoResizeColumns(1, 4);
+
+  Logger.log('אופסו ' + n + ' סיסמאות. הרשימה בגיליון "סיסמאות" — למחוק אחרי החלוקה.');
+  return { updated: n };
+}
+
 // -------------------------------------------------------------- ייבוא תלמידים מאקסל
 /**
  * הקובץ עצמו נקרא ומפוענח בדפדפן (js/excelImport.js, SheetJS) - כולל גזירת

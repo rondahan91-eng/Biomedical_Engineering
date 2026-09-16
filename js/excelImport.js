@@ -84,6 +84,22 @@ function normalizeLast4(value) {
   return digits ? digits.slice(-4).padStart(4, '0') : '';
 }
 
+/**
+ * סיסמה ראשונית = שם פרטי + 3 הספרות האחרונות של ת״ז.
+ *
+ * החלופה הקודמת הייתה תאריך הלידה (DDMMYY), ובה שני תלמידים שנולדו באותו יום
+ * קיבלו בדיוק אותה סיסמה. כאן הסיסמה נגזרת מהת״ז, ולכן היא ייחודית כמעט תמיד.
+ *
+ * ⚠️ שם המשתמש הוא שם פרטי + 4 ספרות, והסיסמה היא שם פרטי + 3 מתוכן — כלומר
+ * הסיסמה נגזרת מתוך שם המשתמש במחיקת תו אחד. מי שרואה שם משתמש יודע את הסיסמה.
+ * זו החלטה מודעת של המורה לכיתה שאין בה מידע רגיש; אם יידרש הפרדה, יש לשנות
+ * את אחד משני הביטויים כך שלא יחפפו.
+ */
+export function derivePassword(firstName, idNumber) {
+  const digits = String(idNumber || '').replace(/\D/g, '');
+  return String(firstName || '').trim() + digits.slice(-3).padStart(3, '0');
+}
+
 /** שם משתמש = שם פרטי + 4 הספרות האחרונות של ת.ז, עם דה-דופ (_2, _3...). */
 export function deriveUsername(firstName, idNumber, takenSet) {
   const digits = String(idNumber || '').replace(/\D/g, '');
@@ -171,7 +187,7 @@ export async function parseStudentsExcel(file, existing = []) {
       return;
     }
     const { username, last4 } = deriveUsername(firstName, idNumber, takenUsernames);
-    const password = dob.dd + dob.mm + dob.yy;
+    const password = derivePassword(firstName, idNumber);
     valid.push({
       excelRow, firstName, lastName, displayName: `${firstName} ${lastName}`,
       last4Id: last4, birthDateLabel: `${dob.dd}/${dob.mm}/${dob.yy}`, group, note,
