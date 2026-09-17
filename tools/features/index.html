@@ -1,0 +1,900 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>איך מודל רואה תמונה · AI Mentor</title>
+<style>
+  :root{
+    --bg:#eef3f7; --surface:#fff; --surface2:#f7fafc; --line:#e0e9f0; --line2:#ccdae5;
+    --ink:#0d1f2b; --ink2:#4a6478; --ink3:#8aa2b3;
+    --brand:#0891b2; --brand2:#0e7490; --brand-soft:#e6fafd; --accent:#14b8a6;
+    --ok:#059669; --ok-soft:#e9fbf3; --warn:#b45309; --warn-soft:#fff8ec;
+    --inf:#c2410c; --uninf:#0891b2;
+    --r:14px; --sh:0 2px 10px rgba(13,31,43,.07);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font-family:'Segoe UI','Assistant',Arial,sans-serif;line-height:1.6}
+  .wrap{max-width:1180px;margin:0 auto;padding:24px 20px 70px}
+  h1{font-size:24px;margin:0 0 4px}
+  .lede{color:var(--ink2);font-size:15px;margin:0 0 22px;max-width:760px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+        box-shadow:var(--sh);padding:22px;margin-bottom:18px}
+  .card h2{font-size:17px;margin:0 0 4px;display:flex;align-items:center;gap:10px}
+  .card .sub{color:var(--ink2);font-size:14px;margin:0 0 16px;max-width:820px}
+  .stage{width:28px;height:28px;border-radius:50%;background:var(--brand);color:#fff;
+         display:grid;place-items:center;font-size:13px;font-weight:700;flex-shrink:0}
+  .mono{font-family:Consolas,'JetBrains Mono',monospace;font-size:11px;letter-spacing:.14em;
+        text-transform:uppercase;color:var(--ink3)}
+  button{font:inherit;font-weight:600;font-size:14px;cursor:pointer;border:none;border-radius:10px;
+         background:var(--brand2);color:#fff;padding:9px 18px}
+  button:hover{background:var(--brand)}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  button.small{padding:6px 13px;font-size:13px;background:var(--surface);color:var(--ink2);
+               border:1px solid var(--line2)}
+  button.small:hover{background:var(--brand-soft);color:var(--brand2);border-color:var(--brand)}
+  button.on{background:var(--brand-soft);color:var(--brand2);border-color:var(--brand)}
+  .note{background:var(--brand-soft);border:1px solid #b8ecf5;border-radius:10px;
+        padding:11px 14px;font-size:13.5px;color:var(--brand2);margin-top:14px}
+  .note.warn{background:var(--warn-soft);border-color:#f5dcb3;color:var(--warn)}
+  .note b{color:inherit}
+  .row{display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start}
+  canvas{image-rendering:pixelated;display:block}
+  .err{color:#dc2626;font-size:13px;margin-top:8px}
+
+  /* ---- בחירת תא ---- */
+  .picker{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;flex:1;min-width:320px}
+  .thumb{position:relative;border:2px solid transparent;border-radius:10px;overflow:hidden;
+         cursor:pointer;background:#000;aspect-ratio:1}
+  .thumb canvas{width:100%;height:100%;image-rendering:auto}
+  .thumb.sel{border-color:var(--brand)}
+  .thumb .tag{position:absolute;bottom:0;inset-inline:0;font-size:11px;font-weight:700;
+              text-align:center;color:#fff;padding:1px 0}
+  .tag.inf{background:rgba(194,65,12,.85)} .tag.uninf{background:rgba(8,145,178,.85)}
+  .bigcell{text-align:center}
+  .bigcell canvas{width:230px;height:230px;border-radius:12px;border:1px solid var(--line);image-rendering:auto}
+  .bigcell .lab{font-weight:700;margin-top:6px}
+
+  /* ---- מסננים ---- */
+  .filters{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .fcol{border:1px solid var(--line);border-radius:12px;padding:12px;background:var(--surface2)}
+  .fcol h3{font-size:15px;margin:0 0 2px}
+  .fcol .q{font-size:13px;color:var(--ink2);min-height:40px;margin-bottom:8px}
+  .fcol canvas.map{width:100%;aspect-ratio:1;border-radius:8px;border:1px solid var(--line)}
+  .kernel{display:grid;gap:2px;margin:6px 0 10px;direction:ltr;width:max-content}
+  .kernel div{width:30px;height:24px;display:grid;place-items:center;font-size:11px;
+              font-family:Consolas,monospace;border-radius:4px;background:#fff;border:1px solid var(--line)}
+  .kernel div.pos{background:#ccf2ee} .kernel div.neg{background:#fde2d0}
+  .kdesc{font-size:12px;color:var(--ink3);margin:6px 0 10px}
+
+  /* ---- מסנן נע ---- */
+  .slide{display:flex;gap:18px;align-items:center;flex-wrap:wrap;margin-top:16px;
+         padding:14px;border:1px dashed var(--line2);border-radius:12px}
+  .slide canvas{width:260px;height:260px;border-radius:10px;border:1px solid var(--line)}
+  .slide .ctrl{display:flex;flex-direction:column;gap:8px;max-width:280px}
+
+  .calc{border:1px solid var(--line);border-radius:12px;background:#fff;padding:12px 14px;min-width:300px}
+  .calc .eq{display:flex;align-items:center;gap:8px;direction:ltr;justify-content:flex-end;flex-wrap:wrap}
+  .calc .g3{display:grid;grid-template-columns:repeat(3,34px);gap:2px}
+  .calc .g3 div{height:28px;display:grid;place-items:center;font-size:12px;font-family:Consolas,monospace;
+                border-radius:4px;border:1px solid var(--line)}
+  .calc .res{font-size:30px;font-weight:800;color:var(--brand2);font-family:Consolas,monospace}
+  .calc .op{font-size:18px;color:var(--ink3)}
+
+  /* ---- שלב 2 ---- */
+  .ladder{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+  .rung{text-align:center}
+  .rung canvas{border-radius:8px;border:1px solid var(--line)}
+  .rung .mono{margin-top:4px}
+  .arrow{font-size:22px;color:var(--ink3);padding-bottom:40px}
+
+  /* ---- שלב 3 ---- */
+  .strips{display:grid;grid-template-columns:1fr;gap:10px}
+  .strip{display:grid;grid-template-columns:150px 1fr 110px;gap:12px;align-items:center}
+  .strip .nm{font-weight:600;font-size:14px}
+  .strip canvas{width:100%;height:54px}
+  .strip .score{font-weight:700;font-size:15px;text-align:center}
+  .meter{height:6px;border-radius:3px;background:var(--line);margin-top:3px;overflow:hidden}
+  .meter i{display:block;height:100%;background:var(--accent)}
+  .legend{display:flex;gap:16px;font-size:13px;margin-bottom:10px}
+  .dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-inline-end:5px;vertical-align:middle}
+
+  /* ---- שלב 4 ---- */
+  .learn{display:grid;grid-template-columns:1.2fr 1fr;gap:20px}
+  .toggles{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+  .wbar{display:grid;grid-template-columns:130px 1fr 54px;gap:10px;align-items:center;margin:6px 0;font-size:14px}
+  .wtrack{position:relative;height:18px;background:var(--surface2);border-radius:4px;border:1px solid var(--line)}
+  .wtrack .mid{position:absolute;inset-block:0;inset-inline-start:50%;width:1px;background:var(--line2)}
+  .wtrack i{position:absolute;inset-block:2px;border-radius:3px}
+  .wval{font-family:Consolas,monospace;font-size:12.5px;direction:ltr;text-align:left}
+  .big{font-size:44px;font-weight:800;line-height:1.1;color:var(--brand2)}
+  .big.bad{color:var(--warn)}
+  .exp{border:1px solid #f5dcb3;background:var(--warn-soft);border-radius:12px;padding:16px;margin-top:18px}
+  .exp h3{margin:0 0 6px;font-size:15.5px;color:var(--warn)}
+  .expgrid{display:flex;gap:26px;flex-wrap:wrap;margin-top:12px;align-items:flex-end}
+
+  /* ---- שלב 5 ---- */
+  .kgrid{display:grid;grid-template-columns:repeat(8,52px);gap:6px}
+  .kgrid canvas{width:52px;height:52px;border-radius:6px;border:1px solid var(--line)}
+  .layers{display:flex;flex-direction:column;gap:14px;margin-top:14px}
+  .layer{display:grid;grid-template-columns:170px 1fr;gap:14px;align-items:center}
+  .layer .maps{display:flex;gap:6px;flex-wrap:wrap}
+  .layer .maps canvas{width:78px;height:78px;border-radius:6px;border:1px solid var(--line)}
+  .pred{display:flex;gap:18px;align-items:center;margin-top:14px;flex-wrap:wrap}
+
+  @media (max-width:900px){
+    .filters{grid-template-columns:repeat(2,1fr)} .learn{grid-template-columns:1fr}
+    .picker{grid-template-columns:repeat(4,1fr)}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>איך מודל רואה תמונה</h1>
+  <p class="lede">מסנן קטן עובר על התמונה ושואל שאלה אחת. שכבה אחרי שכבה, התשובות מתחברות
+    לדפוסים גדולים יותר — עד שנמצא צירוף שמופיע בתאים נגועים ולא בתקינים.
+    <b>כל מה שכאן מחושב עכשיו, על תאים אמיתיים מהמאגר.</b></p>
+
+  <!-- ===================== בחירת תא ===================== -->
+  <div class="card">
+    <h2><span class="stage">0</span>בחר תא</h2>
+    <p class="sub">80 תאים: 40 נגועים ו-40 תקינים, כל אחד משקופית אחרת. אף אחד מהם לא נלקח
+      משקופיות שמשמשות את ערכות המבחן של הקורס.</p>
+    <div class="row">
+      <div class="bigcell">
+        <canvas id="big" width="96" height="96"></canvas>
+        <div class="lab" id="bigLab">—</div>
+        <div style="display:flex;gap:6px;justify-content:center;margin-top:6px">
+          <button class="small" id="rndInf">נגוע אקראי</button>
+          <button class="small" id="rndUn">תקין אקראי</button>
+        </div>
+      </div>
+      <div class="picker" id="picker"></div>
+    </div>
+    <div class="err" id="loadErr"></div>
+  </div>
+
+  <!-- ===================== שלב 1 ===================== -->
+  <div class="card">
+    <h2><span class="stage">1</span>מסננים קטנים</h2>
+    <p class="sub">מסנן הוא ריבוע קטן של מספרים. הוא עובר על כל נקודה בתמונה, מכפיל את
+      השכנות שלה במספרים שלו, ומחזיר מספר אחד — עד כמה הנקודה הזו עונה על השאלה שלו.
+      <b>ככל שהמפה כהה יותר, התשובה "כן" חזקה יותר.</b></p>
+
+    <div class="filters">
+      <div class="fcol">
+        <h3>קצוות</h3>
+        <div class="q">האם הבהירות משתנה כאן בחדות?</div>
+        <div class="kernel" style="grid-template-columns:repeat(3,30px)" id="kSobel"></div>
+        <canvas class="map" id="mEdge" width="96" height="96"></canvas>
+        <div class="kdesc" style="margin:8px 0 0">שים לב: הקצה החזק ביותר הוא גבול התא מול הרקע
+          השחור — לא הטפיל. זו הסיבה שקצוות לבד לא מבדילים טוב (שלב 3).</div>
+      </div>
+      <div class="fcol">
+        <h3>כתמים כהים</h3>
+        <div class="q">האם הנקודה כהה יותר מהסביבה שלה?</div>
+        <div class="kdesc">חלון 13×13: ממוצע השכנים פחות הנקודה עצמה</div>
+        <canvas class="map" id="mDark" width="96" height="96"></canvas>
+      </div>
+      <div class="fcol">
+        <h3>צבע סגלגל</h3>
+        <div class="q">האם יש כאן יותר אדום וכחול מירוק?</div>
+        <div class="kernel" style="grid-template-columns:repeat(3,30px)" id="kColor"></div>
+        <canvas class="map" id="mPurp" width="96" height="96"></canvas>
+      </div>
+      <div class="fcol">
+        <h3>מרקם</h3>
+        <div class="q">האם האזור כאן חלק, או מגורען?</div>
+        <div class="kdesc">חלון 5×5: כמה הערכים בו שונים זה מזה</div>
+        <canvas class="map" id="mTex" width="96" height="96"></canvas>
+      </div>
+    </div>
+
+    <div class="slide">
+      <canvas id="slideCv" width="96" height="96" style="cursor:crosshair" title="לחץ כדי להציב את החלון"></canvas>
+      <div class="ctrl">
+        <b>כך מסנן "עובר" על התמונה</b>
+        <span style="font-size:13.5px;color:var(--ink2)">החלון בגודל 3×3 זז נקודה אחרי נקודה. בכל
+          עצירה הוא מחשב מספר אחד ומצייר אותו במקום — וכך נבנית מפת הקצוות.
+          <b>לחץ על התמונה</b> כדי להציב את החלון בנקודה מסוימת.</span>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button id="slidePlay">הפעלה</button>
+          <button class="small" id="slideStep">צעד אחד</button>
+          <button class="small" id="slideFast">מהר</button>
+        </div>
+        <span class="mono" id="slidePos">—</span>
+      </div>
+      <div class="calc" id="calc"></div>
+    </div>
+
+    <div class="note">כאן בחרנו את המספרים ביד, כדי שיהיה אפשר לקרוא אותם. <b>במודל אמיתי אף
+      אחד לא בוחר אותם — הוא לומד אותם בעצמו</b>, ויש לו עשרות כאלה בכל שכבה. בשלב 5 תראה
+      את המסננים שהמודל עצמו למד.</div>
+  </div>
+
+  <!-- ===================== שלב 2 ===================== -->
+  <div class="card">
+    <h2><span class="stage">2</span>דפוסים גדולים יותר</h2>
+    <p class="sub">השכבה הבאה כבר לא רואה את התמונה. היא רואה את <b>המפות</b> של השכבה הקודמת
+      ומחברת ביניהן. כאן: נקודה נדלקת רק אם היא גם <b>כהה</b> וגם <b>סגלגלה</b>.
+      אחר כך מקטינים — כל ארבע נקודות הופכות לאחת, החזקה מביניהן.</p>
+    <div class="ladder">
+      <div class="rung"><canvas id="c2a" width="96" height="96" style="width:140px;height:140px"></canvas>
+        <div class="mono">כהה</div></div>
+      <div class="arrow">×</div>
+      <div class="rung"><canvas id="c2b" width="96" height="96" style="width:140px;height:140px"></canvas>
+        <div class="mono">סגלגל</div></div>
+      <div class="arrow">=</div>
+      <div class="rung"><canvas id="c2c" width="96" height="96" style="width:180px;height:180px"></canvas>
+        <div class="mono">כתם כהה וסגלגל · 96</div></div>
+      <div class="arrow">←</div>
+      <div class="rung"><canvas id="p48" width="48" height="48" style="width:140px;height:140px"></canvas>
+        <div class="mono">48</div></div>
+      <div class="arrow">←</div>
+      <div class="rung"><canvas id="p24" width="24" height="24" style="width:110px;height:110px"></canvas>
+        <div class="mono">24</div></div>
+      <div class="arrow">←</div>
+      <div class="rung"><canvas id="p12" width="12" height="12" style="width:84px;height:84px"></canvas>
+        <div class="mono">12</div></div>
+    </div>
+    <div class="note" id="s2note">—</div>
+  </div>
+
+  <!-- ===================== שלב 3 ===================== -->
+  <div class="card">
+    <h2><span class="stage">3</span>מה מבדיל בין נגוע לתקין?</h2>
+    <p class="sub">חישבנו כל מאפיין על כל 80 התאים, והפכנו כל מפה למספר אחד. כל נקודה היא תא.
+      אם הנקודות הכתומות והכחולות יושבות במקומות שונים — המאפיין מבדיל.</p>
+    <div class="legend">
+      <span><i class="dot" style="background:var(--inf)"></i>נגוע</span>
+      <span><i class="dot" style="background:var(--uninf)"></i>תקין</span>
+      <span class="mono" style="margin-inline-start:auto">כוח הבחנה · 50% = הטלת מטבע · 100% = הפרדה מלאה</span>
+    </div>
+    <div class="strips" id="strips"></div>
+  </div>
+
+  <!-- ===================== שלב 4 ===================== -->
+  <div class="card">
+    <h2><span class="stage">4</span>המכונה בוחרת צירוף</h2>
+    <p class="sub">עכשיו נותנים למכונה את המאפיינים ומבקשים ממנה למצוא את השילוב שמפריד הכי טוב.
+      <b>אף אחד לא אומר לה איזה מאפיין חשוב.</b> היא נותנת לכל אחד משקל — חיובי אם הוא מצביע
+      על "נגוע", שלילי אם על "תקין".</p>
+    <div class="learn">
+      <div>
+        <div class="mono" style="margin-bottom:6px">אילו מאפיינים המכונה מקבלת · לחץ כדי להוסיף או להסיר</div>
+        <div class="toggles" id="toggles"></div>
+        <div id="weights"></div>
+      </div>
+      <div>
+        <div class="mono">דיוק</div>
+        <div class="big" id="acc">—</div>
+        <div style="font-size:13.5px;color:var(--ink2);margin-top:4px">כל תא נבדק כשהוא <b>לא</b> היה באימון —
+          המכונה לומדת מ-79 ומנחשת את השמונים. וחוזר חלילה.</div>
+        <div class="note" id="s4note" style="margin-top:12px">—</div>
+      </div>
+    </div>
+
+    <div class="exp">
+      <h3>ניסוי: מדבקה של מעבדה</h3>
+      <div style="font-size:14px">נניח שכל התמונות הנגועות הגיעו ממעבדה שמדביקה מדבקה לבנה קטנה
+        בפינה. זה לא קשור למלריה — אבל זה מופיע בדיוק בנגועים.</div>
+      <div class="expgrid">
+        <div>
+          <button id="markBtn">הדבק מדבקה על הנגועים ואמן מחדש</button>
+          <div style="display:flex;gap:6px;margin-top:8px">
+            <button class="small" id="testClean" disabled>בדוק על תאים בלי מדבקה</button>
+            <button class="small" id="markReset" disabled>איפוס</button>
+          </div>
+        </div>
+        <div><div class="mono">עם המדבקה</div><div class="big" id="accMark">—</div></div>
+        <div><div class="mono">בלי המדבקה</div><div class="big bad" id="accClean">—</div></div>
+      </div>
+      <div class="note warn" id="expNote" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- ===================== שלב 5 ===================== -->
+  <div class="card">
+    <h2><span class="stage">5</span>ומה מודל אמיתי רואה?</h2>
+    <p class="sub">עד כאן בנינו את המסננים ביד. עכשיו אותו תא עובר דרך מודל אמיתי שאומן
+      ב-Teachable Machine על מלריה. <b>את המסננים שלו אף אחד לא בחר — הוא למד אותם.</b></p>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button id="loadDemo">טען את מודל ההדגמה</button>
+      <span style="font-size:13px;color:var(--ink3)">או מודל משלך:</span>
+      <input type="file" id="modelFiles" webkitdirectory directory multiple style="font-size:13px">
+      <span class="mono" id="mStatus"></span>
+    </div>
+    <div id="real" style="display:none">
+      <h3 style="font-size:15px;margin:18px 0 4px">16 המסננים של השכבה הראשונה</h3>
+      <div style="font-size:13.5px;color:var(--ink2);margin-bottom:8px">כל ריבוע הוא מסנן 3×3 שהמודל
+        למד בעצמו, מוצג בצבעים. חלקם מחפשים שינוי בהירות לכיוון מסוים — קצוות. אחרים מחפשים צבע
+        מסוים. בדיוק מה שבנינו בשלב 1.</div>
+      <div class="kgrid" id="kgrid"></div>
+
+      <h3 style="font-size:15px;margin:20px 0 4px">שכבה אחרי שכבה</h3>
+      <div style="font-size:13.5px;color:var(--ink2)">בכל שכבה מוצגות שש המפות הפעילות ביותר על התא
+        שבחרת. שים לב: <b>המפות קטנות והולכות, והופכות מופשטות</b> — בסוף כבר אין להן שם.</div>
+      <div class="layers" id="layers"></div>
+
+      <div class="pred" id="pred"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
+<script>
+// ============================================================================
+// כל החישובים כאן זהים לאלה שנבדקו מראש על אותם 80 תאים. הכלי לא מציג שום
+// מספר שהוא לא חישב בעצמו עכשיו.
+// ============================================================================
+const $ = id => document.getElementById(id);
+const N = 96;                         // גודל העיבוד — חיתוך מרכזי לריבוע, כמו Teachable Machine
+const FEATS = [
+  { key:'edge',  name:'קצוות' },
+  { key:'dark',  name:'כתמים כהים' },
+  { key:'purp',  name:'צבע סגלגל' },
+  { key:'tex',   name:'מרקם' },
+  { key:'combo', name:'כתם כהה וסגלגל' },
+  { key:'ring',  name:'מסגרת' },
+];
+const MARK = { key:'mark', name:'פינה בהירה' };
+
+// ---------------------------------------------------------------- טעינה
+function loadImg(url){
+  return new Promise((res, rej) => { const im = new Image();
+    im.onload = () => res(im); im.onerror = () => rej(new Error(url)); im.src = url; });
+}
+// חיתוך מרכזי ל-N×N → Float32Array RGB בטווח 0..1
+function toRGB(img, stamp){
+  const c = document.createElement('canvas'); c.width = c.height = N;
+  const x = c.getContext('2d');
+  const s = Math.min(img.naturalWidth, img.naturalHeight);
+  x.drawImage(img, (img.naturalWidth - s) / 2, (img.naturalHeight - s) / 2, s, s, 0, 0, N, N);
+  if (stamp) { x.fillStyle = '#fff'; x.fillRect(2, 2, 11, 11); }   // "מדבקת מעבדה"
+  const d = x.getImageData(0, 0, N, N).data, out = new Float32Array(N * N * 3);
+  for (let i = 0; i < N * N; i++) { out[i*3] = d[i*4]/255; out[i*3+1] = d[i*4+1]/255; out[i*3+2] = d[i*4+2]/255; }
+  return out;
+}
+
+// ---------------------------------------------------------------- מסננים
+// קונבולוציה עם ריפוד בערך הקצה — אותה התנהגות כמו numpy mode='edge'
+function conv(a, k, kw){
+  const kh = k.length / kw, o = new Float32Array(N * N), rh = kh >> 1, rw = kw >> 1;
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    let s = 0;
+    for (let j = 0; j < kh; j++) { const yy = Math.min(N - 1, Math.max(0, y + j - rh));
+      for (let i = 0; i < kw; i++) { const xx = Math.min(N - 1, Math.max(0, x + i - rw));
+        s += k[j * kw + i] * a[yy * N + xx]; } }
+    o[y * N + x] = s;
+  }
+  return o;
+}
+// ממוצע בחלון (2r+1)² — שני מעברים נפרדים, שקול לחלון דו-ממדי עם ריפוד קצה
+function box(a, r){
+  const t = new Float32Array(N * N), o = new Float32Array(N * N), w = 2 * r + 1;
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    let s = 0; for (let i = -r; i <= r; i++) s += a[y * N + Math.min(N - 1, Math.max(0, x + i))];
+    t[y * N + x] = s / w;
+  }
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    let s = 0; for (let j = -r; j <= r; j++) s += t[Math.min(N - 1, Math.max(0, y + j)) * N + x];
+    o[y * N + x] = s / w;
+  }
+  return o;
+}
+function pool(a, n){               // max-pool 2×2
+  const m = n >> 1, o = new Float32Array(m * m);
+  for (let y = 0; y < m; y++) for (let x = 0; x < m; x++)
+    o[y*m+x] = Math.max(a[2*y*n+2*x], a[2*y*n+2*x+1], a[(2*y+1)*n+2*x], a[(2*y+1)*n+2*x+1]);
+  return o;
+}
+const SOBX = [-1,0,1,-2,0,2,-1,0,1], SOBY = [-1,-2,-1,0,0,0,1,2,1];
+
+function analyse(rgb){
+  const P = N * N, R = new Float32Array(P), G = new Float32Array(P), B = new Float32Array(P), g = new Float32Array(P);
+  for (let i = 0; i < P; i++) { R[i] = rgb[i*3]; G[i] = rgb[i*3+1]; B[i] = rgb[i*3+2];
+    g[i] = .299*R[i] + .587*G[i] + .114*B[i]; }
+  const cell = new Float32Array(P); for (let i = 0; i < P; i++) cell[i] = g[i] > .12 ? 1 : 0;
+  const cb = box(cell, 3), er = new Uint8Array(P);
+  for (let i = 0; i < P; i++) er[i] = cell[i] && cb[i] > .99 ? 1 : 0;   // פנים התא, בלי הקצה החיצוני
+
+  const sx = conv(g, SOBX, 3), sy = conv(g, SOBY, 3), edge = new Float32Array(P);
+  const bg = box(g, 6), dark = new Float32Array(P), purp = new Float32Array(P);
+  const g2 = new Float32Array(P); for (let i = 0; i < P; i++) g2[i] = g[i] * g[i];
+  const m1 = box(g, 2), m2 = box(g2, 2), tex = new Float32Array(P);
+  for (let i = 0; i < P; i++) {
+    edge[i] = Math.hypot(sx[i], sy[i]);
+    dark[i] = Math.max(0, bg[i] - g[i]) * er[i];
+    purp[i] = ((R[i] + B[i]) / 2 - G[i]) * er[i];
+    tex[i]  = Math.sqrt(Math.max(0, m2[i] - m1[i] * m1[i])) * er[i];
+  }
+  const inside = []; for (let i = 0; i < P; i++) if (er[i]) inside.push(purp[i]);
+  inside.sort((a, b) => a - b);
+  const med = inside.length ? (inside.length % 2 ? inside[inside.length >> 1]
+            : (inside[inside.length/2 - 1] + inside[inside.length/2]) / 2) : 0;
+  const prod = new Float32Array(P);
+  for (let i = 0; i < P; i++) prod[i] = dark[i] * Math.max(0, purp[i] - med);
+  const combo = box(prod, 1), p48 = pool(combo, 96), p24 = pool(p48, 48), p12 = pool(p24, 24);
+
+  let eS = 0, eN = 0, tS = 0, tN = 0, rS = 0, rN = 0, cS = 0;
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) { const i = y * N + x;
+    if (cell[i]) { eS += edge[i]; eN++; }
+    if (er[i]) { tS += tex[i]; tN++; }
+    if (y < 8 || y >= N - 8 || x < 8 || x >= N - 8) { rS += g[i]; rN++; }
+    if (y >= 2 && y < 13 && x >= 2 && x < 13) cS += g[i];
+  }
+  const max = a => { let m = -1e9; for (const v of a) if (v > m) m = v; return m; };
+  return {
+    maps: { edge, dark, purp, tex, combo, p48, p24, p12 },
+    f: { edge: eN ? eS/eN : 0, dark: max(dark), purp: max(purp), tex: tN ? tS/tN : 0,
+         combo: max(p12), ring: rS/rN, mark: cS/121 },
+  };
+}
+
+// ---------------------------------------------------------------- ציור
+// לבן → טורקיז → כחול עמוק: ככל שכהה יותר, "כן" חזק יותר
+function heat(t){
+  t = Math.max(0, Math.min(1, t));
+  const a = [255,255,255], b = [20,184,166], c = [13,31,43];
+  const [p, q, u] = t < .5 ? [a, b, t * 2] : [b, c, (t - .5) * 2];
+  return [p[0]+(q[0]-p[0])*u, p[1]+(q[1]-p[1])*u, p[2]+(q[2]-p[2])*u];
+}
+function drawMap(cv, a, n, hi){
+  const x = cv.getContext('2d'), im = x.createImageData(n, n);
+  const top = hi || Math.max(1e-6, ...a);
+  for (let i = 0; i < n * n; i++) { const [r, g, b] = heat(a[i] / top);
+    im.data[i*4] = r; im.data[i*4+1] = g; im.data[i*4+2] = b; im.data[i*4+3] = 255; }
+  x.putImageData(im, 0, 0);
+}
+function drawRGB(cv, rgb){
+  const x = cv.getContext('2d'), im = x.createImageData(N, N);
+  for (let i = 0; i < N * N; i++) { im.data[i*4] = rgb[i*3]*255; im.data[i*4+1] = rgb[i*3+1]*255;
+    im.data[i*4+2] = rgb[i*3+2]*255; im.data[i*4+3] = 255; }
+  x.putImageData(im, 0, 0);
+}
+function kernelGrid(el, vals, fmt){
+  el.innerHTML = vals.map(v => `<div class="${v > 0 ? 'pos' : v < 0 ? 'neg' : ''}">${fmt ? fmt(v) : v}</div>`).join('');
+}
+
+// ---------------------------------------------------------------- מצב
+let samples = [], sel = 0, marked = false;
+
+async function init(){
+  kernelGrid($('kSobel'), SOBX);
+  // מסנן צבע: 1×1 על הערוצים, לא על שכנים — בדיוק מה ששכבות 1×1 במודל עושות
+  $('kColor').innerHTML = [['R','+½'],['G','−1'],['B','+½']]
+    .map(([c, v]) => `<div class="${v[0]==='+'?'pos':'neg'}" title="${c}">${c} ${v}</div>`).join('');
+  $('kColor').style.gridTemplateColumns = 'repeat(3,46px)';
+  [...$('kColor').children].forEach(d => d.style.width = '46px');
+
+  try {
+    const man = await (await fetch('samples/manifest.json')).json();
+    const list = [];
+    for (const lab of Object.keys(man))
+      for (const f of man[lab]) list.push({ lab, url: `samples/${encodeURIComponent(lab)}/${f}` });
+    await Promise.all(list.map(async s => {
+      s.img = await loadImg(s.url);
+      s.rgb = toRGB(s.img, false);
+      s.a = analyse(s.rgb);
+      s.y = s.lab === 'נגוע' ? 1 : 0;
+    }));
+    samples = list;
+  } catch (e) {
+    $('loadErr').textContent = 'לא הצלחתי לטעון את התאים: ' + e.message; return;
+  }
+  computeScales();              // לפני הציור הראשון — אחרת כל מפה נמתחת לעצמה
+  buildPicker();
+  sel = samples.findIndex(s => s.y === 1);
+  showCell();
+  buildStrips();
+  buildToggles();
+  learn();
+}
+
+function buildPicker(){
+  // שישה מכל סוג בתצוגה; כל ה-80 משמשים לחישובים
+  const inf = samples.map((s, i) => i).filter(i => samples[i].y === 1).slice(0, 6);
+  const un  = samples.map((s, i) => i).filter(i => samples[i].y === 0).slice(0, 6);
+  $('picker').innerHTML = [...inf, ...un].map(i =>
+    `<div class="thumb" data-i="${i}"><canvas width="${N}" height="${N}"></canvas>
+       <div class="tag ${samples[i].y ? 'inf' : 'uninf'}">${samples[i].lab}</div></div>`).join('');
+  [...$('picker').children].forEach(t => {
+    drawRGB(t.querySelector('canvas'), samples[+t.dataset.i].rgb);
+    t.onclick = () => { sel = +t.dataset.i; showCell(); };
+  });
+  $('rndInf').onclick = () => { const c = samples.map((s,i)=>i).filter(i=>samples[i].y); sel = c[Math.random()*c.length|0]; showCell(); };
+  $('rndUn').onclick  = () => { const c = samples.map((s,i)=>i).filter(i=>!samples[i].y); sel = c[Math.random()*c.length|0]; showCell(); };
+}
+
+function showCell(){
+  const s = samples[sel], m = s.a.maps;
+  [...$('picker').children].forEach(t => t.classList.toggle('sel', +t.dataset.i === sel));
+  drawRGB($('big'), s.rgb);
+  $('bigLab').innerHTML = `<span style="color:${s.y ? 'var(--inf)' : 'var(--uninf)'}">${s.lab}</span>`;
+
+  // שלב 1: סולם אחיד לכל המאגר, כדי שתא נגוע ותקין יהיו ניתנים להשוואה בעין
+  drawMap($('mEdge'), m.edge, N, scale.edge);
+  drawMap($('mDark'), m.dark, N, scale.dark);
+  drawMap($('mPurp'), m.purp.map(v => Math.max(0, v)), N, scale.purp);
+  drawMap($('mTex'),  m.tex,  N, scale.tex);
+  resetSlide();
+
+  // שלב 2
+  drawMap($('c2a'), m.dark, N, scale.dark);
+  drawMap($('c2b'), m.purp.map(v => Math.max(0, v)), N, scale.purp);
+  drawMap($('c2c'), m.combo, N, scale.combo);
+  drawMap($('p48'), m.p48, 48, scale.combo);
+  drawMap($('p24'), m.p24, 24, scale.combo);
+  drawMap($('p12'), m.p12, 12, scale.combo);
+  const v = s.a.f.combo, thr = comboThreshold();
+  $('s2note').innerHTML = v > thr
+    ? `<b>בתא הזה הכתם שרד את ההקטנה</b> — גם ב-12×12 נשארה נקודה חמה. זה הדפוס שהשכבות הבאות יזהו.`
+    : `<b>בתא הזה אין כתם כהה וסגלגל</b> — המפה נשארת כמעט לבנה עד הסוף. אין מה שישרוד את ההקטנה.`;
+
+  if (real.ready) runReal();
+}
+
+// סולם תצוגה משותף: אחוזון 98 של כל המאגר, לא המקסימום של התא הנוכחי.
+// בלי זה כל מפה נמתחת לעצמה, ותא תקין "נדלק" בדיוק כמו נגוע.
+const scale = {};
+function computeScales(){
+  const q = (arr, p) => { const s = [...arr].sort((a,b)=>a-b); return s[Math.floor(p*(s.length-1))] || 1e-6; };
+  const peaks = k => samples.map(s => { let m = 0; for (const v of s.a.maps[k]) if (v > m) m = v; return m; });
+  for (const k of ['edge','dark','tex','combo']) scale[k] = q(peaks(k), .9);
+  scale.purp = q(samples.map(s => s.a.f.purp), .9);
+}
+// סף ההערה בשלב 2: אמצע הדרך בין החציונים של שתי המחלקות
+function comboThreshold(){
+  const med = a => { const s = [...a].sort((x,y)=>x-y); return s[s.length>>1]; };
+  return (med(samples.filter(s=>s.y).map(s=>s.a.f.combo)) + med(samples.filter(s=>!s.y).map(s=>s.a.f.combo))) / 2;
+}
+
+// ---------------------------------------------------------------- מסנן נע
+let slideT = null, slideK = 0, slideStep = 3;
+function resetSlide(){
+  clearInterval(slideT); slideT = null; slideK = 0; $('slidePlay').textContent = 'הפעלה';
+  drawSlide();
+}
+function drawSlide(){
+  const s = samples[sel], cv = $('slideCv'), x = cv.getContext('2d');
+  drawRGB(cv, s.rgb);
+  // החלק שכבר חושב מוצג כמפת קצוות, השאר עדיין תמונה
+  const im = x.getImageData(0, 0, N, N), e = s.a.maps.edge, top = scale.edge;
+  for (let i = 0; i < Math.min(slideK, N * N); i++) { const [r,g,b] = heat(e[i] / top);
+    im.data[i*4] = r; im.data[i*4+1] = g; im.data[i*4+2] = b; }
+  x.putImageData(im, 0, 0);
+  if (slideK < N * N) {
+    const px = slideK % N, py = (slideK / N) | 0;
+    x.strokeStyle = '#c2410c'; x.lineWidth = 1;
+    x.strokeRect(px - 1.5, py - 1.5, 3, 3);
+    $('slidePos').textContent = `עמודה ${px + 1} · שורה ${py + 1}`;
+    drawCalc(s, px, py);
+  } else { $('slidePos').textContent = 'הושלם — זו מפת הקצוות'; $('calc').innerHTML = ''; }
+}
+// החישוב עצמו, מספר אחר מספר — אותה נוסחה בדיוק שבנתה את מפת הקצוות
+function drawCalc(s, px, py){
+  const gAt = (xx, yy) => { xx = Math.min(N-1, Math.max(0, xx)); yy = Math.min(N-1, Math.max(0, yy));
+    const i = (yy * N + xx) * 3; return Math.round((.299*s.rgb[i] + .587*s.rgb[i+1] + .114*s.rgb[i+2]) * 255); };
+  const patch = []; for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) patch.push(gAt(px + i, py + j));
+  const gx = patch.reduce((a, v, k) => a + v * SOBX[k], 0);
+  const gy = patch.reduce((a, v, k) => a + v * SOBY[k], 0);
+  const res = Math.round(Math.hypot(gx, gy));
+  const t = res / 255 / scale.edge;        // בדיוק הערך שקובע את הצבע במפה
+  const [r, g, b] = heat(t);
+  const cells = patch.map(v => `<div style="background:rgb(${v},${v},${v});color:${v > 120 ? '#0d1f2b' : '#fff'}">${v}</div>`).join('');
+  $('calc').innerHTML = `
+    <div class="mono" style="margin-bottom:6px">בהירות 9 הנקודות שבחלון · 0 שחור · 255 לבן</div>
+    <div class="eq"><div class="g3">${cells}</div></div>
+    <div style="display:flex;gap:18px;margin:10px 0 6px;font-size:13.5px">
+      <span>שינוי לרוחב: <b dir="ltr">${gx}</b></span>
+      <span>שינוי לגובה: <b dir="ltr">${gy}</b></span>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <span style="font-size:13.5px">התוצאה</span>
+      <span class="res">${res}</span>
+      <span style="width:34px;height:34px;border-radius:6px;border:1px solid var(--line);background:rgb(${r},${g},${b})"
+            title="הצבע שהנקודה מקבלת במפה"></span>
+    </div>
+    <div style="font-size:12.5px;color:var(--ink3);margin-top:6px">${t > .35
+      ? 'מספר גדול — יש כאן קצה. הנקודה נצבעת כהה במפה.'
+      : t > .12 ? 'שינוי קל — הנקודה מקבלת גוון בהיר.'
+      : 'מספר קטן — האזור אחיד. הנקודה נשארת לבנה במפה.'}</div>`;
+}
+$('slideCv').onclick = e => {
+  clearInterval(slideT); slideT = null; $('slidePlay').textContent = 'המשך';
+  const cv = $('slideCv'), rc = cv.getBoundingClientRect();
+  const px = Math.min(N - 1, Math.floor((e.clientX - rc.left) / rc.width * N));
+  const py = Math.min(N - 1, Math.floor((e.clientY - rc.top) / rc.height * N));
+  slideK = py * N + px; drawSlide();
+};
+$('slideStep').onclick = () => {
+  clearInterval(slideT); slideT = null; $('slidePlay').textContent = 'המשך';
+  if (slideK < N * N) slideK++; drawSlide();
+};
+$('slidePlay').onclick = () => {
+  if (slideT) { clearInterval(slideT); slideT = null; $('slidePlay').textContent = 'הפעלה'; return; }
+  if (slideK >= N * N) slideK = 0;
+  $('slidePlay').textContent = 'עצירה';
+  slideT = setInterval(() => {
+    slideK += slideStep; drawSlide();
+    if (slideK >= N * N) { clearInterval(slideT); slideT = null; $('slidePlay').textContent = 'שוב'; }
+  }, 16);
+};
+$('slideFast').onclick = () => {
+  slideStep = slideStep === 3 ? 48 : 3;
+  $('slideFast').classList.toggle('on', slideStep > 3);
+};
+
+// ---------------------------------------------------------------- שלב 3
+// AUC: ההסתברות שתא נגוע אקראי יקבל ערך גבוה מתא תקין אקראי
+function auc(vals, ys){
+  let s = 0, n = 0;
+  for (let i = 0; i < vals.length; i++) if (ys[i]) for (let j = 0; j < vals.length; j++) if (!ys[j]) {
+    s += vals[i] > vals[j] ? 1 : vals[i] === vals[j] ? .5 : 0; n++; }
+  return s / n;
+}
+function buildStrips(){
+  const ys = samples.map(s => s.y);
+  $('strips').innerHTML = FEATS.map(f => `<div class="strip">
+      <div class="nm">${f.name}${f.key === 'combo' ? '<div class="mono">שלב 2</div>' : ''}</div>
+      <canvas id="st_${f.key}" width="700" height="54"></canvas>
+      <div><div class="score" id="sc_${f.key}"></div><div class="meter"><i id="mt_${f.key}"></i></div></div>
+    </div>`).join('');
+  for (const f of FEATS) {
+    const v = samples.map(s => s.a.f[f.key]);
+    const a = auc(v, ys), sep = Math.max(a, 1 - a);        // כיוון לא משנה — רק ההפרדה
+    $('sc_' + f.key).textContent = Math.round(sep * 100) + '%';
+    $('mt_' + f.key).style.width = ((sep - .5) * 200) + '%';
+    const cv = $('st_' + f.key), x = cv.getContext('2d'), lo = Math.min(...v), hi = Math.max(...v);
+    x.clearRect(0, 0, cv.width, cv.height);
+    x.fillStyle = '#f7fafc'; x.fillRect(0, 0, cv.width, cv.height);
+    samples.forEach((s, i) => {
+      // ערך נמוך מימין, גבוה משמאל — קריאה בכיוון העברית
+      const px = cv.width - 10 - (v[i] - lo) / (hi - lo || 1) * (cv.width - 20);
+      const py = s.y ? 16 : 38, jit = ((i * 7919) % 9) - 4;
+      x.beginPath(); x.arc(px, py + jit * .6, 4.2, 0, 7);
+      x.fillStyle = s.y ? 'rgba(194,65,12,.7)' : 'rgba(8,145,178,.7)'; x.fill();
+    });
+  }
+}
+
+// ---------------------------------------------------------------- שלב 4
+const active = new Set(FEATS.map(f => f.key));
+function buildToggles(){
+  $('toggles').innerHTML = FEATS.map(f => `<button class="small on" data-k="${f.key}">${f.name}</button>`).join('');
+  [...$('toggles').children].forEach(b => b.onclick = () => {
+    if (active.has(b.dataset.k)) { if (active.size > 1) active.delete(b.dataset.k); }
+    else active.add(b.dataset.k);
+    b.classList.toggle('on', active.has(b.dataset.k));
+    learn();
+  });
+}
+// רגרסיה לוגיסטית קטנה, עם תקנון — כדי שעם 80 תאים המשקלות לא יתפוצצו
+function fit(X, y, l2 = .1, it = 600, lr = .5){
+  const d = X[0].length, w = new Float64Array(d); let b = 0;
+  for (let t = 0; t < it; t++) {
+    const gw = new Float64Array(d); let gb = 0;
+    for (let i = 0; i < X.length; i++) {
+      let z = b; for (let k = 0; k < d; k++) z += w[k] * X[i][k];
+      const e = 1 / (1 + Math.exp(-z)) - y[i];
+      for (let k = 0; k < d; k++) gw[k] += e * X[i][k]; gb += e;
+    }
+    for (let k = 0; k < d; k++) w[k] -= lr * (gw[k] / X.length + l2 * w[k]);
+    b -= lr * gb / X.length;
+  }
+  return { w, b };
+}
+const stats = X => { const d = X[0].length, mu = Array(d).fill(0), sd = Array(d).fill(0);
+  X.forEach(r => r.forEach((v, k) => mu[k] += v / X.length));
+  X.forEach(r => r.forEach((v, k) => sd[k] += (v - mu[k]) ** 2 / X.length));
+  return { mu, sd: sd.map(s => Math.sqrt(s) + 1e-9) }; };
+const zs = (X, st) => X.map(r => r.map((v, k) => (v - st.mu[k]) / st.sd[k]));
+const predict = (m, r) => { let z = m.b; r.forEach((v, k) => z += m.w[k] * v); return z > 0 ? 1 : 0; };
+
+// "השאר אחד בחוץ": כל תא נבדק על מודל שלא ראה אותו
+function loo(X, y){
+  let ok = 0;
+  for (let i = 0; i < X.length; i++) {
+    const Xt = X.filter((_, j) => j !== i), yt = y.filter((_, j) => j !== i);
+    const st = stats(Xt), m = fit(zs(Xt, st), yt);
+    ok += predict(m, zs([X[i]], st)[0]) === y[i] ? 1 : 0;
+  }
+  return ok / X.length;
+}
+function drawWeights(el, keys, names, w){
+  const top = Math.max(.5, ...w.map(Math.abs));
+  el.innerHTML = keys.map((k, i) => {
+    const pct = Math.abs(w[i]) / top * 50, pos = w[i] >= 0;
+    const side = pos ? `inset-inline-end:50%;width:${pct}%` : `inset-inline-start:50%;width:${pct}%`;
+    return `<div class="wbar"><span>${names[i]}</span>
+      <div class="wtrack"><span class="mid"></span>
+        <i style="${side};background:${pos ? 'var(--inf)' : 'var(--uninf)'}"></i></div>
+      <span class="wval">${w[i] >= 0 ? '+' : ''}${w[i].toFixed(2)}</span></div>`;
+  }).join('') + `<div class="mono" style="display:grid;grid-template-columns:130px 1fr 54px;gap:10px;margin-top:4px">
+      <span></span><span style="display:flex;justify-content:space-between">
+        <span style="color:var(--inf)">מצביע על נגוע</span><span style="color:var(--uninf)">מצביע על תקין</span>
+      </span><span></span></div>`;
+}
+function learn(){
+  const keys = FEATS.map(f => f.key).filter(k => active.has(k));
+  const names = keys.map(k => FEATS.find(f => f.key === k).name);
+  const X = samples.map(s => keys.map(k => s.a.f[k])), y = samples.map(s => s.y);
+  const st = stats(X), m = fit(zs(X, st), y);
+  drawWeights($('weights'), keys, names, Array.from(m.w));
+  const a = loo(X, y);
+  $('acc').textContent = Math.round(a * 100) + '%';
+
+  const order = keys.map((k, i) => [names[i], m.w[i]]).sort((p, q) => Math.abs(q[1]) - Math.abs(p[1]));
+  const weak = keys.map((k, i) => [names[i], m.w[i]]).filter(p => Math.abs(p[1]) < .08).map(p => p[0]);
+  $('s4note').innerHTML = `המכונה נשענת בעיקר על <b>${order[0][0]}</b>` +
+    (order[1] ? ` ואחריו על <b>${order[1][0]}</b>` : '') + '.' +
+    (weak.length ? ` ל<b>${weak.join(', ')}</b> היא כמעט לא נותנת משקל — הם לא עוזרים להבדיל.` : '') +
+    ` אף אחד לא אמר לה את זה. היא מצאה את זה בנתונים.`;
+}
+
+// ---------------------------------------------------------------- ניסוי המדבקה
+let markModel = null;
+$('markBtn').onclick = () => {
+  // מדביקים על כל הנגועים ומחשבים מחדש — המאפיין "פינה בהירה" נקרא מהתמונה עצמה
+  samples.forEach(s => { s.rgbM = toRGB(s.img, s.y === 1); s.aM = analyse(s.rgbM); });
+  marked = true;
+  [...$('picker').children].forEach(t => drawRGB(t.querySelector('canvas'), samples[+t.dataset.i].rgbM));
+  drawRGB($('big'), samples[sel].rgbM);
+
+  const keys = [...FEATS.map(f => f.key).filter(k => active.has(k)), 'mark'];
+  const names = keys.map(k => k === 'mark' ? MARK.name : FEATS.find(f => f.key === k).name);
+  const X = samples.map(s => keys.map(k => s.aM.f[k])), y = samples.map(s => s.y);
+  const st = stats(X);
+  markModel = { keys, st, m: fit(zs(X, st), y) };
+  drawWeights($('weights'), keys, names, Array.from(markModel.m.w));
+  $('accMark').textContent = Math.round(loo(X, y) * 100) + '%';
+  $('accClean').textContent = '—';
+  $('testClean').disabled = false; $('markReset').disabled = false; $('markBtn').disabled = true;
+
+  const top = keys.map((k, i) => [k, Math.abs(markModel.m.w[i])]).sort((a, b) => b[1] - a[1])[0][0];
+  const e = $('expNote'); e.style.display = 'block';
+  e.innerHTML = top === 'mark'
+    ? `<b>המכונה בחרה במדבקה.</b> היא נתנה ל"פינה בהירה" את המשקל הגבוה מכולם — יותר מהצבע, יותר מהכתם.
+       מבחינתה זה הגיוני לגמרי: זה המאפיין שמפריד הכי טוב.`
+    : `המכונה נתנה למדבקה משקל משמעותי, לצד המאפיינים האמיתיים.`;
+};
+$('testClean').onclick = () => {
+  // אותו מודל בדיוק, על התאים המקוריים — בלי מדבקה על אף אחד
+  const X = samples.map(s => markModel.keys.map(k => s.a.f[k])), y = samples.map(s => s.y);
+  const Z = zs(X, markModel.st);
+  const a = Z.reduce((acc, r, i) => acc + (predict(markModel.m, r) === y[i] ? 1 : 0), 0) / y.length;
+  $('accClean').textContent = Math.round(a * 100) + '%';
+  $('expNote').innerHTML += `<br><br><b>ובלי המדבקה הדיוק צנח ל-${Math.round(a * 100)}%.</b>
+    המכונה עשתה בדיוק מה שביקשנו: מצאה צירוף שמופיע בנגועים ולא בתקינים. היא פשוט לא יודעת
+    שמדבקה זה לא רפואה. <b>זה מה שקרה במאגר צילומי החזה — שם ה"מדבקה" הייתה המכשיר שצילם.</b>`;
+  $('testClean').disabled = true;
+};
+$('markReset').onclick = () => {
+  marked = false; markModel = null;
+  [...$('picker').children].forEach(t => drawRGB(t.querySelector('canvas'), samples[+t.dataset.i].rgb));
+  $('accMark').textContent = '—'; $('accClean').textContent = '—';
+  $('expNote').style.display = 'none';
+  $('markBtn').disabled = false; $('testClean').disabled = true; $('markReset').disabled = true;
+  showCell(); learn();
+};
+
+// ---------------------------------------------------------------- שלב 5: מודל אמיתי
+const real = { ready: false, tm: null, probe: null, labels: [] };
+const LAYERS = [
+  ['Conv1_relu',   'שכבה 1', 'מסננים קטנים'],
+  ['block_2_add',  'שכבה 5', 'צירופים ראשונים'],
+  ['block_5_add',  'שכבה 12', 'חלקים'],
+  ['block_12_add', 'שכבה 30', 'דפוסים'],
+  ['out_relu',     'אחרונה', 'מופשט לגמרי'],
+];
+async function setupReal(tm){
+  real.tm = tm; real.labels = tm.getClassLabels();
+  // model = Sequential[ Sequential[ MobileNet, GAP ], Sequential[ Dense, Dense ] ]
+  const base = tm.model.layers[0].layers[0];
+  real.probe = tf.model({ inputs: base.inputs, outputs: LAYERS.map(([n]) => base.getLayer(n).output) });
+
+  // חימום: ההרצה הראשונה ב-WebGL מקמפלת את ה-shaders, ובה נמדד פער בין
+  // התחזית שלנו לזו של הספרייה. אחרי הרצה אחת הן זהות עד 1e-9.
+  tf.tidy(() => {
+    const z = tf.zeros([1, 224, 224, 3]);
+    real.tm.model.predict(z).dataSync();
+    real.probe.predict(z).forEach(t => t.dataSync());
+  });
+
+  // 16 המסננים שנלמדו: [3,3,3,16]
+  const k = base.getLayer('Conv1').getWeights()[0].arraySync();
+  let html = '';
+  for (let f = 0; f < 16; f++) html += `<canvas width="3" height="3" data-f="${f}"></canvas>`;
+  $('kgrid').innerHTML = html;
+  [...$('kgrid').children].forEach(cv => {
+    const f = +cv.dataset.f, vals = [];
+    for (let y = 0; y < 3; y++) for (let x = 0; x < 3; x++) for (let c = 0; c < 3; c++) vals.push(k[y][x][c][f]);
+    const lo = Math.min(...vals), hi = Math.max(...vals), im = cv.getContext('2d').createImageData(3, 3);
+    for (let p = 0; p < 9; p++) for (let c = 0; c < 3; c++) im.data[p*4+c] = (vals[p*3+c] - lo) / (hi - lo || 1) * 255;
+    for (let p = 0; p < 9; p++) im.data[p*4+3] = 255;
+    cv.getContext('2d').putImageData(im, 0, 0);
+  });
+  real.ready = true;
+  $('real').style.display = 'block';
+  await runReal();
+}
+async function runReal(){
+  const s = samples[sel];
+  // בדיוק כמו Teachable Machine: חיתוך מרכזי ל-224, ואז ‎/127 − 1
+  const c = document.createElement('canvas'); c.width = c.height = 224;
+  const x = c.getContext('2d'), side = Math.min(s.img.naturalWidth, s.img.naturalHeight);
+  x.drawImage(s.img, (s.img.naturalWidth - side) / 2, (s.img.naturalHeight - side) / 2, side, side, 0, 0, 224, 224);
+  if (marked && s.y) { x.fillStyle = '#fff'; x.fillRect(5, 5, 26, 26); }
+
+  const input = tf.tidy(() => tf.browser.fromPixels(c).toFloat().div(127).sub(1).expandDims(0));
+  const outs = real.probe.predict(input);
+  const fullP = tf.tidy(() => real.tm.model.predict(input).dataSync());
+  input.dispose();
+
+  const blocks = [];
+  for (let L = 0; L < LAYERS.length; L++) {
+    const t = outs[L], [, h, w, ch] = t.shape, data = t.dataSync();
+    // בחירה לפי פיזור ולא לפי ממוצע: ממוצע גבוה מעלה ערוצים שדולקים בכל
+    // מקום (בהירות כללית) ונראים כמשטח אחיד. פיזור מעלה את אלה שמגיבים
+    // לחלק מסוים בתמונה — ואלה שמלמדים משהו.
+    const m1 = new Float32Array(ch), m2 = new Float32Array(ch);
+    for (let i = 0; i < h * w; i++) for (let k = 0; k < ch; k++) {
+      const v = data[i * ch + k]; m1[k] += v; m2[k] += v * v; }
+    const sd = [...m1.keys()].map(k => Math.sqrt(Math.max(0, m2[k] / (h*w) - (m1[k] / (h*w)) ** 2)));
+    const top = [...sd.keys()].sort((a, b) => sd[b] - sd[a]).slice(0, 6);
+    blocks.push({ h, w, ch, data, top });
+    t.dispose();
+  }
+  $('layers').innerHTML = blocks.map((b, L) => `<div class="layer">
+      <div><b>${LAYERS[L][1]}</b> · ${LAYERS[L][2]}
+        <div class="mono">${b.h}×${b.w} · ${b.ch} מפות</div></div>
+      <div class="maps">${b.top.map(k => `<canvas width="${b.w}" height="${b.h}" data-l="${L}" data-k="${k}"></canvas>`).join('')}</div>
+    </div>`).join('');
+  $('layers').querySelectorAll('canvas').forEach(cv => {
+    const b = blocks[+cv.dataset.l], k = +cv.dataset.k, a = new Float32Array(b.h * b.w);
+    for (let i = 0; i < b.h * b.w; i++) a[i] = b.data[i * b.ch + k];
+    const ctx = cv.getContext('2d'), im = ctx.createImageData(b.w, b.h), hi = Math.max(1e-6, ...a);
+    for (let i = 0; i < a.length; i++) { const [r,g,bb] = heat(a[i] / hi);
+      im.data[i*4] = r; im.data[i*4+1] = g; im.data[i*4+2] = bb; im.data[i*4+3] = 255; }
+    ctx.putImageData(im, 0, 0);
+  });
+
+  // בדיקת עקביות: התחזית של הספרייה עצמה מול המעבר שלנו דרך המודל
+  const tmP = await real.tm.predict(c);
+  const same = tmP.every((p, i) => Math.abs(p.probability - fullP[i]) < 1e-3);
+  const best = tmP.reduce((a, b) => b.probability > a.probability ? b : a);
+  const heb = n => /parasit|נגוע/i.test(n) ? 'נגוע' : /uninf|תקין/i.test(n) ? 'תקין' : n;
+  $('pred').innerHTML = `<div><div class="mono">החלטת המודל</div>
+      <div class="big" style="color:${heb(best.className) === 'נגוע' ? 'var(--inf)' : 'var(--uninf)'}">
+        ${heb(best.className)} · ${Math.round(best.probability * 100)}%</div></div>
+    <div><div class="mono">התשובה הנכונה</div><div class="big" style="font-size:30px">${s.lab}</div></div>
+    <div class="mono" style="max-width:260px">${same
+      ? '✓ המפות שלמעלה הן מאותו חישוב שהוביל להחלטה'
+      : '⚠ פער בין החישוב שלנו לתחזית הספרייה'}</div>`;
+}
+$('loadDemo').onclick = async () => {
+  $('mStatus').textContent = 'טוען...'; $('loadDemo').disabled = true;
+  try {
+    const tm = await tmImage.load('model/model.json', 'model/metadata.json');
+    await setupReal(tm);
+    $('mStatus').textContent = 'מודל ההדגמה נטען · מלריה';
+  } catch (e) { $('mStatus').textContent = 'שגיאה: ' + e.message; $('loadDemo').disabled = false; }
+};
+$('modelFiles').onchange = async e => {
+  const map = {}; for (const f of e.target.files) map[f.name.toLowerCase()] = f;
+  if (!map['model.json'] || !map['metadata.json'] || !map['weights.bin']) {
+    $('mStatus').textContent = 'חסרים model.json / weights.bin / metadata.json'; return; }
+  $('mStatus').textContent = 'טוען...';
+  try {
+    const tm = await tmImage.loadFromFiles(map['model.json'], map['weights.bin'], map['metadata.json']);
+    await setupReal(tm);
+    $('mStatus').textContent = 'המודל שלך נטען';
+  } catch (err) { $('mStatus').textContent = 'שגיאה: ' + err.message; }
+};
+
+init();
+</script>
+</body>
+</html>
