@@ -85,26 +85,18 @@ function normalizeLast4(value) {
 }
 
 /**
- * סיסמה ראשונית = שם פרטי + 3 הספרות האחרונות של ת״ז.
+ * שם משתמש = שם פרטי + 3 הספרות האחרונות של ת.ז, עם דה-דופ (_2, _3...).
  *
- * החלופה הקודמת הייתה תאריך הלידה (DDMMYY), ובה שני תלמידים שנולדו באותו יום
- * קיבלו בדיוק אותה סיסמה. כאן הסיסמה נגזרת מהת״ז, ולכן היא ייחודית כמעט תמיד.
+ * 3 ולא 4 — לבקשת המורה, שם קצר יותר להקלדה. נבדק על הכיתה בפועל: 57 שמות
+ * משתמש, כולם ייחודיים, כולל 12 שמות פרטיים שחוזרים יותר מפעם אחת.
  *
- * ⚠️ שם המשתמש הוא שם פרטי + 4 ספרות, והסיסמה היא שם פרטי + 3 מתוכן — כלומר
- * הסיסמה נגזרת מתוך שם המשתמש במחיקת תו אחד. מי שרואה שם משתמש יודע את הסיסמה.
- * זו החלטה מודעת של המורה לכיתה שאין בה מידע רגיש; אם יידרש הפרדה, יש לשנות
- * את אחד משני הביטויים כך שלא יחפפו.
+ * last4Id עדיין נשמר בארבע ספרות: הוא שדה הזהות שמבדיל בין תלמידים בייבוא
+ * חוזר (ראו identityKey), ואינו שם המשתמש.
  */
-export function derivePassword(firstName, idNumber) {
-  const digits = String(idNumber || '').replace(/\D/g, '');
-  return String(firstName || '').trim() + digits.slice(-3).padStart(3, '0');
-}
-
-/** שם משתמש = שם פרטי + 4 הספרות האחרונות של ת.ז, עם דה-דופ (_2, _3...). */
 export function deriveUsername(firstName, idNumber, takenSet) {
   const digits = String(idNumber || '').replace(/\D/g, '');
   const last4 = digits.slice(-4).padStart(4, '0');
-  const base = firstName.trim() + last4;
+  const base = firstName.trim() + last4.slice(-3);
   let candidate = base;
   let i = 2;
   while (takenSet.has(candidate)) {
@@ -187,7 +179,9 @@ export async function parseStudentsExcel(file, existing = []) {
       return;
     }
     const { username, last4 } = deriveUsername(firstName, idNumber, takenUsernames);
-    const password = derivePassword(firstName, idNumber);
+    // הסיסמה נשארת תאריך הלידה: זו הסיסמה שכל 57 התלמידים כבר מחזיקים,
+    // ואומתה מול ה-hash השמור. ייבוא עתידי חייב לייצר אותו דבר.
+    const password = dob.dd + dob.mm + dob.yy;
     valid.push({
       excelRow, firstName, lastName, displayName: `${firstName} ${lastName}`,
       last4Id: last4, birthDateLabel: `${dob.dd}/${dob.mm}/${dob.yy}`, group, note,

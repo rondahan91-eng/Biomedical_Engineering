@@ -460,58 +460,90 @@ function resetStudentPassword(studentId, newPassword) {
 }
 
 /**
- * סיסמה ראשונית = שם פרטי + 3 הספרות האחרונות של ת״ז. חייבת להישאר זהה
- * לנוסחה ב-js/excelImport.js (derivePassword) - שתי נוסחאות שונות פירושן
- * שהסיסמה שהמורה מחלק אינה זו ששמורה בשרת.
+ * שם משתמש = שם פרטי + 3 הספרות האחרונות של ת״ז. חייב להישאר זהה לנוסחה
+ * ב-js/excelImport.js (deriveUsername) - שתי נוסחאות שונות פירושן שתלמיד
+ * שייובא בעתיד יקבל שם בפורמט אחר מכולם.
  *
- * 3 הספרות נלקחות מ-last4Id ולא מהת״ז המלאה, שאינה נשמרת כלל. זה עובד גם על
- * השורות שבהן Sheets בלע אפס מוביל (0330 שמור כ-330): מכיוון שלוקחים את
- * *הסוף*, האפס המוביל לא משנה דבר.
+ * 3 הספרות נלקחות מ-last4Id ולא מהת״ז המלאה, שאינה נשמרת כלל. last4Id עצמו
+ * נשאר בן 4 ספרות - הוא שדה הזהות, לא שם המשתמש.
  */
-function initialPassword(firstName, last4Id) {
+function usernameFor(firstName, last4Id) {
   return String(firstName || '').trim() + pad4(last4Id).slice(-3);
 }
 
 /**
- * הרצה חד-פעמית מעורך Apps Script אחרי שינוי שיטת הסיסמאות.
+ * הסיסמה הראשונית היא תאריך הלידה, DDMMYY.
  *
- * שינוי הנוסחה בקוד משפיע רק על ייבוא הבא - התלמידים שכבר קיימים נשארים עם
- * ה-hash הישן שנגזר מתאריך הלידה. הפונקציה הזו מיישרת את כולם לשיטה החדשה,
- * וכותבת גיליון "סיסמאות" לחלוקה.
- *
- * **למחוק את הגיליון "סיסמאות" מיד אחרי החלוקה.** הסיסמאות שם אינן חושפות
- * דבר שלא ניתן לגזור מ-firstName ו-last4Id שכבר בגיליון, אבל אין סיבה
- * להשאיר רשימה מרוכזת פתוחה.
- *
- * אינה חשופה כפעולת רשת בכוונה: איפוס גורף של כל הסיסמאות אינו דבר שצריך
- * להיות אפשרי דרך כתובת ה-/exec.
+ * התא עשוי להיות טקסט ("05/10/11") או תאריך אמיתי, תלוי אם Sheets המיר אותו
+ * בייבוא. שני המקרים מטופלים, ושניהם חייבים לתת את אותן שש הספרות שמופיעות
+ * בתצוגה - הן אלה שמהן נגזר ה-hash.
  */
-function resetAllStudentPasswordsToNewScheme() {
+function initialPasswordFromBirthDate(v) {
+  if (Object.prototype.toString.call(v) === '[object Date]') {
+    return Utilities.formatDate(v, Session.getScriptTimeZone(), 'ddMMyy');
+  }
+  return String(v == null ? '' : v).replace(/\D/g, '');
+}
+
+/**
+ * הרצה חד-פעמית מעורך Apps Script: מקצרת את שמות המשתמש ל-3 ספרות.
+ *
+ * **הסיסמאות אינן משתנות.** עמודת passHash לא נגעת בה, ולכן כל תלמיד ממשיך
+ * עם תאריך הלידה שלו. זה גם מה שהופך את הפעולה הזו לבטוחה יחסית: גם אם משהו
+ * ישתבש, אף אחד לא נעול בחוץ בגלל סיסמה.
+ *
+ * שלושה דברים שהפונקציה עושה לפני שהיא כותבת משהו:
+ *   1. מחשבת את כל השמות החדשים ובודקת שאין התנגשות - גם מול שורת המורה.
+ *      התנגשות עוצרת הכול לפני הכתיבה הראשונה.
+ *   2. מאמתת כל סיסמה מול ה-hash השמור. שורה שלא מתאימה מסומנת ברשימה
+ *      במקום להיות מוגשת למורה כאילו היא נכונה.
+ *   3. כותבת גיליון "פרטי התחברות" לחלוקה. **למחוק אותו אחרי ההדפסה.**
+ *
+ * אידמפוטנטית: השם נגזר מ-last4Id ולא מהשם הנוכחי, ולכן הרצה שנייה לא משנה
+ * דבר. אינה חשופה כפעולת רשת בכוונה.
+ */
+function shortenUsernamesToThreeDigits() {
   const sheet = getSheet(SHEET_USERS);
   const rows = sheetToObjects(sheet);
   const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
-  const passCol = headers.indexOf('passHash') + 1;
-  const out = [['שם מלא', 'קבוצה', 'שם משתמש', 'סיסמה']];
-  let n = 0;
+  const unCol = headers.indexOf('username') + 1;
 
+  const taken = {}, plan = [];
+  rows.filter(u => u.role !== 'student').forEach(u => { taken[String(u.username)] = 'שורה שאינה תלמיד'; });
   rows.forEach(u => {
-    if (u.role !== 'student') return;           // שורת המורה לא נוגעים בה
-    const pw = initialPassword(u.firstName, u.last4Id);
-    sheet.getRange(u.__row, passCol).setValue(sha256(pw));
-    out.push([(u.firstName + ' ' + u.lastName).trim(), u.group, u.username, pw]);
-    n++;
+    if (u.role !== 'student') return;
+    const to = usernameFor(u.firstName, u.last4Id);
+    if (taken[to]) {
+      throw new Error('התנגשות בשם משתמש "' + to + '" (' + u.firstName + ' ' + u.lastName +
+                      ' מול ' + taken[to] + '). לא בוצע שום שינוי.');
+    }
+    taken[to] = u.firstName + ' ' + u.lastName;
+    plan.push({ row: u.__row, to: to, u: u });
+  });
+
+  plan.forEach(p => sheet.getRange(p.row, unCol).setValue(p.to));
+
+  const out = [['שם מלא', 'קבוצה', 'שם משתמש', 'סיסמה', 'אומת']];
+  let bad = 0;
+  plan.forEach(p => {
+    const pw = initialPasswordFromBirthDate(p.u.birthDate);
+    const ok = sha256(pw) === String(p.u.passHash);
+    if (!ok) bad++;
+    out.push([(p.u.firstName + ' ' + p.u.lastName).trim(), p.u.group, p.to, pw,
+              ok ? '✓' : '✗ לא תואם — לאפס מהפאנל']);
   });
 
   const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const old = ss.getSheetByName('סיסמאות');
+  const old = ss.getSheetByName('פרטי התחברות');
   if (old) ss.deleteSheet(old);
-  const list = ss.insertSheet('סיסמאות');
-  list.getRange(1, 1, out.length, 4).setValues(out);
+  const list = ss.insertSheet('פרטי התחברות');
+  list.getRange(1, 1, out.length, 5).setValues(out);
   list.setFrozenRows(1);
-  list.autoResizeColumns(1, 4);
+  list.autoResizeColumns(1, 5);
 
-  Logger.log('אופסו ' + n + ' סיסמאות. הרשימה בגיליון "סיסמאות" — למחוק אחרי החלוקה.');
-  return { updated: n };
+  Logger.log('שונו ' + plan.length + ' שמות משתמש. סיסמאות לא שונו. ' +
+             (bad ? bad + ' סיסמאות לא אומתו — ראו עמודת "אומת".' : 'כל הסיסמאות אומתו.'));
+  return { renamed: plan.length, unverified: bad };
 }
 
 // -------------------------------------------------------------- ייבוא תלמידים מאקסל
