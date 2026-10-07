@@ -113,15 +113,21 @@ export async function mountStudentChat(app, session, onLogout) {
       <div class="mission">
         <h4>המחקר שלי</h4>
         <div class="mission-row"><span>המאגר הפעיל</span><b>${escapeHtml(ctx.moduleName || '—')}</b></div>
-        ${ctx.datasetUrl
-          ? `<a class="tool-link" style="margin-top:8px" href="${escapeHtml(ctx.datasetUrl)}"
-                target="_blank" rel="noopener noreferrer">
-               <b>ערכות האימון ↗</b><span>מחולקות מראש לפי גודל ויחס</span></a>
-             <p class="form-note" style="margin-top:6px;">אל תורידו את המאגר הגולמי ממקור
-               אחר — הערכות כאן בנויות כך שכל גודל מכיל את הקטן ממנו, ואותה שקופית לא
-               מופיעה גם באימון וגם במבחן.</p>`
+        ${!ctx.datasets && ctx.datasetUrl
+          ? /* שרת ישן: קישור יחיד לתיקיית-העל */ `
+              <a class="tool-link" style="margin-top:8px" href="${escapeHtml(ctx.datasetUrl)}"
+                 target="_blank" rel="noopener noreferrer">
+                <b>ערכות האימון ↗</b><span>מחולקות מראש לפי גודל ויחס</span></a>`
+          : (ctx.datasets || []).length
+          ? (ctx.datasets || []).map(d => `
+              <a class="tool-link" style="margin-top:8px" href="${escapeHtml(d.url)}"
+                 target="_blank" rel="noopener noreferrer">
+                <b>${escapeHtml(d.name)} ↗</b><span>נפתח בשלב ${d.stage}</span></a>`).join('')
+            + `<p class="form-note" style="margin-top:6px;">אל תורידו את המאגר הגולמי ממקור
+                 אחר — הערכות כאן בנויות כך שכל גודל מכיל את הקטן ממנו, ואותה שקופית לא
+                 מופיעה גם באימון וגם במבחן.</p>`
           : `<p class="form-note" style="margin-top:6px;">המאגר נקבע על ידי המורה.
-               קישור לערכות האימון טרם הוזן.</p>`}
+               ערכות האימון של השלב הנוכחי טרם זמינות.</p>`}
       </div>
 
       <div class="ladder">
@@ -129,15 +135,17 @@ export async function mountStudentChat(app, session, onLogout) {
         ${(ctx.experiments || []).map((e, i) => {
           const cur = e.key === ctx.currentExperiment;
           const done = (ctx.experiments || []).findIndex(x => x.key === ctx.currentExperiment) > i;
-          return `<button class="exp${cur ? ' cur' : ''}${done ? ' done' : ''}"
-                    data-exp="${e.key}" ${cur ? 'aria-current="step"' : ''}>
-                    <span class="n">${done ? '✓' : i + 1}</span>
+          const open = e.open !== false;
+          return `<button class="exp${cur ? ' cur' : ''}${done ? ' done' : ''}${open ? '' : ' locked'}"
+                    data-exp="${e.key}" ${open ? '' : 'disabled'}
+                    ${cur ? 'aria-current="step"' : ''}>
+                    <span class="n">${done ? '✓' : open ? i + 1 : '🔒'}</span>
                     <span class="t"><b>${escapeHtml(e.name)}</b>
-                      <span>${escapeHtml(EXPERIMENT_BLURB[e.key] || '')}</span></span>
+                      <span>${open ? escapeHtml(EXPERIMENT_BLURB[e.key] || '') : 'טרם נפתח'}</span></span>
                   </button>`;
         }).join('')}
         <p class="form-note" style="margin-top:8px;">לחיצה מסמנת איפה את/ה עכשיו.
-          המנטור ישאל על הניסוי המסומן.</p>
+          המנטור ישאל על הניסוי המסומן. ניסוי נפתח על ידי המורה.</p>
       </div>
 
       <div class="steps">
@@ -149,9 +157,15 @@ export async function mountStudentChat(app, session, onLogout) {
 
       <div class="tools">
         <h4>כלי המחקר</h4>
-        ${toolLink('tools/evaluate/', 'הערכת מודל', 'דיוק, רגישות, מפת קשב')}
-        ${toolLink('tools/perturb/', 'כלי הפרעות', 'מה באמת מניע את ההחלטה')}
-        ${toolLink('tools/notebook/', 'מחברת ניסוי', 'השערה, מדידה, מסקנה')}
+        ${ctx.tools
+          ? ctx.tools.map(t => t.open
+              ? toolLink(t.path, t.name, t.sub)
+              : `<div class="tool-link locked"><b>${escapeHtml(t.name)} 🔒</b>
+                   <span>נפתח ב${escapeHtml(t.opensAtName || '')}</span></div>`).join('')
+          : /* שרת ישן: כל הכלים פתוחים */
+            toolLink('tools/notebook/', 'מחברת ניסוי', 'השערה, מדידה, מסקנה')
+            + toolLink('tools/evaluate/', 'הערכת מודל', 'דיוק, רגישות, מפת קשב')
+            + toolLink('tools/perturb/', 'כלי הפרעות', 'מה באמת מניע את ההחלטה')}
         <p class="form-note" style="margin-top:8px">
           פתחו אותם מכאן — כך כל ייצוא מתויק אוטומטית בתיקייה שלכם.
           כלי שנפתח מסימנייה לא יזהה אתכם, והקובץ יישאר על המחשב בלבד.

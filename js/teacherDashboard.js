@@ -4,11 +4,17 @@
 // ==========================================================================
 import { escapeHtml, toast, topbarHtml, wireLogout, passwordField, wirePasswordEyes } from './ui.js';
 import {
-  getDashboard, getGroupWeeks, startNewWeek, updateCurrentWeekTopic,
+  getDashboard, getGroupWeeks, setGroupStage, startNewWeek, updateCurrentWeekTopic,
   getStudentTranscripts, setManualGrade, exportWeeklyReport, importRoster, resetStudentPassword,
   changePassword, deleteStudent,
 } from './api.js';
 import { parseStudentsExcel } from './excelImport.js';
+
+// ארבעת הניסויים, באותו סדר שבשרת. מקור האמת הוא EXPERIMENT_ORDER ב-Code.gs.
+// ברמת המודול ולא בתוך mountTeacherDashboard: הרינדור הראשון קורה בתוך
+// refresh() שנקרא בשורה הראשונה, לפני שהצהרות const בגוף הפונקציה מאותחלות.
+const STAGES = ['עקומת למידה', 'יחסי איזון', 'הכללה בין מקורות', 'התערבות'];
+const TOOL_AT = { 1: 'מחברת ניסוי', 2: 'הערכת מודל', 3: 'כלי הפרעות' };
 
 export async function mountTeacherDashboard(app, session, onLogout) {
   // כל קבוצה מתקדמת בקצב שלה, ולכן אין "השבוע" אחד לכיתה: groups מחזיק שורה
@@ -103,7 +109,7 @@ export async function mountTeacherDashboard(app, session, onLogout) {
             <div class="panel glass">
               <h3>📥 ייבוא תלמידים מקובץ Excel</h3>
               <p class="form-note" style="margin-top:0;">עמודות נדרשות: שם פרטי, שם משפחה, תעודת זהות מלאה, תאריך לידה, קבוצה. עמודת "הערה" אופציונלית.
-                שם משתמש ייגזר משם פרטי + 4 ספרות אחרונות של ת"ז, וסיסמה ראשונית מתאריך הלידה. ת"ז המלאה לא עוזבת את הדפדפן.</p>
+                שם משתמש ייגזר משם פרטי + 3 הספרות האחרונות של ת"ז, וסיסמה ראשונית מתאריך הלידה (DDMMYY). ת"ז המלאה לא עוזבת את הדפדפן.</p>
               <div class="field"><input type="file" id="excel-file-input" accept=".xlsx,.xls"></div>
               <button type="button" id="parse-excel-btn" class="secondary" style="width:100%;">ניתוח קובץ</button>
               ${renderImportPreview()}
@@ -152,9 +158,11 @@ export async function mountTeacherDashboard(app, session, onLogout) {
                     data-group="${escapeHtml(g.group)}">
               <b>${escapeHtml(groupLabel(g.group))}</b>
               <span>שבוע ${g.weekNumber} · ${g.studentCount} תלמידים</span>
+              <span>שלב ${g.unlockedStage || 1}${g.stageName ? ' · ' + escapeHtml(g.stageName) : ''}</span>
             </button>`).join('')}
         </div>
         <p class="form-note">שבוע ${w.weekNumber}${w.topicText ? ' · ' + escapeHtml(w.topicText) : ' · טרם הוזן נושא'}</p>
+        ${renderStagePanel(w)}
         ${!w.isOwn ? `<p class="form-note warn-note">הקבוצה הזו עדיין על הנושא המשותף
           שנקבע לפני ההפרדה. שמירה כאן תיצור לה מסלול משלה, בלי לגעת בקבוצות האחרות.</p>` : ''}
         <div class="field"><textarea id="topic-input" rows="2"
@@ -169,6 +177,30 @@ export async function mountTeacherDashboard(app, session, onLogout) {
         <div style="display:flex;gap:8px;">
           <button type="button" id="update-topic-btn" class="secondary" style="flex:1;">שמירה לשבוע הנוכחי</button>
           <button type="button" id="new-week-btn" style="flex:1;">שבוע חדש ▶</button>
+        </div>
+      </div>`;
+  }
+
+  function renderStagePanel(w) {
+    const cur = w.unlockedStage || 1;
+    return `
+      <div class="stage-box">
+        <div class="mono-lbl">מה פתוח ל${escapeHtml(groupLabel(w.group))}</div>
+        <div class="stage-row">
+          ${STAGES.map((name, i) => {
+            const n = i + 1, open = n <= cur;
+            return `<button type="button" class="stage-pip${open ? ' open' : ''}${n === cur ? ' edge' : ''}"
+                      data-stage="${n}" title="${open ? 'פתוח' : 'נעול'}">
+                      <b>${n}</b><span>${escapeHtml(name)}</span>
+                      ${TOOL_AT[n] ? `<i>+ ${escapeHtml(TOOL_AT[n])}</i>` : '<i>&nbsp;</i>'}
+                    </button>`;
+          }).join('')}
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap">
+          ${cur < STAGES.length
+            ? `<button type="button" id="stage-next">פתח שלב ${cur + 1} ▶</button>` : ''}
+          ${cur > 1 ? `<button type="button" class="small" id="stage-back">החזר לשלב ${cur - 1}</button>` : ''}
+          <span class="form-note" style="margin:0">לחיצה על מספר קופצת ישירות לשלב.</span>
         </div>
       </div>`;
   }
@@ -283,6 +315,20 @@ export async function mountTeacherDashboard(app, session, onLogout) {
         render();
       });
     });
+
+    const setStage = async (n) => {
+      try {
+        await setGroupStage(state.selectedGroup, n);
+        toast(`${groupLabel(state.selectedGroup)} · נפתח עד שלב ${n}`);
+        await refresh();
+      } catch (err) { toast('שגיאה: ' + err.message, true); }
+    };
+    document.querySelectorAll('.stage-pip').forEach(b =>
+      b.addEventListener('click', () => setStage(+b.dataset.stage)));
+    const sn = document.getElementById('stage-next');
+    if (sn) sn.addEventListener('click', () => setStage((currentGroupWeek().unlockedStage || 1) + 1));
+    const sb = document.getElementById('stage-back');
+    if (sb) sb.addEventListener('click', () => setStage((currentGroupWeek().unlockedStage || 1) - 1));
 
     document.querySelectorAll('.group-pick').forEach(btn => {
       btn.addEventListener('click', () => { state.selectedGroup = btn.dataset.group; render(); });

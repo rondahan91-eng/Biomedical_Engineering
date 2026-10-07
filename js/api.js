@@ -62,6 +62,19 @@ function delay(ms = 250) { return new Promise(r => setTimeout(r, ms)); }
 // '*' = "חל על כל קבוצה שאין לה שבוע משלה" - אותה סמנטיקה כמו בשרת.
 const DEV_GROUP_ALL = '*';
 
+// חייב להישאר זהה ל-TOOL_STAGE ול-TOOLS שב-backend/Code.gs
+const DEV_TOOL_STAGE = { notebook: 1, evaluate: 2, perturb: 3 };
+const DEV_TOOLS = {
+  notebook: { name: 'מחברת ניסוי', sub: 'השערה, מדידה, מסקנה', path: 'tools/notebook/' },
+  evaluate: { name: 'הערכת מודל',  sub: 'דיוק, רגישות, מפת קשב', path: 'tools/evaluate/' },
+  perturb:  { name: 'כלי הפרעות',  sub: 'מה באמת מניע את ההחלטה', path: 'tools/perturb/' },
+};
+const devStageOf = k => Math.max(1, DEV_EXPERIMENTS.findIndex(e => e.key === k) + 1);
+const devGroupStage = (db, group) => {
+  const g = devNormGroup(group);
+  return Math.min(DEV_EXPERIMENTS.length, Math.max(1, Number((db.stages || {})[g]) || 1));
+};
+
 function devNormGroup(g) { return String(g == null ? '' : g).trim(); }
 
 /** השבוע של קבוצה, עם נפילה לשבוע המשותף. מקביל ל-getCurrentWeekInfo בשרת. */
@@ -148,6 +161,9 @@ async function callLocal(action, payload) {
 
   if (action === 'logout') return { ok: true };
   if (action === 'setCurrentExperiment') {
+    const who = findStudent(db, payload.studentId);
+    if (devStageOf(payload.experiment) > devGroupStage(db, who.group))
+      throw new Error('הניסוי הזה עוד לא נפתח.');
     const u = findStudent(db, payload.studentId);
     u.currentExperiment = payload.experiment;
     saveDB(db);
@@ -192,11 +208,20 @@ async function callLocal(action, payload) {
     const doneThisWeek = mine.some(c => c.weekNumber === week.weekNumber && c.status === 'graded');
     return {
       firstName: u.firstName, group: u.group, note: u.note,
-      moduleName: 'מלריה — תאי דם', experiments: DEV_EXPERIMENTS,
+      moduleName: 'מלריה — תאי דם',
+      experiments: DEV_EXPERIMENTS.map((e, i) => ({ ...e, open: i + 1 <= devGroupStage(db, u.group) })),
       currentExperiment: u.currentExperiment || 'curve',
       experimentName: (DEV_EXPERIMENTS.find(e => e.key === (u.currentExperiment || 'curve')) || {}).name,
       weekNumber: week.weekNumber, topicText: week.topicText,
-      datasetUrl: week.datasetUrl || '',
+      unlockedStage: devGroupStage(db, u.group),
+      datasets: [{ name: 'ערכות עקומת הלמידה', url: week.datasetUrl || '#', stage: 1 }]
+        .filter(() => !!week.datasetUrl),
+      tools: Object.keys(DEV_TOOLS).map(k => ({
+        key: k, name: DEV_TOOLS[k].name, sub: DEV_TOOLS[k].sub,
+        open: DEV_TOOL_STAGE[k] <= devGroupStage(db, u.group),
+        path: DEV_TOOL_STAGE[k] <= devGroupStage(db, u.group) ? DEV_TOOLS[k].path : '',
+        opensAtName: (DEV_EXPERIMENTS[DEV_TOOL_STAGE[k] - 1] || {}).name,
+      })),
       priorSummary: lastGraded ? lastGraded.aiMemorySummary : '', gradedThisWeek: doneThisWeek,
     };
   }
@@ -226,7 +251,20 @@ async function callLocal(action, payload) {
   }
 
   if (action === 'getGroupWeeks') {
-    return devGroups(db).map(g => ({ ...devWeek(db, g.group), studentCount: g.studentCount }));
+    return devGroups(db).map(g => {
+      const st = devGroupStage(db, g.group);
+      return { ...devWeek(db, g.group), studentCount: g.studentCount,
+               unlockedStage: st, stageName: (DEV_EXPERIMENTS[st - 1] || {}).name };
+    });
+  }
+
+  if (action === 'setGroupStage') {
+    const g = devNormGroup(payload.group);
+    if (!g) throw new Error('לא נבחרה קבוצה.');
+    const n = Math.min(DEV_EXPERIMENTS.length, Math.max(1, Number(payload.stage) || 1));
+    db.stages = db.stages || {}; db.stages[g] = n;
+    saveDB(db);
+    return { group: g, unlockedStage: n, stageName: (DEV_EXPERIMENTS[n - 1] || {}).name };
   }
 
   if (action === 'startNewWeek') {
@@ -368,6 +406,9 @@ export async function getCurrentWeek(group) {
 }
 export async function getGroupWeeks() {
   return dispatch('getGroupWeeks', {});
+}
+export async function setGroupStage(group, stage) {
+  return dispatch('setGroupStage', { group, stage });
 }
 export async function startNewWeek(group, topicText, module, datasetUrl) {
   return dispatch('startNewWeek', { group, topicText, module, datasetUrl });

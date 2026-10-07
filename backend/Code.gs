@@ -15,6 +15,7 @@ const SHEET_HELPCHATS = 'HelpChatLog';
 const SHEET_SESSIONS = 'Sessions';
 const SHEET_USAGE = 'Usage';
 const SHEET_ARTIFACTS = 'Artifacts';
+const SHEET_STAGES = 'GroupStages';
 
 /**
  * מבנה הקורס: שדרה אחת של שיטה, שרצה על מודולים מתחלפים של מאגרים.
@@ -143,6 +144,9 @@ function routeAction(action, payload) {
     case 'getGroupWeeks':
       requireAdmin(payload);
       return getGroupWeeks();
+    case 'setGroupStage':
+      requireAdmin(payload);
+      return setGroupStage(payload.group, payload.stage);
     case 'setCurrentExperiment':
       requireSelfOrAdmin(payload, payload.studentId);
       return setCurrentExperiment(payload.studentId, payload.experiment);
@@ -262,6 +266,7 @@ SHEET_SCHEMAS[SHEET_SESSIONS] = ['token', 'studentId', 'role', 'createdAt', 'exp
 SHEET_SCHEMAS[SHEET_USAGE] = ['studentId', 'weekNumber', 'messageCount', 'lastMessageAt'];
 SHEET_SCHEMAS[SHEET_ARTIFACTS] = ['artifactId', 'studentId', 'weekNumber', 'kind', 'filename',
   'fileId', 'url', 'sizeBytes', 'createdAt'];
+SHEET_SCHEMAS[SHEET_STAGES] = ['group', 'unlockedStage', 'setAt'];
 
 function getSheet(name) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -650,11 +655,112 @@ function listGroups() {
   return Object.keys(seen).sort().map(g => ({ group: g, studentCount: seen[g] }));
 }
 
+/**
+ * ===========================================================================
+ * פתיחה הדרגתית
+ * ===========================================================================
+ * לכל קבוצה "שלב פתוח" (1..4) שהמורה מקדם מהפאנל. השלב קובע שני דברים:
+ * אילו ערכות אימון מוצגות, ואילו כלים זמינים.
+ *
+ * זו נעילת תצוגה, לא נעילת הרשאות: התיקיות ב-Drive נשארות משותפות, ומי
+ * שכבר מחזיק קישור יכול לפתוח אותו. המטרה היא שתלמיד לא *יגיע* לחומר של
+ * שלב שעוד לא נפתח, לא למנוע ממנו בכוח. החלטה מודעת - נעילה אמיתית דורשת
+ * לשנות שיתופים ב-Drive בכל פתיחת שלב.
+ */
+
+/** איזה כלי נפתח באיזה שלב. שינוי כאן מזיז כלי בין שלבים - אין מקום נוסף. */
+const TOOL_STAGE = { notebook: 1, evaluate: 2, perturb: 3 };
+
+const TOOLS = {
+  notebook: { path: 'tools/notebook/', name: 'מחברת ניסוי', sub: 'השערה, מדידה, מסקנה' },
+  evaluate: { path: 'tools/evaluate/', name: 'הערכת מודל',  sub: 'דיוק, רגישות, מפת קשב' },
+  perturb:  { path: 'tools/perturb/',  name: 'כלי הפרעות',  sub: 'מה באמת מניע את ההחלטה' },
+};
+
+/**
+ * אילו תיקיות נפתחות בכל שלב, לפי שמן ב-Drive.
+ * 'ניסויים/X' = תת-תיקייה בתוך תיקיית הניסויים.
+ */
+const STAGE_FOLDERS = {
+  1: [['ניסויים/עקומת למידה',      'ערכות עקומת הלמידה']],
+  2: [['ניסויים/יחסי איזון',        'ערכות יחסי האיזון'],
+      ['ערכת מבחן',                 'ערכת המבחן']],
+  3: [['ניסויים/הכללה בין מקורות',  'ערכות ההכללה']],
+  4: [['בריכת תמונות',              'בריכת התמונות המלאה']],
+};
+
+function stageOf(experimentKey) {
+  const i = EXPERIMENT_ORDER.indexOf(experimentKey);
+  return i < 0 ? 1 : i + 1;
+}
+
+/** השלב הפתוח של קבוצה. ברירת המחדל היא 1 - לא פותחים מה שלא נפתח במפורש. */
+function getGroupStage(group) {
+  const g = normGroup(group);
+  const row = sheetToObjects(getSheet(SHEET_STAGES)).find(r => normGroup(r.group) === g);
+  const n = row ? Number(row.unlockedStage) : 1;
+  return Math.min(EXPERIMENT_ORDER.length, Math.max(1, n || 1));
+}
+
+function setGroupStage(group, stage) {
+  const g = requireGroup(group);
+  const n = Math.min(EXPERIMENT_ORDER.length, Math.max(1, Number(stage) || 1));
+  const sheet = getSheet(SHEET_STAGES);
+  const rows = sheetToObjects(sheet);
+  const row = rows.find(r => normGroup(r.group) === g);
+  if (row) {
+    sheet.getRange(row.__row, 2).setValue(n);
+    sheet.getRange(row.__row, 3).setValue(new Date());
+  } else {
+    sheet.appendRow([g, n, new Date()]);
+  }
+  return { group: g, unlockedStage: n, stageName: EXPERIMENTS[EXPERIMENT_ORDER[n - 1]] };
+}
+
+/**
+ * הקישורים לתיקיות שנפתחו, נגזרים מתוך תיקיית המאגר שהמורה הזין.
+ *
+ * אין טופס נפרד לכל ערכה: שמות התיקיות קבועים במאגרי הקורס, ולכן השרת מוצא
+ * אותן לבד. מאגר חדש שייבנה באותו מבנה יעבוד בלי שינוי קוד; מאגר בשמות
+ * אחרים פשוט לא יחזיר קישור, והתלמיד יראה הערה במקום קישור שבור.
+ *
+ * התוצאה נשמרת ב-cache לחצי שעה - חיפוש ב-Drive בכל טעינת מסך הוא בזבוז.
+ */
+function unlockedDatasetLinks(datasetUrl, stage) {
+  if (!datasetUrl) return [];
+  const key = 'ds_' + stage + '_' + datasetUrl;
+  const cache = CacheService.getScriptCache();
+  const hit = cache.get(key);
+  if (hit) return JSON.parse(hit);
+
+  const m = String(datasetUrl).match(/[-\w]{25,}/);
+  if (!m) return [];
+  let root;
+  try { root = DriveApp.getFolderById(m[0]); } catch (e) { return []; }
+
+  const byName = (folder, name) => {
+    const it = folder.getFoldersByName(name);
+    return it.hasNext() ? it.next() : null;
+  };
+  const out = [];
+  for (let s = 1; s <= stage; s++) {
+    (STAGE_FOLDERS[s] || []).forEach(pair => {
+      let f = root;
+      pair[0].split('/').forEach(part => { f = f ? byName(f, part) : null; });
+      if (f) out.push({ name: pair[1], url: f.getUrl(), stage: s });
+    });
+  }
+  cache.put(key, JSON.stringify(out), 1800);
+  return out;
+}
+
 /** מצב כל הקבוצות במכה אחת - זה מה שהפאנל מצייר. */
 function getGroupWeeks() {
   return listGroups().map(g => {
     const week = getCurrentWeekInfo(g.group);
     week.studentCount = g.studentCount;
+    week.unlockedStage = getGroupStage(g.group);
+    week.stageName = EXPERIMENTS[EXPERIMENT_ORDER[week.unlockedStage - 1]];
     return week;
   });
 }
@@ -699,6 +805,14 @@ function safeHttpUrl(u) {
 /** התלמיד/ה מסמן/ת באיזה ניסוי הוא/היא נמצא/ת. הקצב אישי, המשימות זהות. */
 function setCurrentExperiment(studentId, experiment) {
   if (!EXPERIMENTS[experiment]) throw new Error('ניסוי לא מוכר: ' + experiment);
+  // הגבלה גם בשרת ולא רק בתצוגה: כפתור מושבת הוא בקשה, לא מניעה.
+  const me = sheetToObjects(getSheet(SHEET_USERS)).find(u => u.studentId === studentId);
+  if (!me) throw new Error('תלמיד לא נמצא');
+  const stage = getGroupStage(me.group);
+  if (stageOf(experiment) > stage) {
+    throw new Error('הניסוי הזה עוד לא נפתח. השלב הפתוח כרגע: ' +
+                    EXPERIMENTS[EXPERIMENT_ORDER[stage - 1]] + '.');
+  }
   const sheet = getSheet(SHEET_USERS);
   const headers = sheet.getDataRange().getValues()[0];
   const col = headers.indexOf('currentExperiment') + 1;
@@ -763,16 +877,31 @@ function getStudentContext(studentId) {
   const checkIns = sheetToObjects(getSheet(SHEET_CHECKINS)).filter(c => c.studentId === studentId);
   const thisWeekCheckIn = checkIns.find(c => Number(c.weekNumber) === Number(week.weekNumber));
   const lastGraded = checkIns.filter(c => c.status === 'graded').sort((a, b) => b.weekNumber - a.weekNumber)[0];
+  const stage = getGroupStage(user.group);
+  // הניסוי המסומן לא יכול לחרוג מהשלב שנפתח: אם המורה הוריד שלב, או
+  // שהתלמיד סומן קדימה בעבר, מציגים אותו בגבול העליון שנפתח.
+  const cur = user.currentExperiment || EXPERIMENT_ORDER[0];
+  const curCapped = stageOf(cur) > stage ? EXPERIMENT_ORDER[stage - 1] : cur;
+
   return {
     firstName: user.firstName,
     group: user.group,
     note: user.note,
     module: week.module || DEFAULT_MODULE,
     moduleName: moduleName(week.module),
-    datasetUrl: week.datasetUrl || '',
-    currentExperiment: user.currentExperiment || EXPERIMENT_ORDER[0],
-    experimentName: experimentName(user.currentExperiment),
-    experiments: EXPERIMENT_ORDER.map(k => ({ key: k, name: EXPERIMENTS[k] })),
+    unlockedStage: stage,
+    // הקישור לתיקיית-העל לא נשלח לתלמיד בכוונה - רק הערכות שנפתחו
+    datasets: unlockedDatasetLinks(week.datasetUrl, stage),
+    // כלי נעול נשלח בלי path - אין כתובת לשלוח אליה, ולא רק כפתור מושבת
+    tools: Object.keys(TOOLS).map(k => ({
+      key: k, name: TOOLS[k].name, sub: TOOLS[k].sub,
+      path: TOOL_STAGE[k] <= stage ? TOOLS[k].path : '',
+      open: TOOL_STAGE[k] <= stage,
+      opensAtName: EXPERIMENTS[EXPERIMENT_ORDER[TOOL_STAGE[k] - 1]],
+    })),
+    currentExperiment: curCapped,
+    experimentName: experimentName(curCapped),
+    experiments: EXPERIMENT_ORDER.map((k, i) => ({ key: k, name: EXPERIMENTS[k], open: i + 1 <= stage })),
     weekNumber: week.weekNumber,
     topicText: week.topicText,
     priorSummary: lastGraded ? lastGraded.aiMemorySummary : '',
