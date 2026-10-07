@@ -682,12 +682,20 @@ const TOOLS = {
  * 'ניסויים/X' = תת-תיקייה בתוך תיקיית הניסויים.
  */
 const STAGE_FOLDERS = {
-  1: [['ניסויים/עקומת למידה',      'ערכות עקומת הלמידה']],
-  2: [['ניסויים/יחסי איזון',        'ערכות יחסי האיזון'],
-      ['ערכת מבחן',                 'ערכת המבחן']],
-  3: [['ניסויים/הכללה בין מקורות',  'ערכות ההכללה']],
-  4: [['בריכת תמונות',              'בריכת התמונות המלאה']],
+  1: [['ניסויים/עקומת למידה/גודל 0025', 'ערכת אימון ראשונה — 25 תמונות'],
+      ['ערכת מבחן',                      'ערכת המבחן']],
+  2: [['ניסויים/עקומת למידה',            'כל ערכות עקומת הלמידה'],
+      ['ניסויים/יחסי איזון',              'ערכות יחסי האיזון']],
+  3: [['ניסויים/הכללה בין מקורות',        'ערכות ההכללה']],
+  4: [['בריכת תמונות',                    'בריכת התמונות המלאה']],
 };
+
+/**
+ * תיקיות שאסור שייפתחו אוטומטית בשום שלב.
+ * תיקיית-העל - כדי שתלמיד לא יוכל לדפדף בכל המאגר; הערכה העיוורת - כי כל
+ * ערכה שמטרתה בדיקה ללא תוויות מאבדת את ערכה ברגע שאפשר לשוטט בה.
+ */
+const NEVER_SHARED = ['', 'ערכת מבחן עיוורת', 'ניסויים'];
 
 function stageOf(experimentKey) {
   const i = EXPERIMENT_ORDER.indexOf(experimentKey);
@@ -714,7 +722,10 @@ function setGroupStage(group, stage) {
   } else {
     sheet.appendRow([g, n, new Date()]);
   }
-  return { group: g, unlockedStage: n, stageName: EXPERIMENTS[EXPERIMENT_ORDER[n - 1]] };
+  // הסנכרון אחרי הכתיבה: הוא נשען על השלב המעודכן של כל הקבוצות
+  const week = getCurrentWeekInfo(g);
+  const sync = syncDriveSharing(week.datasetUrl);
+  return { group: g, unlockedStage: n, stageName: EXPERIMENTS[EXPERIMENT_ORDER[n - 1]], sync: sync };
 }
 
 /**
@@ -752,6 +763,87 @@ function unlockedDatasetLinks(datasetUrl, stage) {
   }
   cache.put(key, JSON.stringify(out), 1800);
   return out;
+}
+
+/**
+ * מסנכרן את השיתוף ב-Drive למצב השלבים בפועל.
+ *
+ * תיקייה של שלב שנפתח מקבלת "כל מי שיש לו הקישור - צפייה"; תיקייה של שלב
+ * שעוד לא נפתח הופכת לפרטית. כך "מה שהתלמיד רואה" ו"מה שהתלמיד יכול לפתוח"
+ * הם אותו דבר, ולא צריך לזכור לשנות שיתופים ביד בכל פתיחת שלב.
+ *
+ * **השיתוף גלובלי והשלב הוא פר-קבוצה.** התיקיות ב-Drive משותפות לכולם, ולכן
+ * הסנכרון עובד לפי השלב *הגבוה ביותר* מבין הקבוצות. אם י1 בשלב 3 ו-י2 בשלב 1,
+ * תלמיד מ-י2 לא *יראה* את הקישורים של שלב 3 - אבל אם חבר מ-י1 ישלח לו קישור,
+ * הוא ייפתח. הפרדה מלאה דורשת עותק נפרד של המאגר לכל קבוצה.
+ */
+function syncDriveSharing(datasetUrl) {
+  if (!datasetUrl) return { shared: 0, closed: 0, note: 'אין קישור למאגר' };
+  const m = String(datasetUrl).match(/[-\w]{25,}/);
+  if (!m) return { shared: 0, closed: 0, note: 'קישור לא תקין' };
+  let root;
+  try { root = DriveApp.getFolderById(m[0]); }
+  catch (e) { return { shared: 0, closed: 0, note: 'אין גישה לתיקייה' }; }
+
+  const maxStage = listGroups().reduce(function (acc, g) {
+    return Math.max(acc, getGroupStage(g.group));
+  }, 1);
+
+  const byPath = function (path) {
+    let f = root;
+    path.split('/').forEach(function (part) {
+      if (!f) return;
+      const it = f.getFoldersByName(part);
+      f = it.hasNext() ? it.next() : null;
+    });
+    return f;
+  };
+  const setAccess = function (folder, open) {
+    try {
+      if (open) folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+      else folder.setSharing(DriveApp.Access.PRIVATE, DriveApp.Permission.VIEW);
+      return true;
+    } catch (e) { return false; }
+  };
+
+  let shared = 0, closed = 0;
+  // תיקיית-העל והערכה העיוורת - תמיד סגורות
+  setAccess(root, false) && closed++;
+  NEVER_SHARED.filter(function (p) { return p; }).forEach(function (p) {
+    const f = byPath(p);
+    if (f && setAccess(f, false)) closed++;
+  });
+  // כל שלב לפי מצבו
+  Object.keys(STAGE_FOLDERS).forEach(function (k) {
+    const open = Number(k) <= maxStage;
+    STAGE_FOLDERS[k].forEach(function (pair) {
+      const f = byPath(pair[0]);
+      if (!f) return;
+      if (setAccess(f, open)) { open ? shared++ : closed++; }
+    });
+  });
+  // הקישורים לכל שלב נשמרים ב-cache לחצי שעה. אחרי שינוי שלב צריך לפנות
+  // אותם, אחרת תלמיד שייכנס מיד יקבל את הרשימה של לפני השינוי.
+  const keys = [];
+  for (let st = 1; st <= EXPERIMENT_ORDER.length; st++) keys.push('ds_' + st + '_' + datasetUrl);
+  CacheService.getScriptCache().removeAll(keys);
+
+  return { shared: shared, closed: closed, maxStage: maxStage };
+}
+
+/**
+ * נעילה ראשונית - להרצה חד-פעמית מהעורך.
+ * מביאה את כל התיקיות למצב שתואם את השלבים הפתוחים כרגע. אחרי זה הסנכרון
+ * קורה לבד בכל פתיחת שלב.
+ */
+function lockDriveToCurrentStages() {
+  const res = {};
+  listGroups().forEach(function (g) {
+    const w = getCurrentWeekInfo(g.group);
+    if (w.datasetUrl && !res[w.datasetUrl]) res[w.datasetUrl] = syncDriveSharing(w.datasetUrl);
+  });
+  Logger.log(JSON.stringify(res));
+  return res;
 }
 
 /** מצב כל הקבוצות במכה אחת - זה מה שהפאנל מצייר. */

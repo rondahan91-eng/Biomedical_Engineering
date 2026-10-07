@@ -200,7 +200,8 @@ export async function mountTeacherDashboard(app, session, onLogout) {
           ${cur < STAGES.length
             ? `<button type="button" id="stage-next">פתח שלב ${cur + 1} ▶</button>` : ''}
           ${cur > 1 ? `<button type="button" class="small" id="stage-back">החזר לשלב ${cur - 1}</button>` : ''}
-          <span class="form-note" style="margin:0">לחיצה על מספר קופצת ישירות לשלב.</span>
+          <span class="form-note" style="margin:0">לחיצה על מספר קופצת ישירות לשלב.
+            השיתוף ב-Drive מסתנכרן לבד — תיקייה של שלב סגור הופכת לפרטית.</span>
         </div>
       </div>`;
   }
@@ -318,8 +319,12 @@ export async function mountTeacherDashboard(app, session, onLogout) {
 
     const setStage = async (n) => {
       try {
-        await setGroupStage(state.selectedGroup, n);
-        toast(`${groupLabel(state.selectedGroup)} · נפתח עד שלב ${n}`);
+        const r = await setGroupStage(state.selectedGroup, n);
+        const sy = r && r.sync;
+        toast(`${groupLabel(state.selectedGroup)} · נפתח עד שלב ${n}` +
+          (sy && (sy.shared || sy.closed)
+            ? ` · ב-Drive נפתחו ${sy.shared} ונסגרו ${sy.closed}`
+            : sy && sy.note ? ` · ${sy.note}` : ''));
         await refresh();
       } catch (err) { toast('שגיאה: ' + err.message, true); }
     };
