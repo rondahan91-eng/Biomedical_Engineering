@@ -63,7 +63,7 @@ function delay(ms = 250) { return new Promise(r => setTimeout(r, ms)); }
 const DEV_GROUP_ALL = '*';
 
 // חייב להישאר זהה ל-TOOL_STAGE ול-TOOLS שב-backend/Code.gs
-const DEV_TOOL_STAGE = { notebook: 1, evaluate: 2, perturb: 3 };
+const DEV_TOOL_STAGE = { notebook: 1, evaluate: 1, perturb: 3 };
 const DEV_TOOLS = {
   notebook: { name: 'מחברת ניסוי', sub: 'השערה, מדידה, מסקנה', path: 'tools/notebook/' },
   evaluate: { name: 'הערכת מודל',  sub: 'דיוק, רגישות, מפת קשב', path: 'tools/evaluate/' },

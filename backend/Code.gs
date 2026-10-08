@@ -710,7 +710,9 @@ function listGroups() {
  */
 
 /** איזה כלי נפתח באיזה שלב. שינוי כאן מזיז כלי בין שלבים - אין מקום נוסף. */
-const TOOL_STAGE = { notebook: 1, evaluate: 2, perturb: 3 };
+// כלי ההערכה נפתח כבר בניסוי הראשון: עקומת למידה *היא* סדרת מדידות
+// דיוק, ובלי הכלי אין במה למדוד אותה.
+const TOOL_STAGE = { notebook: 1, evaluate: 1, perturb: 3 };
 
 const TOOLS = {
   notebook: { path: 'tools/notebook/', name: 'מחברת ניסוי', sub: 'השערה, מדידה, מסקנה' },
