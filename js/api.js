@@ -222,6 +222,8 @@ async function callLocal(action, payload) {
         path: DEV_TOOL_STAGE[k] <= devGroupStage(db, u.group) ? DEV_TOOLS[k].path : '',
         opensAtName: (DEV_EXPERIMENTS[DEV_TOOL_STAGE[k] - 1] || {}).name,
       })),
+      checkInEnabled: week.checkIn !== false,
+      trainerUrl: 'https://teachablemachine.withgoogle.com/train/image',
       priorSummary: lastGraded ? lastGraded.aiMemorySummary : '', gradedThisWeek: doneThisWeek,
     };
   }
@@ -276,6 +278,7 @@ async function callLocal(action, payload) {
       topicText: payload.topicText || '',
       // נגרר משבוע לשבוע, כמו בשרת
       datasetUrl: (payload.datasetUrl || '').trim() || cur.datasetUrl || '',
+      checkIn: payload.checkIn === undefined || payload.checkIn === null ? true : !!payload.checkIn,
     };
     saveDB(db);
     return devWeek(db, g);
@@ -289,9 +292,65 @@ async function callLocal(action, payload) {
     // לשאר הקבוצות.
     const url = (payload.datasetUrl === undefined || payload.datasetUrl === null)
       ? (cur.datasetUrl || '') : String(payload.datasetUrl).trim();
-    db.weeks[g] = { weekNumber: cur.weekNumber || 1, topicText: payload.topicText || '', datasetUrl: url };
+    const ci = (payload.checkIn === undefined || payload.checkIn === null)
+      ? (cur.checkIn !== false) : !!payload.checkIn;
+    db.weeks[g] = { weekNumber: cur.weekNumber || 1, topicText: payload.topicText || '',
+                    datasetUrl: url, checkIn: ci };
     saveDB(db);
     return devWeek(db, g);
+  }
+
+  // במצב דמו הלוקר יושב ב-localStorage: אין Drive, אבל המסך מתנהג אותו דבר.
+  if (action === 'saveArtifact') {
+    const who = findStudent(db, payload.studentId);
+    db.artifacts = db.artifacts || [];
+    if (payload.kind === 'model') {
+      db.artifacts = db.artifacts.filter(a => !(a.studentId === who.studentId &&
+        a.kind === 'model' && a.filename === payload.filename));
+    }
+    const rec = { id: 'ART' + Date.now() + Math.random().toString(36).slice(2, 6),
+      studentId: who.studentId, kind: payload.kind, filename: payload.filename,
+      mimeType: payload.mimeType, base64: payload.base64,
+      sizeBytes: Math.floor(String(payload.base64 || '').length * 3 / 4),
+      weekNumber: devWeek(db, who.group).weekNumber,
+      createdAt: new Date().toISOString() };
+    db.artifacts.push(rec);
+    saveDB(db);
+    return { ok: true, filename: rec.filename, week: rec.weekNumber };
+  }
+
+  if (action === 'getArtifact') {
+    const who = findStudent(db, payload.studentId);
+    const a = (db.artifacts || []).find(x => x.id === payload.artifactId && x.studentId === who.studentId);
+    if (!a) throw new Error('הקובץ לא נמצא');
+    return { filename: a.filename, mimeType: a.mimeType, base64: a.base64 };
+  }
+
+  // במצב דמו אין פריקת zip בשרת, ולכן מקבלים כאן רק את שלושת הקבצים.
+  if (action === 'saveMyModel') {
+    const base = String(payload.filename || '').split(/[\\/]/).pop();
+    if (/\.zip$/i.test(base)) {
+      throw new Error('במצב דמו אין פריקת zip. בחרו את שלושת הקבצים עצמם.');
+    }
+    await dispatch('saveArtifact', { studentId: payload.studentId, kind: 'model',
+      filename: base, mimeType: 'application/octet-stream', base64: payload.base64 });
+    return { saved: [base] };
+  }
+
+  if (action === 'downloadMyModel') {
+    throw new Error('במצב דמו אין הורדת zip מהשרת. הורידו כל קובץ בנפרד.');
+  }
+
+  if (action === 'getMyModel') {
+    const who = findStudent(db, payload.studentId);
+    const mine = (db.artifacts || []).filter(a => a.studentId === who.studentId && a.kind === 'model');
+    const files = ['model.json', 'weights.bin', 'metadata.json'].map(name => {
+      const f = mine.filter(a => a.filename === name).slice(-1)[0];
+      return f ? { name, saved: true, id: f.id, weekNumber: f.weekNumber,
+                   savedAt: f.createdAt, bytes: f.sizeBytes }
+               : { name, saved: false };
+    });
+    return { files, complete: files.every(f => f.saved) };
   }
 
   if (action === 'getDashboard') {
@@ -410,11 +469,28 @@ export async function getGroupWeeks() {
 export async function setGroupStage(group, stage) {
   return dispatch('setGroupStage', { group, stage });
 }
-export async function startNewWeek(group, topicText, module, datasetUrl) {
-  return dispatch('startNewWeek', { group, topicText, module, datasetUrl });
+export async function startNewWeek(group, topicText, module, datasetUrl, checkIn) {
+  return dispatch('startNewWeek', { group, topicText, module, datasetUrl, checkIn });
 }
-export async function updateCurrentWeekTopic(group, topicText, datasetUrl) {
-  return dispatch('updateCurrentWeekTopic', { group, topicText, datasetUrl });
+export async function updateCurrentWeekTopic(group, topicText, datasetUrl, checkIn) {
+  return dispatch('updateCurrentWeekTopic', { group, topicText, datasetUrl, checkIn });
+}
+
+// --- הלוקר: קבצים ששמורים במערכת, לא על המחשב בכיתה ---
+export async function saveArtifact(studentId, kind, filename, mimeType, base64) {
+  return dispatch('saveArtifact', { studentId, kind, filename, mimeType, base64 });
+}
+export async function getArtifact(studentId, artifactId) {
+  return dispatch('getArtifact', { studentId, artifactId });
+}
+export async function getMyModel(studentId) {
+  return dispatch('getMyModel', { studentId });
+}
+export async function saveMyModel(studentId, filename, base64) {
+  return dispatch('saveMyModel', { studentId, filename, base64 });
+}
+export async function downloadMyModel(studentId) {
+  return dispatch('downloadMyModel', { studentId });
 }
 export async function getDashboard() {
   return dispatch('getDashboard', {});

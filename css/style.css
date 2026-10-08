@@ -347,6 +347,11 @@ label { display: block; font-size: 12.5px; font-weight: 600; color: var(--ink-2)
 .tool-link b { display: block; font-size: 13px; color: var(--ink); }
 .tool-link span { font-size: 11.5px; color: var(--ink-3); }
 .tool-link:hover b { color: var(--brand-2); }
+/* אותו כרטיס גם כשהוא כפתור ולא קישור: לכפתור יש גופן וגודל משלו מהדפדפן */
+button.tool-link, label.tool-link {
+  font: inherit; width: 100%; text-align: start; cursor: pointer;
+}
+.model-card .tool-link { margin-bottom: 8px; }
 
 .rail-tip {
   margin-top: auto; font-size: 12px; color: var(--ink-2); line-height: 1.7;
@@ -519,6 +524,7 @@ label { display: block; font-size: 12.5px; font-weight: 600; color: var(--ink-2)
 .pill.ok { background: var(--ok-soft); color: var(--ok); border: 1px solid #a7f3d0; }
 .pill.warn { background: var(--warn-soft); color: var(--warn); border: 1px solid #fde68a; }
 .pill.bad { background: var(--err-soft); color: var(--err); border: 1px solid #fecaca; }
+.pill.neutral { background: var(--surface-2); color: var(--ink-3); border: 1px solid var(--line-2); }
 
 /* ============================== פאנל מורה ============================== */
 .topbar {

@@ -161,7 +161,8 @@ export async function mountTeacherDashboard(app, session, onLogout) {
               <span>שלב ${g.unlockedStage || 1}${g.stageName ? ' · ' + escapeHtml(g.stageName) : ''}</span>
             </button>`).join('')}
         </div>
-        <p class="form-note">שבוע ${w.weekNumber}${w.topicText ? ' · ' + escapeHtml(w.topicText) : ' · טרם הוזן נושא'}</p>
+        <p class="form-note">שבוע ${w.weekNumber}${w.topicText ? ' · ' + escapeHtml(w.topicText) : ' · טרם הוזן נושא'}${
+          w.checkIn === false ? ' · <b>ללא צ׳ק-אין מוערך</b>' : ''}</p>
         ${renderStagePanel(w)}
         ${!w.isOwn ? `<p class="form-note warn-note">הקבוצה הזו עדיין על הנושא המשותף
           שנקבע לפני ההפרדה. שמירה כאן תיצור לה מסלול משלה, בלי לגעת בקבוצות האחרות.</p>` : ''}
@@ -173,6 +174,16 @@ export async function mountTeacherDashboard(app, session, onLogout) {
             value="${escapeHtml(w.datasetUrl || '')}">
           <p class="form-note" style="margin-top:4px;">מוצג לתלמידי הקבוצה הזו בלבד. נשמר בשני
             הכפתורים, ונגרר משבוע לשבוע כל עוד המאגר לא השתנה.</p>
+        </div>
+        <div class="field">
+          <label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;">
+            <input type="checkbox" id="week-checkin" style="margin-top:3px;"
+              ${w.checkIn === false ? '' : 'checked'}>
+            <span>שבוע עם צ׳ק-אין מוערך (2 תמונות + שאלות + ציון)</span>
+          </label>
+          <p class="form-note" style="margin-top:4px;">כשזה כבוי, המנטור לא יבקש
+            תמונות, לא יודיע על שאלות מוערכות ולא ייתן ציון — הוא יעבוד לפי
+            הנושא השבועי כמשימה. מתאים לשבועות הקנייה והתקנה.</p>
         </div>
         <div style="display:flex;gap:8px;">
           <button type="button" id="update-topic-btn" class="secondary" style="flex:1;">שמירה לשבוע הנוכחי</button>
@@ -432,7 +443,8 @@ ${names}`;
       const text = document.getElementById('topic-input').value.trim();
       const dsUrl = (document.getElementById('dataset-url').value || '').trim();
       try {
-        await updateCurrentWeekTopic(state.selectedGroup, text, dsUrl);
+        const ci = document.getElementById('week-checkin').checked;
+        await updateCurrentWeekTopic(state.selectedGroup, text, dsUrl, ci);
         toast('הנושא עודכן ל' + groupLabel(state.selectedGroup));
         await refresh();
       } catch (err) { toast('שגיאה: ' + err.message, true); }
@@ -449,7 +461,8 @@ ${names}`;
         'שאר הקבוצות לא יושפעו.')) return;
       try {
         const dsUrl = (document.getElementById('dataset-url').value || '').trim();
-        const res = await startNewWeek(state.selectedGroup, text, undefined, dsUrl);
+        const ci = document.getElementById('week-checkin').checked;
+        const res = await startNewWeek(state.selectedGroup, text, undefined, dsUrl, ci);
         toast(`${groupLabel(res.group)} · שבוע ${res.weekNumber} התחיל`);
         await refresh();
       } catch (err) { toast('שגיאה: ' + err.message, true); }

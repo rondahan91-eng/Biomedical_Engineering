@@ -6,6 +6,12 @@
       "runtimeExecutable": "py",
       "runtimeArgs": ["-m", "http.server", "8917"],
       "port": 8917
+    },
+    {
+      "name": "ai-mentor-8971",
+      "runtimeExecutable": "py",
+      "runtimeArgs": ["-m", "http.server", "8971"],
+      "port": 8971
     }
   ]
 }

@@ -4,7 +4,8 @@
 // 3 שאלות מוערכות משולבות + עזרה חופשית בלתי מוגבלת סביבן (FR-B/FR-F).
 // ==========================================================================
 import { escapeHtml, toast, logoMark } from './ui.js';
-import { getStudentContext, sendMentorMessage, setCurrentExperiment } from './api.js';
+import { getStudentContext, sendMentorMessage, setCurrentExperiment,
+         getMyModel, saveMyModel, downloadMyModel } from './api.js';
 
 // הקטנת תמונות לפני השליחה. צילומי טלפון/מסך מגיעים לעיתים במגה-בייטים,
 // ו-Gemini מחייב על תמונות לפי רזולוציה - ההקטנה חוסכת עלות טוקנים, זמן
@@ -72,9 +73,29 @@ export async function mountStudentChat(app, session, onLogout) {
     railHidden: localStorage.getItem(RAIL_PREF_KEY) === '1',
     taskModalOpen: false,
     summaryDraft: '', // נשמר כדי שסגירת החלון לא תמחק מה שנכתב
+    model: null,      // { files:[{name,saved,...}], complete } - נטען אחרי הציור הראשון
+    modelBusy: '',    // טקסט שמוצג בכרטיס בזמן העלאה/הורדה
   };
 
+  // שבוע ללא צ׳ק-אין מוערך: אין משימת תמונות, אין שאלות מוערכות ואין ציון.
+  // שרת ישן אינו שולח את השדה, ולכן חוסר ערך נחשב שבוע מוערך - ההתנהגות
+  // שהייתה עד כה.
+  const gradedWeek = ctx.checkInEnabled !== false;
+  const trainerUrl = ctx.trainerUrl || 'https://teachablemachine.withgoogle.com/train/image';
+
   render();
+  refreshModel();
+
+  /** הלוקר נטען ברקע: המסך לא צריך להמתין לו, והוא מתעדכן כשהתשובה חוזרת. */
+  async function refreshModel() {
+    try {
+      state.model = await getMyModel(session.studentId);
+    } catch (err) {
+      state.model = { files: [], complete: false, error: err.message,
+                      unsupported: /פעולה לא מוכרת/.test(err.message) };
+    }
+    render();
+  }
 
   // ---------------------------------------------------------------- מסילת הצד
   function railHtml() {
@@ -148,15 +169,28 @@ export async function mountStudentChat(app, session, onLogout) {
           המנטור ישאל על הניסוי המסומן. ניסוי נפתח על ידי המורה.</p>
       </div>
 
+      ${gradedWeek ? `
       <div class="steps">
         <h4>המשימה השבועית</h4>
         ${step(imagesDone, !imagesDone, '2 תמונות התקדמות + סיכום')}
         ${step(scored, answering, 'מענה על שאלות המנטור')}
         ${step(scored, false, 'קבלת ציון ומשוב')}
-      </div>
+      </div>` : `
+      <div class="steps">
+        <h4>המשימה של שבוע ${ctx.weekNumber}</h4>
+        <p class="form-note" style="margin:0;">${ctx.topicText
+          ? escapeHtml(ctx.topicText)
+          : 'טרם הוזנה משימה לשבוע הזה.'}</p>
+        <p class="form-note" style="margin-top:8px;">בשבוע הזה אין חלק מוערך —
+          אין תמונות להעלות ואין ציון. המנטור כאן לעזרה מעשית.</p>
+      </div>`}
+
+      ${modelCardHtml()}
 
       <div class="tools">
         <h4>כלי המחקר</h4>
+        <a class="tool-link" href="${trainerUrl}" target="_blank" rel="noopener noreferrer">
+          <b>Teachable Machine ↗</b><span>כלי האימון — כאן מאמנים את המודל</span></a>
         ${ctx.tools
           ? ctx.tools.map(t => t.open
               ? toolLink(t.path, t.name, t.sub)
@@ -167,17 +201,77 @@ export async function mountStudentChat(app, session, onLogout) {
             + toolLink('tools/evaluate/', 'הערכת מודל', 'דיוק, רגישות, מפת קשב')
             + toolLink('tools/perturb/', 'כלי הפרעות', 'מה באמת מניע את ההחלטה')}
         <p class="form-note" style="margin-top:8px">
-          פתחו אותם מכאן — כך כל ייצוא מתויק אוטומטית בתיקייה שלכם.
+          את כלי המערכת פתחו מכאן — כך כל ייצוא מתויק אוטומטית בתיקייה שלכם.
           כלי שנפתח מסימנייה לא יזהה אתכם, והקובץ יישאר על המחשב בלבד.
+          Teachable Machine הוא כלי חיצוני ואינו מתייק אצלנו — את המודל ממנו
+          שמרו בכרטיס "המודל שלי".
         </p>
       </div>
 
       <div class="rail-tip">
-        <b>שימו לב:</b> רק החלק המוערך נכנס לציון. בכל שאר השיחה אפשר לשאול
-        בחופשיות על הניסוי, על הפעלת Teachable Machine, על קריאת המדדים
-        והגרפים או על הרקע הרפואי — בלי שזה נמדד.
+        ${gradedWeek
+          ? `<b>שימו לב:</b> רק החלק המוערך נכנס לציון. בכל שאר השיחה אפשר לשאול
+             בחופשיות על הניסוי, על הפעלת Teachable Machine, על קריאת המדדים
+             והגרפים או על הרקע הרפואי — בלי שזה נמדד.`
+          : `<b>שימו לב:</b> בשבוע הזה אין ציון. אפשר לשאול בחופשיות על הפעלת
+             Teachable Machine, על האימון ועל כל מה שנתקעתם בו.`}
       </div>
     </aside>`;
+  }
+
+  // ------------------------------------------------------------- המודל שלי
+  /**
+   * לוקר המודל. התלמידים מחליפים מחשב בין שיעורים, ולכן מודל שיושב רק
+   * בתיקיית ההורדות של מחשב בכיתה אבוד בפועל - גם אם האימון הצליח.
+   */
+  function modelCardHtml() {
+    const m = state.model;
+    // שרת שעוד לא עודכן אינו מכיר את הפעולה. כרטיס שמודיע על תקלה בכל
+    // טעינה גרוע מכרטיס שלא קיים - מסתירים אותו עד שהשרת תומך.
+    if (m && m.unsupported) return '';
+    const busy = state.modelBusy;
+    const done = m && m.complete;
+    const partial = m && !m.complete && m.files.some(f => f.saved);
+    const savedAt = done
+      ? (m.files.map(f => f.savedAt).filter(Boolean).sort().slice(-1)[0] || '')
+      : '';
+
+    const statusLine = !m
+      ? 'בודק מה שמור...'
+      : m.error ? 'לא הצלחתי לבדוק: ' + escapeHtml(m.error)
+      : done ? 'מודל שמור ✓' + (savedAt ? ' · ' + formatDate(savedAt) : '')
+      : partial ? 'שמור חלקית (' + m.files.filter(f => f.saved).length + '/3 קבצים)'
+      : 'אין מודל שמור';
+
+    return `
+      <div class="tools model-card">
+        <h4>המודל שלי</h4>
+        <p class="form-note" style="margin:0 0 8px;">${statusLine}</p>
+
+        <label class="tool-link">
+          <b>${done ? 'שמירת מודל חדש' : 'שמירת המודל במערכת'}</b>
+          <span>בחרו את קובץ ה-zip שהורדתם מ-Teachable Machine</span>
+          <input type="file" id="model-upload" accept=".zip,.json,.bin" multiple
+                 style="display:none;">
+        </label>
+
+        ${done
+          ? `<button class="tool-link" id="model-download" type="button">
+               <b>הורדת המודל שלי ↓</b><span>zip עם שלושת הקבצים, לכל מחשב</span>
+             </button>`
+          : ''}
+
+        ${busy ? `<p class="form-note" style="margin-top:8px;">${escapeHtml(busy)}</p>` : ''}
+        <p class="form-note" style="margin-top:8px;">
+          מה שנשמר כאן נשאר שלכם גם אם תחליפו מחשב. אל תסמכו על תיקיית
+          ההורדות של מחשב בכיתה.
+        </p>
+      </div>`;
+  }
+
+  function formatDate(v) {
+    const d = new Date(v);
+    return isNaN(d) ? '' : d.toLocaleDateString('he-IL', { day: 'numeric', month: 'numeric' });
   }
 
   // ---------------------------------------------------------------- שיחה
@@ -202,13 +296,18 @@ export async function mountStudentChat(app, session, onLogout) {
     return `<div class="stream-empty">
         ${logoMark(52)}
         <div class="big">שלום ${escapeHtml(ctx.firstName || '')}, נתחיל?</div>
-        <p>אפשר לפתוח בשאלה חופשית על הניסוי שאת/ה מריץ/ה, או להעלות למטה
-           שתי תמונות מהשבוע כדי להתחיל את החלק המוערך.</p>
+        ${gradedWeek
+          ? `<p>אפשר לפתוח בשאלה חופשית על הניסוי שאת/ה מריץ/ה, או להעלות למטה
+               שתי תמונות מהשבוע כדי להתחיל את החלק המוערך.</p>`
+          : `<p>בשבוע הזה אין חלק מוערך. ${ctx.topicText
+               ? 'המשימה: ' + escapeHtml(ctx.topicText) + '.'
+               : ''} אם נתקעת — שאל/י כאן.</p>`}
       </div>`;
   }
 
   /** כפתור צף בפינת הצ'אט - מחליף את הרצועה שגזלה גובה מהשיחה */
   function taskFabHtml() {
+    if (!gradedWeek) return '';   // אין משימת תמונות בשבוע לא-מוערך
     if (state.submittedTask) {
       return `<button class="task-fab done" id="task-fab" title="משימת השבוע הוגשה">
           <span class="fab-icon">✓</span><span>משימת השבוע הוגשה</span>
@@ -220,7 +319,7 @@ export async function mountStudentChat(app, session, onLogout) {
   }
 
   function taskModalHtml() {
-    if (!state.taskModalOpen) return '';
+    if (!state.taskModalOpen || !gradedWeek) return '';
     if (state.submittedTask) {
       return `
       <div class="modal-veil" id="modal-veil">
@@ -260,7 +359,9 @@ export async function mountStudentChat(app, session, onLogout) {
   }
 
   function render() {
-    const statusPill = ctx.gradedThisWeek
+    const statusPill = !gradedWeek
+      ? '<span class="pill neutral">שבוע ללא ציון</span>'
+      : ctx.gradedThisWeek
       ? '<span class="pill ok">החלק המוערך הושלם ✓</span>'
       : (state.submittedTask ? '<span class="pill warn">בתהליך הערכה</span>' : '<span class="pill bad">טרם בוצע</span>');
 
@@ -294,7 +395,9 @@ export async function mountStudentChat(app, session, onLogout) {
               <textarea id="chat-input" rows="1" placeholder="כתבו הודעה למנטור..." required></textarea>
               <button type="submit" id="send-btn">שליחה</button>
             </form>
-            <div class="dock-note">${ctx.gradedThisWeek
+            <div class="dock-note">${!gradedWeek
+              ? 'בשבוע הזה אין חלק מוערך — כל השיחה חופשית ואינה נמדדת.'
+              : ctx.gradedThisWeek
               ? 'החלק המוערך של השבוע הסתיים — מכאן השיחה חופשית ואינה נמדדת.'
               : 'שאלות חופשיות אינן נמדדות. רק שאלות המנטור המסומנות מזכות בציון.'}</div>
           </div>
@@ -339,10 +442,14 @@ export async function mountStudentChat(app, session, onLogout) {
       render();
     });
 
-    document.getElementById('task-fab').addEventListener('click', () => {
+    // הכפתור אינו מצויר בשבוע לא-מוערך
+    const fab = document.getElementById('task-fab');
+    if (fab) fab.addEventListener('click', () => {
       state.taskModalOpen = true;
       render();
     });
+
+    wireModelCard();
 
     const veil = document.getElementById('modal-veil');
     if (veil) {
@@ -407,6 +514,72 @@ export async function mountStudentChat(app, session, onLogout) {
     document.getElementById('chat-input').addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); }
     });
+  }
+
+  // ------------------------------------------------- אירועי כרטיס המודל
+  /** base64 בלבד, בלי התחילית data:...;base64, שהשרת לא מצפה לה. */
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onerror = () => reject(new Error('לא הצלחתי לקרוא את הקובץ'));
+      r.onload = () => resolve(String(r.result).split(',')[1] || '');
+      r.readAsDataURL(file);
+    });
+  }
+
+  function wireModelCard() {
+    const up = document.getElementById('model-upload');
+    if (up) {
+      up.addEventListener('change', async () => {
+        const files = Array.from(up.files || []);
+        if (!files.length) return;
+        state.modelBusy = 'שומר...';
+        render();
+        try {
+          // הקבצים נשלחים אחד-אחד: שלוש בקשות קטנות עוברות גם כשרשת
+          // הכיתה חונקת בקשה אחת גדולה.
+          for (const f of files) {
+            state.modelBusy = 'שומר את ' + f.name + '...';
+            render();
+            await saveMyModel(session.studentId, f.name, await fileToBase64(f));
+          }
+          state.modelBusy = '';
+          await refreshModel();
+          toast(state.model && state.model.complete
+            ? 'המודל נשמר במערכת ✓'
+            : 'נשמר. עדיין חסרים קבצים — העלו את כל ה-zip של הייצוא.');
+        } catch (err) {
+          state.modelBusy = '';
+          render();
+          toast('השמירה נכשלה: ' + err.message, true);
+        }
+      });
+    }
+
+    const down = document.getElementById('model-download');
+    if (down) {
+      down.addEventListener('click', async () => {
+        state.modelBusy = 'מכין את ההורדה...';
+        render();
+        try {
+          const res = await downloadMyModel(session.studentId);
+          const bytes = Uint8Array.from(atob(res.base64), c => c.charCodeAt(0));
+          const url = URL.createObjectURL(new Blob([bytes], { type: res.mimeType }));
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = res.filename || 'my-model.zip';
+          a.click();
+          URL.revokeObjectURL(url);
+          state.modelBusy = '';
+          render();
+          toast('ההורדה החלה. חלצו את ה-zip לתיקייה לפני הטעינה בכלי.');
+        } catch (err) {
+          state.modelBusy = '';
+          render();
+          toast('ההורדה נכשלה: ' + err.message, true);
+        }
+      });
+    }
   }
 
   async function send(text) {

@@ -65,7 +65,15 @@ const ARTIFACT_KINDS = {
   perturb:  '03_הפרעות',
   notebook: '04_מחברת ניסוי',
   checkin:  '05_צ׳ק-אין שבועי',
+  model:    '06_מודלים שמורים',
 };
+// שלושת הקבצים שמרכיבים מודל של Teachable Machine. השמות קבועים כי
+// tmImage.loadFromFiles מזהה אותם לפי שם, והלוקר שומר עותק אחד מכל אחד.
+const MODEL_FILES = ['model.json', 'weights.bin', 'metadata.json'];
+// כלי האימון עצמו. התלמידים מאמנים ב-Teachable Machine ומייצאים משם את
+// המודל; הקישור יושב בהקשר ולא בקוד הדף כדי שיהיה מקור אחד לשינוי.
+const TRAINER_URL = 'https://teachablemachine.withgoogle.com/train/image';
+
 const ARTIFACT_MAX_BYTES = 6 * 1024 * 1024;   // תרשים או מפת קשב הם עשרות KB
 const ARTIFACT_WEEKLY_CAP = 300;              // תקרה שמונעת העלאה בלולאה
 
@@ -158,6 +166,16 @@ function routeAction(action, payload) {
     case 'listArtifacts':
       requireSelfOrAdmin(payload, payload.studentId);
       return listArtifacts(payload.studentId);
+    // הורדה חזרה למחשב אחר. גם כאן הזהות מהטוקן: אחרת artifactId של מישהו
+    // אחר היה מחזיר את הקובץ שלו.
+    case 'getArtifact':
+      return getArtifact(requireAuth(payload).studentId, payload.artifactId);
+    case 'getMyModel':
+      return getMyModel(requireAuth(payload).studentId);
+    case 'saveMyModel':
+      return saveMyModel(requireAuth(payload).studentId, payload.filename, payload.base64);
+    case 'downloadMyModel':
+      return downloadMyModel(requireAuth(payload).studentId);
 
     // --- מורה בלבד ---
     case 'resetStudentPassword':
@@ -171,10 +189,12 @@ function routeAction(action, payload) {
       return importRoster(payload.students);
     case 'startNewWeek':
       requireAdmin(payload);
-      return startNewWeek(payload.group, payload.topicText, payload.module, payload.datasetUrl);
+      return startNewWeek(payload.group, payload.topicText, payload.module,
+        payload.datasetUrl, payload.checkIn);
     case 'updateCurrentWeekTopic':
       requireAdmin(payload);
-      return updateCurrentWeekTopic(payload.group, payload.topicText, payload.datasetUrl);
+      return updateCurrentWeekTopic(payload.group, payload.topicText,
+        payload.datasetUrl, payload.checkIn);
     case 'getDashboard':
       requireAdmin(payload);
       return getDashboard();
@@ -257,7 +277,7 @@ function logout(token) {
 const SHEET_SCHEMAS = {};
 SHEET_SCHEMAS[SHEET_USERS] = ['studentId', 'username', 'passHash', 'mustChangePassword', 'role',
   'firstName', 'lastName', 'last4Id', 'birthDate', 'group', 'note', 'currentExperiment', 'createdAt'];
-SHEET_SCHEMAS[SHEET_TOPICS] = ['group', 'weekNumber', 'topicText', 'module', 'datasetUrl', 'setAt'];
+SHEET_SCHEMAS[SHEET_TOPICS] = ['group', 'weekNumber', 'topicText', 'module', 'datasetUrl', 'setAt', 'checkIn'];
 SHEET_SCHEMAS[SHEET_CHECKINS] = ['checkInId', 'studentId', 'weekNumber', 'date', 'image1Url', 'image2Url',
   'studentSummary', 'transcriptJson', 'aiMemorySummary', 'mentorFeedback', 'score',
   'teacherOverrideScore', 'teacherNote', 'docLink', 'sessionSeconds', 'status'];
@@ -272,7 +292,9 @@ function getSheet(name) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(name);
   if (!sheet) return createSheet(ss, name);
+  // סדר חשוב: הגירה שנייה מניחה שהראשונה כבר רצה
   if (SHEET_MIGRATIONS[name]) SHEET_MIGRATIONS[name](sheet);
+  if (SHEET_MIGRATIONS[name + '_checkIn']) SHEET_MIGRATIONS[name + '_checkIn'](sheet);
   assertSchema(sheet, name);
   return sheet;
 }
@@ -308,6 +330,23 @@ SHEET_MIGRATIONS[SHEET_TOPICS] = function (sheet) {
   if (dataRows > 0) {
     sheet.getRange(2, 1, dataRows, 1)
       .setValues(Array.from({ length: dataRows }, () => [GROUP_ALL]));
+  }
+  return true;
+};
+
+// הוספת עמודת checkIn: האם השבוע כולל צ'ק-אין מוערך. שבועות קיימים מקבלים
+// TRUE - זו הייתה ההתנהגות עד כה, ושינוי שקט שלה היה מבטל ציונים בדיעבד.
+SHEET_MIGRATIONS[SHEET_TOPICS + '_checkIn'] = function (sheet) {
+  const width = Math.max(1, sheet.getLastColumn());
+  const header = sheet.getRange(1, 1, 1, width).getValues()[0].map(h => String(h || '').trim());
+  if (header.indexOf('checkIn') >= 0) return false;
+  if (header[0] !== 'group') return false;           // ההגירה הקודמת עוד לא רצה
+  const col = width + 1;
+  sheet.getRange(1, col).setValue('checkIn');
+  const dataRows = sheet.getLastRow() - 1;
+  if (dataRows > 0) {
+    sheet.getRange(2, col, dataRows, 1)
+      .setValues(Array.from({ length: dataRows }, () => [true]));
   }
   return true;
 };
@@ -635,13 +674,15 @@ function getCurrentWeekInfo(group) {
   const pool = own.length ? own : shared;
   if (!pool.length) {
     return { group: g, weekNumber: 0, topicText: '', module: DEFAULT_MODULE,
-             moduleName: moduleName(DEFAULT_MODULE), datasetUrl: '', isOwn: false };
+             moduleName: moduleName(DEFAULT_MODULE), datasetUrl: '', checkIn: true, isOwn: false };
   }
   const latest = pool.reduce((a, b) => (Number(b.weekNumber) >= Number(a.weekNumber) ? b : a));
   return {
     group: g, weekNumber: Number(latest.weekNumber) || 0, topicText: latest.topicText || '',
     module: latest.module || DEFAULT_MODULE, moduleName: moduleName(latest.module),
     datasetUrl: latest.datasetUrl || '', setAt: latest.setAt,
+    // ברירת מחדל TRUE: שורה שנוצרה לפני העמודה, או ערך ריק, היא שבוע רגיל
+    checkIn: latest.checkIn === false || latest.checkIn === 'FALSE' ? false : true,
     isOwn: own.length > 0,
   };
 }
@@ -857,7 +898,7 @@ function getGroupWeeks() {
   });
 }
 
-function startNewWeek(group, topicText, module, datasetUrl) {
+function startNewWeek(group, topicText, module, datasetUrl, checkIn) {
   const g = requireGroup(group);
   const sheet = getSheet(SHEET_TOPICS);
   const current = getCurrentWeekInfo(g);
@@ -866,9 +907,12 @@ function startNewWeek(group, topicText, module, datasetUrl) {
   // ולא משהו שצריך לבחור מחדש בכל שבוע. אותו היגיון לקישור ערכות האימון.
   const mod = MODULES[module] ? module : (current.module || DEFAULT_MODULE);
   const url = safeHttpUrl(datasetUrl) || (mod === current.module ? current.datasetUrl || '' : '');
-  sheet.appendRow([g, nextWeek, topicText || '', mod, url, new Date()]);
+  // undefined = הלקוח לא שלח את השדה. שבוע חדש הוא שבוע מוערך כברירת מחדל.
+  const ci = checkIn === undefined || checkIn === null ? true : !!checkIn;
+  sheet.appendRow([g, nextWeek, topicText || '', mod, url, new Date(), ci]);
   return { group: g, weekNumber: nextWeek, topicText: topicText || '',
-           module: mod, moduleName: moduleName(mod), datasetUrl: url, isOwn: true };
+           module: mod, moduleName: moduleName(mod), datasetUrl: url,
+           checkIn: ci, isOwn: true };
 }
 
 /**
@@ -926,7 +970,7 @@ function setCurrentExperiment(studentId, experiment) {
  * בפאנל יושב ליד שני הכפתורים - כך שלחיצה על "עדכון נושא" בלעה את הקישור
  * בשקט. שדה שמוצג ואינו נשמר הוא באג, לא אי-הבנה של המשתמש.
  */
-function updateCurrentWeekTopic(group, topicText, datasetUrl) {
+function updateCurrentWeekTopic(group, topicText, datasetUrl, checkIn) {
   const g = requireGroup(group);
   const sheet = getSheet(SHEET_TOPICS);
   const current = getCurrentWeekInfo(g);
@@ -935,16 +979,18 @@ function updateCurrentWeekTopic(group, topicText, datasetUrl) {
   // מחרוזת ריקה = בקשה מפורשת לנקות.
   const url = (datasetUrl === undefined || datasetUrl === null)
     ? (current.datasetUrl || '') : safeHttpUrl(datasetUrl);
+  const ci = (checkIn === undefined || checkIn === null)
+    ? (current.checkIn !== false) : !!checkIn;
 
   // הקבוצה עדיין רוכבת על השורה המשותפת: יוצרים לה שורה משלה במקום לערוך
   // את המשותפת, שמשרתת גם את הקבוצות האחרות. עריכה שם הייתה משנה נושא
   // לכיתה שלא נגעו בה.
   if (!current.isOwn) {
     const week = current.weekNumber || 1;
-    sheet.appendRow([g, week, topicText || '', current.module, url, new Date()]);
+    sheet.appendRow([g, week, topicText || '', current.module, url, new Date(), ci]);
     return { group: g, weekNumber: week, topicText: topicText || '',
              module: current.module, moduleName: moduleName(current.module),
-             datasetUrl: url, isOwn: true };
+             datasetUrl: url, checkIn: ci, isOwn: true };
   }
 
   const rows = sheetToObjects(sheet).filter(r => normGroup(r.group) === g);
@@ -954,9 +1000,13 @@ function updateCurrentWeekTopic(group, topicText, datasetUrl) {
   if (datasetUrl !== undefined && datasetUrl !== null) {
     sheet.getRange(latest.__row, headers.indexOf('datasetUrl') + 1).setValue(url);
   }
+  if (checkIn !== undefined && checkIn !== null) {
+    sheet.getRange(latest.__row, headers.indexOf('checkIn') + 1).setValue(ci);
+  }
   const mod = latest.module || DEFAULT_MODULE;
   return { group: g, weekNumber: Number(latest.weekNumber) || 0, topicText: topicText || '',
-           module: mod, moduleName: moduleName(mod), datasetUrl: url, isOwn: true };
+           module: mod, moduleName: moduleName(mod), datasetUrl: url,
+           checkIn: ci, isOwn: true };
 }
 
 // -------------------------------------------------------------- הקשר תלמיד
@@ -996,6 +1046,10 @@ function getStudentContext(studentId) {
     experiments: EXPERIMENT_ORDER.map((k, i) => ({ key: k, name: EXPERIMENTS[k], open: i + 1 <= stage })),
     weekNumber: week.weekNumber,
     topicText: week.topicText,
+    // שבוע ללא צ׳ק-אין מוערך: אין משימת תמונות, אין שאלות מוערכות ואין ציון.
+    // השדה נשלח תמיד כך שגם התצוגה וגם ה-prompt נגזרים מאותו מקור אחד.
+    checkInEnabled: week.checkIn !== false,
+    trainerUrl: TRAINER_URL,
     priorSummary: lastGraded ? lastGraded.aiMemorySummary : '',
     gradedThisWeek: !!(thisWeekCheckIn && thisWeekCheckIn.status === 'graded'),
   };
@@ -1040,7 +1094,21 @@ function buildSystemPrompt(ctx) {
     'אם ערך כלשהו מופיע כ-"(חסר)" - אל תמציא אותו ואל תבקש מהתלמיד/ה להשלים אותו;',
     'ציין/י בקצרה שיש תקלה בנתונים ושכדאי לפנות למורה.',
     '',
-    ctx.gradedThisWeek
+    ctx.checkInEnabled === false
+      ? [
+        '--- השבוע הזה אינו שבוע מוערך ---',
+        '',
+        'בשבוע הזה אין צ׳ק-אין מוערך: **אסור לבקש תמונות התקדמות, אסור לבקש סיכום שבועי,',
+        'אסור להודיע על שאלות שמזכות בציון ואסור לתת ציון.** אל תזכיר כלל שקיים חלק מוערך.',
+        'המשימה של השבוע היא בדיוק מה שמופיע ב"נושא השיעור השבועי" למעלה - עבוד/י ממנה',
+        'ולא ממשימה אחרת, גם אם בשבועות אחרים הקורס עובד אחרת.',
+        'פתח/י בפנייה בשם הפרטי ובשאלה קצרה אחת: איפה הוא/היא עומד/ת במשימה של השבוע.',
+        'אם הוא/היא נתקע/ת - עזרה טכנית מעשית, שלב אחרי שלב, בלי להפוך את זה לתשאול.',
+        'המשך/י לפי "מצב ב׳" למטה.',
+        '',
+        '--- מצב ב׳ ---',
+      ].join('\n')
+      : ctx.gradedThisWeek
       ? '--- החלק המוערך של השבוע הזה כבר בוצע. פעל אך ורק לפי "מצב ב׳" למטה. ---'
       : [
         '--- מצב א׳: החלק המוערך של השבוע (אם עוד לא בוצע) ---',
@@ -1123,7 +1191,10 @@ function sendMentorMessage(studentId, history, images, elapsedSeconds) {
   if (lastTurn && String(lastTurn.text || '').length > MAX_MESSAGE_CHARS) {
     throw new Error('ההודעה ארוכה מדי (עד ' + MAX_MESSAGE_CHARS + ' תווים). נסו לקצר או לפצל אותה.');
   }
-  enforceUsageLimits(studentId, ctx.weekNumber, ctx.gradedThisWeek);
+  // בשבוע ללא צ׳ק-אין אין שיחה מוערכת לשמור לה מכסה, ולכן הרזרבה משוחררת
+  // לשימוש חופשי במקום להישאר נעולה עד סוף השבוע.
+  enforceUsageLimits(studentId, ctx.weekNumber,
+    ctx.gradedThisWeek || ctx.checkInEnabled === false);
 
   const systemPrompt = buildSystemPrompt(ctx);
 
@@ -1146,7 +1217,9 @@ function sendMentorMessage(studentId, history, images, elapsedSeconds) {
 
   const result = { reply: visibleText, graded: false };
 
-  if (scoreMatch && !ctx.gradedThisWeek) {
+  // גם אם המודל בחר בכל זאת לכתוב ציון בשבוע לא-מוערך, הוא לא נשמר:
+  // ההנחיה היא בקשה, והבדיקה כאן היא מה שבאמת קובע.
+  if (scoreMatch && !ctx.gradedThisWeek && ctx.checkInEnabled !== false) {
     const score = Math.max(1, Math.min(10, Number(scoreMatch[1])));
     const aiMemorySummary = summaryMatch ? summaryMatch[1].trim() : '';
     saveGradedCheckIn(studentId, ctx.weekNumber, images, history.concat([{ role: 'model', text: visibleText }]),
@@ -1400,6 +1473,15 @@ function saveArtifact(studentId, kind, filename, mimeType, base64) {
       throw new Error('הגעת לתקרת הקבצים השבועית (' + ARTIFACT_WEEKLY_CAP + '). ' +
         'פנה/י למורה אם נדרש יותר.');
     }
+    // הלוקר של המודל מקבל רק את שלושת הקבצים של Teachable Machine, בשמותיהם
+    // המקוריים - loadFromFiles מזהה אותם לפי שם, וקובץ בשם אחר לא ייטען.
+    if (kind === 'model') {
+      if (MODEL_FILES.indexOf(String(filename)) < 0) {
+        throw new Error('קובץ מודל חייב להיות אחד מ: ' + MODEL_FILES.join(', ') +
+          '. התקבל: ' + filename);
+      }
+      replaceModelFile(studentId, String(filename));
+    }
     const name = safeFileName(filename);
     const blob = Utilities.newBlob(Utilities.base64Decode(base64),
       mimeType || 'application/octet-stream', name);
@@ -1417,9 +1499,130 @@ function saveArtifact(studentId, kind, filename, mimeType, base64) {
 function listArtifacts(studentId) {
   return sheetToObjects(getSheet(SHEET_ARTIFACTS))
     .filter(a => a.studentId === studentId)
-    .map(a => ({ kind: a.kind, folder: ARTIFACT_KINDS[a.kind] || a.kind, filename: a.filename,
-                 url: a.url, weekNumber: a.weekNumber, createdAt: a.createdAt }))
+    .map(a => ({ id: a.artifactId, kind: a.kind, folder: ARTIFACT_KINDS[a.kind] || a.kind,
+                 filename: a.filename, url: a.url, weekNumber: a.weekNumber,
+                 createdAt: a.createdAt }))
     .reverse();
+}
+
+/**
+ * מחזיר את תוכן הקובץ עצמו, ולא קישור Drive: תיקיות התוצרים אינן משותפות,
+ * ולכן קישור לא היה נפתח לתלמיד/ה. הזהות מגיעה מהטוקן והשורה נבדקת מולה -
+ * artifactId לבדו אינו הרשאה.
+ */
+function getArtifact(studentId, artifactId) {
+  const row = sheetToObjects(getSheet(SHEET_ARTIFACTS))
+    .find(a => a.artifactId === artifactId && a.studentId === studentId);
+  if (!row) throw new Error('הקובץ לא נמצא');
+  const blob = DriveApp.getFileById(row.fileId).getBlob();
+  return {
+    filename: row.filename,
+    mimeType: blob.getContentType(),
+    base64: Utilities.base64Encode(blob.getBytes()),
+  };
+}
+
+/**
+ * הלוקר של המודל: שלושת קבצי Teachable Machine, העותק האחרון בלבד.
+ * התלמידים מחליפים מחשב בין שיעורים, ולכן מודל שיושב רק בתיקיית ההורדות
+ * של מחשב בכיתה אבוד בפועל.
+ */
+function getMyModel(studentId) {
+  const rows = sheetToObjects(getSheet(SHEET_ARTIFACTS))
+    .filter(a => a.studentId === studentId && a.kind === 'model');
+  const files = MODEL_FILES.map(function (name) {
+    // האחרון שנשמר בשם הזה הוא הקובץ הנוכחי, גם אם נשארו ישנים בגיליון
+    const mine = rows.filter(r => r.filename === name);
+    if (!mine.length) return { name: name, saved: false };
+    const latest = mine.reduce((a, b) => (Number(b.__row) >= Number(a.__row) ? b : a));
+    return { name: name, saved: true, id: latest.artifactId,
+             weekNumber: latest.weekNumber, savedAt: latest.createdAt,
+             bytes: Number(latest.sizeBytes) || 0 };
+  });
+  return { files: files, complete: files.every(f => f.saved) };
+}
+
+/**
+ * מקבל בדיוק את מה ש-Teachable Machine נותן: את קובץ ה-zip של הייצוא, או
+ * את שלושת הקבצים בנפרד. פריקת ה-zip נעשית בשרת ולא בדפדפן - כך אין צורך
+ * בספריית zip בדף, והתלמיד/ה לא צריך/ה לפרוק כלום לפני ההעלאה.
+ */
+function saveMyModel(studentId, filename, base64) {
+  if (!base64) throw new Error('לא התקבל תוכן הקובץ');
+  // בדיקה לפני הפריקה: zip קטן יכול להתנפח לגיגה, ו-Utilities.unzip פורק
+  // לזיכרון. מודל של Teachable Machine הוא בערך 2MB.
+  const bytes = Math.floor(String(base64).length * 3 / 4);
+  if (bytes > ARTIFACT_MAX_BYTES) {
+    throw new Error('הקובץ גדול מדי (' + Math.round(bytes / 1024 / 1024) + 'MB). ' +
+      'המותר עד ' + (ARTIFACT_MAX_BYTES / 1024 / 1024) + 'MB.');
+  }
+  const name = String(filename || '');
+  const isZip = /\.zip$/i.test(name);
+
+  if (!isZip) {
+    const base = name.split(/[\\/]/).pop();
+    return { saved: [saveArtifact(studentId, 'model', base,
+      /\.json$/i.test(base) ? 'application/json' : 'application/octet-stream',
+      base64).filename] };
+  }
+
+  const zip = Utilities.newBlob(Utilities.base64Decode(base64), 'application/zip', 'model.zip');
+  const entries = Utilities.unzip(zip);
+  const saved = [];
+  entries.forEach(function (entry) {
+    // שם הערך ב-zip יכול לכלול תיקייה ("my_model/model.json") - רק הקובץ חשוב
+    const base = entry.getName().split(/[\\/]/).pop();
+    if (MODEL_FILES.indexOf(base) < 0) return;
+    saveArtifact(studentId, 'model', base,
+      /\.json$/i.test(base) ? 'application/json' : 'application/octet-stream',
+      Utilities.base64Encode(entry.getBytes()));
+    saved.push(base);
+  });
+  if (!saved.length) {
+    throw new Error('ה-zip לא מכיל את קבצי המודל (' + MODEL_FILES.join(', ') + '). ' +
+      'ודאו שייצאתם מ-Teachable Machine בפורמט Tensorflow.js.');
+  }
+  return { saved: saved };
+}
+
+/**
+ * מחזיר zip אחד ולא שלוש הורדות נפרדות: כלי ההערכה מבקש *תיקייה* עם
+ * שלושת הקבצים, ושלושה קבצים שנוחתים בתיקיית ההורדות בין קבצים אחרים
+ * אינם תיקייה כזו.
+ */
+function downloadMyModel(studentId) {
+  const rows = sheetToObjects(getSheet(SHEET_ARTIFACTS))
+    .filter(a => a.studentId === studentId && a.kind === 'model');
+  const blobs = [];
+  MODEL_FILES.forEach(function (name) {
+    const mine = rows.filter(r => r.filename === name);
+    if (!mine.length) return;
+    const latest = mine.reduce((a, b) => (Number(b.__row) >= Number(a.__row) ? b : a));
+    blobs.push(DriveApp.getFileById(latest.fileId).getBlob().setName(name));
+  });
+  if (blobs.length < MODEL_FILES.length) {
+    throw new Error('המודל השמור חסר קבצים. שמרו אותו מחדש מהייצוא של Teachable Machine.');
+  }
+  const zip = Utilities.zip(blobs, 'my-model.zip');
+  return { filename: 'my-model.zip', mimeType: 'application/zip',
+           base64: Utilities.base64Encode(zip.getBytes()) };
+}
+
+/**
+ * מודל שמור הוא עותק אחד ולא היסטוריה: שמירה חדשה של אותו שם מוציאה את
+ * הקודם לפח ומוחקת את שורתו. בלי זה הלוקר מתמלא בעשרות model.json
+ * והתלמיד/ה לא יודע/ת איזה מהם המודל שלו/ה.
+ */
+function replaceModelFile(studentId, filename) {
+  const sheet = getSheet(SHEET_ARTIFACTS);
+  const rows = sheetToObjects(sheet)
+    .filter(a => a.studentId === studentId && a.kind === 'model' && a.filename === filename)
+    .sort((a, b) => b.__row - a.__row);        // מלמטה למעלה: מחיקה לא מזיזה שורות שטרם נמחקו
+  rows.forEach(function (r) {
+    try { DriveApp.getFileById(r.fileId).setTrashed(true); } catch (e) {}
+    sheet.deleteRow(r.__row);
+  });
+  return rows.length;
 }
 
 function getOrCreateFolderPath(pathParts) {
