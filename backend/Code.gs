@@ -850,20 +850,30 @@ function syncDriveSharing(datasetUrl) {
   };
 
   let shared = 0, closed = 0;
-  // תיקיית-העל והערכה העיוורת - תמיד סגורות
-  setAccess(root, false) && closed++;
+
+  // **שתי פניות, וסדר שאי אפשר להחליף: קודם סוגרים הכול, ורק אחר כך פותחים.**
+  //
+  // סגירת תיקייה ב-Drive מסירה את שיתוף-הקישור גם מצאצאיה. 'גודל 0025' נפתח
+  // בשלב 1 אבל יושב בתוך 'עקומת למידה' שנסגרת בשלב 2 - וכשהסגירה רצה אחרי
+  // הפתיחה היא מוחקת אותה בשקט. בדיוק זה קרה: אחרי ההרצה הראשונה 'ערכת מבחן'
+  // נותרה פתוחה (ההורה שלה נסגר *לפניה*) ו'גודל 0025' נסגרה.
+  const closeF = function (f) { if (f && setAccess(f, false)) closed++; };
+  const openF  = function (f) { if (f && setAccess(f, true))  shared++; };
+
+  // פנייה 1 - סגירה: תיקיית-העל, מה שלעולם אינו משותף, וכל שלב שטרם נפתח
+  closeF(root);
   NEVER_SHARED.filter(function (p) { return p; }).forEach(function (p) {
-    const f = byPath(p);
-    if (f && setAccess(f, false)) closed++;
+    closeF(byPath(p));
   });
-  // כל שלב לפי מצבו
   Object.keys(STAGE_FOLDERS).forEach(function (k) {
-    const open = Number(k) <= maxStage;
-    STAGE_FOLDERS[k].forEach(function (pair) {
-      const f = byPath(pair[0]);
-      if (!f) return;
-      if (setAccess(f, open)) { open ? shared++ : closed++; }
-    });
+    if (Number(k) <= maxStage) return;
+    STAGE_FOLDERS[k].forEach(function (pair) { closeF(byPath(pair[0])); });
+  });
+
+  // פנייה 2 - פתיחה: רק עכשיו, כשאף סגירה לא תרוץ אחריה
+  Object.keys(STAGE_FOLDERS).forEach(function (k) {
+    if (Number(k) > maxStage) return;
+    STAGE_FOLDERS[k].forEach(function (pair) { openF(byPath(pair[0])); });
   });
   // הקישורים לכל שלב נשמרים ב-cache לחצי שעה. אחרי שינוי שלב צריך לפנות
   // אותם, אחרת תלמיד שייכנס מיד יקבל את הרשימה של לפני השינוי.
