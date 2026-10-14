@@ -1,0 +1,624 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>מטלה · כלי הערכת המודל · AI Mentor</title>
+<style>
+  :root{
+    --bg:#eef3f7; --surface:#fff; --line:#e0e9f0; --line2:#ccdae5;
+    --ink:#0d1f2b; --ink2:#4a6478; --ink3:#8aa2b3;
+    --brand:#0891b2; --brand2:#0e7490; --brand-soft:#e6fafd;
+    --ok:#059669; --ok-soft:#e9fbf3; --warn:#b45309; --warn-soft:#fff8ec;
+    --err:#dc2626; --err-soft:#fef2f2;
+    --r:14px; --sh:0 2px 10px rgba(13,31,43,.07);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:15px/1.65 "Segoe UI",system-ui,-apple-system,Arial,sans-serif}
+  .wrap{max-width:860px;margin:0 auto;padding:26px 16px 70px}
+
+  .topbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:18px}
+  .back{display:inline-block;text-decoration:none;background:var(--brand2);color:#fff;
+        padding:9px 18px;border-radius:10px;font-weight:600;font-size:13.5px}
+  .back.ghost{background:var(--surface);color:var(--brand2);border:1px solid var(--line2)}
+  .crumb{font-size:12.5px;color:var(--ink3);margin-inline-start:auto}
+
+  h1{font-size:27px;margin:0 0 8px;letter-spacing:-.4px}
+  .lede{color:var(--ink2);font-size:14.5px;margin:0 0 22px}
+
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
+        padding:22px;margin-bottom:16px;box-shadow:var(--sh)}
+  h2{font-size:18px;margin:0 0 4px;display:flex;align-items:center;gap:10px}
+  .kicker{background:var(--brand-soft);color:var(--brand2);font-size:11.5px;font-weight:700;
+          padding:3px 10px;border-radius:20px;letter-spacing:.3px}
+  .hint{color:var(--ink2);font-size:13.5px;margin:6px 0 16px}
+
+  label{display:block;font-size:13px;color:var(--ink2);margin-bottom:5px;font-weight:600}
+  input[type=number],input[type=text],select,textarea{
+    width:100%;font:inherit;padding:9px 11px;border:1px solid var(--line2);
+    border-radius:9px;background:#fbfdff;color:var(--ink)}
+  textarea{resize:vertical;min-height:72px;line-height:1.6}
+  input:focus,select:focus,textarea:focus{outline:2px solid var(--brand);outline-offset:1px}
+
+  .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+  .grid2{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+  @media(max-width:620px){.grid4,.grid2{grid-template-columns:1fr 1fr}}
+
+  .cells{display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:420px}
+  .cell{border-radius:10px;padding:11px;border:1px solid var(--line)}
+  .cell.tp,.cell.tn{background:var(--ok-soft);border-color:#bbf0da}
+  .cell.fp{background:var(--warn-soft);border-color:#fde68a}
+  .cell.fn{background:var(--err-soft);border-color:#fecaca}
+  .cell .nm{font-size:11.5px;font-weight:700;letter-spacing:.3px;margin-bottom:4px}
+  .cell.tp .nm,.cell.tn .nm{color:var(--ok)}
+  .cell.fp .nm{color:var(--warn)}
+  .cell.fn .nm{color:var(--err)}
+
+  .totals{display:flex;gap:18px;flex-wrap:wrap;font-size:13px;color:var(--ink2);
+          margin-top:12px;padding-top:12px;border-top:1px dashed var(--line2)}
+  .totals b{color:var(--ink);font-variant-numeric:tabular-nums}
+
+  .formula{font-family:ui-monospace,"Consolas",monospace;font-size:13px;direction:ltr;
+           text-align:left;background:#f6fafc;border:1px solid var(--line);
+           border-radius:9px;padding:10px 13px;margin:10px 0;color:var(--ink2)}
+
+  .chk{font-size:12.5px;margin-top:5px;min-height:17px;font-weight:600}
+  .chk.good{color:var(--ok)}
+  .chk.bad{color:var(--err)}
+  .chk.idle{color:var(--ink3);font-weight:400}
+
+  .verdict{border-radius:10px;padding:12px 15px;font-size:13.5px;margin-top:14px;display:none}
+  .verdict.good{background:var(--ok-soft);border:1px solid #bbf0da;color:var(--ok);display:block}
+  .verdict.bad{background:var(--err-soft);border:1px solid #fecaca;color:var(--err);display:block}
+  .verdict.warn{background:var(--warn-soft);border:1px solid #fde68a;color:var(--warn);display:block}
+
+  table.thr{width:100%;border-collapse:collapse;margin-top:6px}
+  table.thr th{font-size:12px;color:var(--ink3);font-weight:700;padding:6px 7px;text-align:center;
+               border-bottom:1px solid var(--line2)}
+  table.thr td{padding:5px 4px}
+  table.thr td.lbl{font-size:12.5px;color:var(--ink2);white-space:nowrap;font-weight:600}
+  table.thr input{text-align:center;padding:7px 5px}
+
+  .q{margin-top:16px}
+  .q .qt{font-size:14px;font-weight:600;margin-bottom:7px;color:var(--ink)}
+  .q .qs{font-size:12.5px;color:var(--ink3);margin-bottom:7px}
+
+  button{font:inherit;font-weight:600;border:0;border-radius:10px;cursor:pointer;
+         background:var(--brand2);color:#fff;padding:11px 22px}
+  button.secondary{background:var(--surface);color:var(--brand2);border:1px solid var(--line2)}
+  button:disabled{opacity:.5;cursor:default}
+  .btnrow{display:flex;gap:9px;flex-wrap:wrap;margin-top:6px}
+
+  .note{font-size:12.5px;color:var(--ink3);margin-top:10px}
+  ol.steps{margin:8px 0 0;padding-inline-start:20px;font-size:13.5px;color:var(--ink2)}
+  ol.steps li{margin-bottom:5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <a class="back" href="./">← חזרה לכלי ההערכה</a>
+    <a class="back ghost" href="מדריך.html">המדריך — מה כל רכיב עושה</a>
+    <span class="crumb">מטלה · כלי הערכת המודל</span>
+  </div>
+
+  <h1>תיק ההערכה של המודל שלי</h1>
+  <p class="lede">אימנתם מודל על 50 תמונות (25 תקינות, 25 חריגות) והרצתם אותו מול ערכת המבחן.
+     עכשיו תקראו את התוצאה. המטלה הזו לא שואלת "כמה קיבלת" — היא שואלת
+     <b>מה אתם יודעים על המודל שלכם, ואיך אתם יודעים את זה</b>.
+     מלאו מהמסך שלכם; הדף בודק לכם את החשבון תוך כדי.</p>
+
+  <!-- ===== זהות ===== -->
+  <div class="card">
+    <div class="grid2">
+      <div>
+        <label for="who">שם מלא</label>
+        <input type="text" id="who" placeholder="שם פרטי ומשפחה">
+      </div>
+      <div>
+        <label for="grp">קבוצה</label>
+        <input type="text" id="grp" placeholder="י1 / י2">
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== חלק א ===== -->
+  <div class="card">
+    <h2><span class="kicker">חלק א׳</span> ארבעת התאים</h2>
+    <p class="hint">העתיקו את ארבעת המספרים ממטריצת הבלבול שעל המסך שלכם, בסף 0.50.
+       זהו המקור שממנו נגזרים ארבעת האחוזים — ועוד מעט תוכיחו את זה בעצמכם.</p>
+
+    <div class="cells">
+      <div class="cell tp"><div class="nm">TP · חריג, זוהה נכון</div>
+        <input type="number" id="tp" min="0" step="1" placeholder="0"></div>
+      <div class="cell fn"><div class="nm">FN · ממצא שהוחמץ</div>
+        <input type="number" id="fn" min="0" step="1" placeholder="0"></div>
+      <div class="cell fp"><div class="nm">FP · אזעקת שווא</div>
+        <input type="number" id="fp" min="0" step="1" placeholder="0"></div>
+      <div class="cell tn"><div class="nm">TN · תקין, זוהה נכון</div>
+        <input type="number" id="tn" min="0" step="1" placeholder="0"></div>
+    </div>
+
+    <div class="totals">
+      <span>סך תמונות המבחן: <b id="tTot">—</b></span>
+      <span>מתוכן חריגות: <b id="tAb">—</b></span>
+      <span>מתוכן תקינות: <b id="tNo">—</b></span>
+      <span>סך טעויות: <b id="tErr">—</b></span>
+    </div>
+  </div>
+
+  <!-- ===== חלק ב ===== -->
+  <div class="card">
+    <h2><span class="kicker">חלק ב׳</span> חשבו בעצמכם, ואז השוו למסך</h2>
+    <p class="hint">חשבו כל מדד <b>מארבעת התאים שלמעלה</b> — לא מהמסך. עגלו לאחוז השלם הקרוב.
+       הדף יגיד לכם אם הגעתם לאותו מספר שהכלי מציג. זו הנקודה: ארבעת האחוזים
+       אינם ארבע מדידות נפרדות, הם ארבע דרכים לקרוא את אותה טבלה.</p>
+
+    <div class="formula">
+דיוק כולל  = (TP + TN) / (TP + FN + FP + TN)
+רגישות     =  TP / (TP + FN)        ← מתוך החריגים, כמה נתפסו
+ספציפיות   =  TN / (TN + FP)        ← מתוך התקינים, כמה לא הובהלו
+דיוק חיובי =  TP / (TP + FP)        ← כשאמר "חריג", כמה פעמים צדק
+    </div>
+
+    <div class="grid4">
+      <div><label for="acc">דיוק כולל %</label>
+        <input type="number" id="acc" min="0" max="100" step="1" placeholder="—">
+        <div class="chk idle" id="accChk">ממתין</div></div>
+      <div><label for="sens">רגישות %</label>
+        <input type="number" id="sens" min="0" max="100" step="1" placeholder="—">
+        <div class="chk idle" id="sensChk">ממתין</div></div>
+      <div><label for="spec">ספציפיות %</label>
+        <input type="number" id="spec" min="0" max="100" step="1" placeholder="—">
+        <div class="chk idle" id="specChk">ממתין</div></div>
+      <div><label for="prec">דיוק חיובי %</label>
+        <input type="number" id="prec" min="0" max="100" step="1" placeholder="—">
+        <div class="chk idle" id="precChk">ממתין</div></div>
+    </div>
+
+    <div class="q">
+      <div class="qt">1. חבר מהכיתה אומר לכם רק משפט אחד: "המודל שלי הגיע ל-95% דיוק".</div>
+      <div class="qs">איזה מספר אחד הייתם מבקשים ממנו כדי לדעת אם זה טוב? נמקו מה הוא יגלה לכם שהדיוק הכולל מסתיר.</div>
+      <textarea id="q1"></textarea>
+    </div>
+
+    <div class="q">
+      <div class="qt">2. אצלכם — מי גבוה יותר, הרגישות או הספציפיות?</div>
+      <div class="qs">מה הפער אומר על סוג הטעות שהמודל שלכם <i>מעדיף</i> לעשות? ענו על המספרים שלכם, לא בכללי.</div>
+      <textarea id="q2"></textarea>
+    </div>
+
+    <div class="q">
+      <div class="qt">3. בהקשר של אבחון מלריה — איזו משתי הטעויות חמורה יותר?</div>
+      <div class="qs">החמצה של תא נגוע, או אזעקת שווא על תא תקין? הסבירו מה קורה למטופל בכל אחד מהמקרים.</div>
+      <textarea id="q3"></textarea>
+    </div>
+  </div>
+
+  <!-- ===== חלק ג ===== -->
+  <div class="card">
+    <h2><span class="kicker">חלק ג׳</span> הסף — אותו מודל, הכרעה אחרת</h2>
+    <p class="hint">הזיזו את סרגל הסף ומלאו שלוש שורות. <b>שימו לב:</b> הדף מוגדר מימין לשמאל,
+       ולכן הסרגל הפוך — המינימום (0.05) בצד ימין והמקסימום (0.95) בצד שמאל.
+       אל תאמנו מחדש כלום: אלה אותם ציונים בדיוק, רק חיתוך אחר.</p>
+
+    <table class="thr">
+      <thead><tr><th></th><th>סף</th><th>רגישות %</th><th>ספציפיות %</th><th>החמצות (FN)</th><th>אזעקות שווא (FP)</th></tr></thead>
+      <tbody>
+        <tr><td class="lbl">ברירת המחדל</td>
+          <td><input type="number" id="t0" value="0.50" step="0.01" readonly></td>
+          <td><input type="number" id="s0" step="1" placeholder="—"></td>
+          <td><input type="number" id="p0" step="1" placeholder="—"></td>
+          <td><input type="number" id="n0" step="1" placeholder="—"></td>
+          <td><input type="number" id="f0" step="1" placeholder="—"></td></tr>
+        <tr><td class="lbl">סף נמוך יותר</td>
+          <td><input type="number" id="t1" step="0.01" placeholder="0.??"></td>
+          <td><input type="number" id="s1" step="1" placeholder="—"></td>
+          <td><input type="number" id="p1" step="1" placeholder="—"></td>
+          <td><input type="number" id="n1" step="1" placeholder="—"></td>
+          <td><input type="number" id="f1" step="1" placeholder="—"></td></tr>
+        <tr><td class="lbl">סף גבוה יותר</td>
+          <td><input type="number" id="t2" step="0.01" placeholder="0.??"></td>
+          <td><input type="number" id="s2" step="1" placeholder="—"></td>
+          <td><input type="number" id="p2" step="1" placeholder="—"></td>
+          <td><input type="number" id="n2" step="1" placeholder="—"></td>
+          <td><input type="number" id="f2" step="1" placeholder="—"></td></tr>
+      </tbody>
+    </table>
+    <div class="verdict" id="thrChk"></div>
+
+    <div class="q">
+      <div class="qt">4. מה שילמתם כדי להרוויח רגישות?</div>
+      <div class="qs">השוו את שורת הסף הנמוך לשורת ברירת המחדל. כמה החמצות חסכתם, וכמה אזעקות שווא זה עלה? ענו במספרים שלכם.</div>
+      <textarea id="q4"></textarea>
+    </div>
+
+    <div class="q">
+      <div class="qt">5. איזה סף הייתם בוחרים למעבדה אמיתית, ולמי זה תלוי?</div>
+      <div class="qs">אין כאן תשובה אחת נכונה — יש נימוק נכון. הסבירו למי אתם מיטיבים ועל חשבון מי.</div>
+      <textarea id="q5"></textarea>
+    </div>
+  </div>
+
+  <!-- ===== חלק ד ===== -->
+  <div class="card">
+    <h2><span class="kicker">חלק ד׳</span> הטעות שהמודל היה בטוח בה</h2>
+    <p class="hint">גללו לטבלת "טעויות — מהבטוחה ביותר לפחותה" וקחו את <b>השורה הראשונה</b>.
+       לחצו עליה כדי לפתוח את מפת הקשב שלה. זו הטעות שהמודל היה הכי בטוח בה — ולכן
+       המלמדת ביותר.</p>
+
+    <div class="grid2">
+      <div><label for="eType">סוג הטעות</label>
+        <select id="eType">
+          <option value="">— בחרו —</option>
+          <option>ממצא שהוחמץ (FN)</option>
+          <option>אזעקת שווא (FP)</option>
+        </select></div>
+      <div><label for="eConf">הביטחון שהכלי מציג %</label>
+        <input type="number" id="eConf" min="0" max="100" step="1" placeholder="—"></div>
+    </div>
+
+    <div class="q">
+      <label for="eWhere">במפת הקשב — איפה האזור שהשפיע הכי חזק?</label>
+      <select id="eWhere">
+        <option value="">— בחרו —</option>
+        <option>בתוך התא, במקום שבו אמור להיות הממצא</option>
+        <option>על שולי התמונה</option>
+        <option>על הרקע, מחוץ לתא</option>
+        <option>פזור על כל התמונה, בלי מוקד ברור</option>
+      </select>
+    </div>
+
+    <div class="q">
+      <div class="qt">6. האם זו תמונה קשה באמת, או קיצור דרך?</div>
+      <div class="qs">תמונה קשה = גם אדם היה מתלבט. קיצור דרך = המודל הסתכל על משהו שאינו הממצא.
+         הכריעו, ובססו על מה שראיתם במפה. אם המפה לא מכריעה — כתבו את זה, וכתבו איזו בדיקה כן תכריע.</div>
+      <textarea id="q6"></textarea>
+    </div>
+  </div>
+
+  <!-- ===== חלק ה ===== -->
+  <div class="card">
+    <h2><span class="kicker">חלק ה׳</span> ההכרעה</h2>
+    <p class="hint">כתבו טענה אחת על המודל שלכם, וגַבּוּ אותה בשתי ראיות
+       <b>משני רכיבים שונים</b> של הכלי. ראיה אחת היא דעה; שתיים ממקומות שונים הן ממצא.</p>
+
+    <div class="q">
+      <label for="claim">הטענה שלי על המודל</label>
+      <textarea id="claim" placeholder="למשל: המודל שלי מזהה חריגים טוב, אבל לא תמיד מהסיבה הנכונה."></textarea>
+    </div>
+
+    <div class="grid2">
+      <div><label for="ev1src">ראיה 1 — מאיזה רכיב</label>
+        <select id="ev1src" class="evsrc">
+          <option value="">— בחרו —</option>
+          <option>מטריצת הבלבול</option>
+          <option>ארבעת המדדים</option>
+          <option>סף ההחלטה</option>
+          <option>טבלת הטעויות</option>
+          <option>גרף התפלגות הציונים</option>
+          <option>גרף השפעת הסף</option>
+          <option>גרף הרכב הטעויות</option>
+          <option>מפת הקשב</option>
+        </select></div>
+      <div><label for="ev2src">ראיה 2 — מאיזה רכיב</label>
+        <select id="ev2src" class="evsrc">
+          <option value="">— בחרו —</option>
+          <option>מטריצת הבלבול</option>
+          <option>ארבעת המדדים</option>
+          <option>סף ההחלטה</option>
+          <option>טבלת הטעויות</option>
+          <option>גרף התפלגות הציונים</option>
+          <option>גרף השפעת הסף</option>
+          <option>גרף הרכב הטעויות</option>
+          <option>מפת הקשב</option>
+        </select></div>
+    </div>
+    <div class="verdict" id="evChk"></div>
+
+    <div class="q">
+      <label for="ev1">ראיה 1 — מה בדיוק ראיתם שם</label>
+      <textarea id="ev1" placeholder="מספר או תצפית קונקרטית, לא 'ראיתי שזה טוב'."></textarea>
+    </div>
+    <div class="q">
+      <label for="ev2">ראיה 2 — מה בדיוק ראיתם שם</label>
+      <textarea id="ev2"></textarea>
+    </div>
+
+    <div class="q">
+      <div class="qt">7. מה הייתם בודקים בשבוע הבא כדי לנסות <i>להפריך</i> את הטענה שלכם?</div>
+      <div class="qs">מדען טוב מנסה לשבור את המסקנה של עצמו. תארו בדיקה אחת קונקרטית.</div>
+      <textarea id="q7"></textarea>
+    </div>
+  </div>
+
+  <!-- ===== הגשה ===== -->
+  <div class="card">
+    <h2><span class="kicker">הגשה</span> שמירה ותיוק</h2>
+    <p class="hint">הקובץ יורד למחשב <b>וגם</b> מתויק אוטומטית בתיקייה שלכם במערכת —
+       אבל רק אם פתחתם את הכלי מתוך המערכת. אם פתחתם מסימנייה, הוא רק יירד.</p>
+    <ol class="steps">
+      <li>ודאו שכל שדות החובה מלאים — הכפתור ייפתח רק אז.</li>
+      <li>לחצו "שמירה והגשה".</li>
+      <li>אם מופיעה הודעה שהתיוק נכשל — שמרו את הקובץ שירד והראו אותו למורה.</li>
+    </ol>
+    <div class="verdict" id="subChk"></div>
+    <div class="btnrow">
+      <button id="save" disabled>שמירה והגשה</button>
+      <button id="clear" class="secondary" type="button">ניקוי הטופס</button>
+    </div>
+    <p class="note">הטופס נשמר אוטומטית בדפדפן הזה תוך כדי מילוי, כך שרענון בטעות לא ימחק אותו.</p>
+  </div>
+
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const LS = 'ai-mentor-eval-assignment';
+const SESSION_KEY = 'ai-mentor-biorefua-session';
+
+/* ---- תיוק אוטומטי — זהה לשאר הכלים (מקור: tools/_filing.js) ---- */
+const API_KEY_LS='ai-mentor-api-url';
+const sessionUser=()=>{ try{return JSON.parse(sessionStorage.getItem(SESSION_KEY)||'null');}catch{return null;} };
+const apiUrl=()=>localStorage.getItem(API_KEY_LS)||'';
+const filingEnabled=()=>{ const u=sessionUser(); return !!(u&&u.token&&apiUrl()); };
+
+async function fileToServer(kind, filename, blob){
+  const u=sessionUser();
+  const base64=await new Promise((res,rej)=>{ const r=new FileReader();
+    r.onload=()=>res(String(r.result).split(',')[1]);
+    r.onerror=()=>rej(new Error('קריאת הקובץ נכשלה')); r.readAsDataURL(blob); });
+  const resp=await fetch(apiUrl(),{ method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body:JSON.stringify({action:'saveArtifact', token:u.token, kind, filename,
+                         mimeType:blob.type, base64}) });
+  const d=await resp.json();
+  if(!d.ok) throw new Error(d.error||'התיוק נכשל');
+  return d.result;
+}
+
+async function exportArtifact(kind, filename, text){
+  const blob=new Blob(['﻿'+text],{type:'text/plain;charset=utf-8'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download=filename; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+  if(!filingEnabled()){ note('הקובץ ירד למחשב. אין תיוק — לא נכנסתם דרך המערכת.'); return; }
+  note('מתייק את '+filename+'...');
+  try{ const r=await fileToServer(kind,filename,blob);
+       note('תויק בתיקייה "'+r.kind+'" · '+filename); }
+  catch(e){ note('התיוק נכשל ('+e.message+'). הקובץ ירד למחשב — הראו אותו למורה.'); }
+}
+
+function note(msg){
+  let el=$('filingNote');
+  if(!el){ el=document.createElement('div'); el.id='filingNote';
+    el.style.cssText='position:fixed;inset-block-end:18px;inset-inline-start:18px;z-index:99;'+
+      'background:#0d1f2b;color:#fff;font-size:12.5px;padding:9px 15px;border-radius:10px;'+
+      'box-shadow:0 4px 16px rgba(0,0,0,.22);max-width:min(420px,80vw)';
+    document.body.appendChild(el); }
+  el.textContent=msg; el.style.display='block';
+  clearTimeout(el._t); el._t=setTimeout(()=>el.style.display='none', 7000);
+}
+
+/* ---- שדות ---- */
+const CELLS = ['tp','fn','fp','tn'];
+const METRICS = ['acc','sens','spec','prec'];
+const THR = ['t0','s0','p0','n0','f0','t1','s1','p1','n1','f1','t2','s2','p2','n2','f2'];
+const TEXTS = ['who','grp','q1','q2','q3','q4','q5','q6','q7','claim','ev1','ev2'];
+const PICKS = ['eType','eWhere','ev1src','ev2src','eConf'];
+const ALL = [...CELLS, ...METRICS, ...THR, ...TEXTS, ...PICKS];
+
+const num = id => { const v = $(id).value.trim(); return v === '' ? null : Number(v); };
+
+/* ---- חלק א: סכומים ---- */
+function cells(){
+  const c = {}; let ok = true;
+  CELLS.forEach(k => { const v = num(k); if (v === null || v < 0 || !Number.isFinite(v)) ok = false; c[k] = v; });
+  return ok ? c : null;
+}
+
+function renderTotals(){
+  const c = cells();
+  if (!c) { ['tTot','tAb','tNo','tErr'].forEach(id => $(id).textContent = '—'); return; }
+  $('tTot').textContent = c.tp + c.fn + c.fp + c.tn;
+  $('tAb').textContent  = c.tp + c.fn;
+  $('tNo').textContent  = c.tn + c.fp;
+  $('tErr').textContent = c.fn + c.fp;
+}
+
+/* ---- חלק ב: בדיקת החשבון ----
+   סובלנות של אחוז אחד: הכלי מעגל לשלם, וגם התלמיד/ה. שני עיגולים
+   לאותו ערך יכולים ליפול על שני מספרים סמוכים, וזו אינה טעות. */
+function pct(a, b){ return b ? (100 * a / b) : null; }
+
+function checkMetrics(){
+  const c = cells();
+  const defs = {
+    acc:  c ? pct(c.tp + c.tn, c.tp + c.fn + c.fp + c.tn) : null,
+    sens: c ? pct(c.tp, c.tp + c.fn) : null,
+    spec: c ? pct(c.tn, c.tn + c.fp) : null,
+    prec: c ? pct(c.tp, c.tp + c.fp) : null,
+  };
+  const why = {
+    acc:  'דיוק כולל = (TP+TN) חלקי כל התמונות',
+    sens: 'רגישות = TP חלקי (TP+FN) — המכנה הוא כל החריגים',
+    spec: 'ספציפיות = TN חלקי (TN+FP) — המכנה הוא כל התקינים',
+    prec: 'דיוק חיובי = TP חלקי (TP+FP) — המכנה הוא כל מי שהוכרז חריג',
+  };
+  METRICS.forEach(k => {
+    const el = $(k + 'Chk'), mine = num(k), truth = defs[k];
+    el.className = 'chk idle';
+    if (!c)            { el.textContent = 'מלאו קודם את ארבעת התאים'; return; }
+    if (truth === null){ el.textContent = 'לא מוגדר — המכנה אפס'; return; }
+    if (mine === null) { el.textContent = 'ממתין'; return; }
+    if (Math.abs(mine - truth) <= 1) { el.className = 'chk good'; el.textContent = '✓ נכון'; }
+    else { el.className = 'chk bad'; el.textContent = '✗ ' + why[k]; }
+  });
+}
+
+/* ---- חלק ג: בדיקת עקביות הסף ----
+   העלאת סף לא יכולה להעלות רגישות ולא להוריד ספציפיות. זו מונוטוניות
+   חלשה: שוויון מותר (ייתכן שאין ציון בתחום שנחצה), עלייה אינה. */
+function checkThreshold(){
+  const box = $('thrChk');
+  const rows = [0,1,2].map(i => ({
+    t: num('t'+i), s: num('s'+i), p: num('p'+i), n: num('n'+i), f: num('f'+i),
+  })).filter(r => r.t !== null && r.s !== null && r.p !== null);
+
+  if (rows.length < 2) { box.className = 'verdict'; box.textContent = ''; return; }
+  rows.sort((a,b) => a.t - b.t);
+
+  const errs = [];
+  for (let i = 1; i < rows.length; i++){
+    const lo = rows[i-1], hi = rows[i];
+    if (hi.t === lo.t) continue;
+    if (hi.s > lo.s + 0.5) errs.push('בסף ' + hi.t + ' הרגישות גבוהה מאשר בסף ' + lo.t +
+      '. העלאת סף רק מקשה על המודל להכריז "חריג", ולכן הרגישות יכולה לרדת או להישאר — לא לעלות.');
+    if (hi.p < lo.p - 0.5) errs.push('בסף ' + hi.t + ' הספציפיות נמוכה מאשר בסף ' + lo.t +
+      '. העלאת סף מפחיתה אזעקות שווא, ולכן הספציפיות יכולה לעלות או להישאר — לא לרדת.');
+    if (hi.n !== null && lo.n !== null && hi.n < lo.n)
+      errs.push('מספר ההחמצות קטן כשהסף עלה. לא ייתכן — סף גבוה יותר מחמיץ יותר, לא פחות.');
+    if (hi.f !== null && lo.f !== null && hi.f > lo.f)
+      errs.push('מספר אזעקות השווא גדל כשהסף עלה. לא ייתכן — סף גבוה יותר מכריז "חריג" פחות.');
+  }
+
+  if (errs.length){ box.className = 'verdict bad';
+    box.innerHTML = '<b>משהו בשורות לא מסתדר:</b><br>' + errs.join('<br>') +
+      '<br>בדקו שלא התחלפו לכם עמודות, ושקראתם את הסף הנכון — הסרגל מוצג הפוך.'; }
+  else { box.className = 'verdict good';
+    box.textContent = '✓ שלוש השורות עקביות זו עם זו: ככל שהסף עולה הרגישות יורדת והספציפיות עולה.'; }
+}
+
+/* ---- חלק ה: שתי ראיות משני רכיבים ---- */
+function checkEvidence(){
+  const a = $('ev1src').value, b = $('ev2src').value, box = $('evChk');
+  if (!a || !b){ box.className = 'verdict'; box.textContent = ''; return; }
+  if (a === b){ box.className = 'verdict warn';
+    box.textContent = 'שתי הראיות מאותו רכיב. שני מספרים מאותו מקום אומרים את אותו דבר פעמיים — ' +
+      'בחרו רכיב שני שבודק את הטענה מכיוון אחר.'; }
+  else { box.className = 'verdict good';
+    box.textContent = '✓ שתי ראיות משני רכיבים שונים.'; }
+}
+
+/* ---- שלמות ההגשה ---- */
+const REQUIRED = ['who','tp','fn','fp','tn','acc','sens','spec','prec',
+                  'q1','q2','q3','s0','p0','t1','s1','p1','t2','s2','p2','q4','q5',
+                  'eType','eWhere','q6','claim','ev1src','ev2src','ev1','ev2','q7'];
+
+function checkComplete(){
+  const missing = REQUIRED.filter(id => String($(id).value).trim() === '');
+  const sameSrc = $('ev1src').value && $('ev1src').value === $('ev2src').value;
+  const box = $('subChk'), btn = $('save');
+  if (missing.length){
+    box.className = 'verdict warn';
+    box.textContent = missing.length === 1
+      ? 'חסר שדה אחד. מלאו אותו וההגשה תיפתח.'
+      : 'חסרים ' + missing.length + ' שדות. מלאו אותם וההגשה תיפתח.';
+    btn.disabled = true;
+  } else if (sameSrc){
+    box.className = 'verdict warn';
+    box.textContent = 'שתי הראיות עדיין מאותו רכיב — תקנו את חלק ה׳ לפני ההגשה.';
+    btn.disabled = true;
+  } else {
+    box.className = 'verdict good';
+    box.textContent = '✓ הכול מלא. אפשר להגיש.';
+    btn.disabled = false;
+  }
+}
+
+/* ---- שמירה מקומית ---- */
+function save(){
+  const d = {}; ALL.forEach(id => d[id] = $(id).value);
+  try{ localStorage.setItem(LS, JSON.stringify(d)); }catch{}
+}
+function load(){
+  let d; try{ d = JSON.parse(localStorage.getItem(LS) || 'null'); }catch{ d = null; }
+  if (d) ALL.forEach(id => { if (d[id] !== undefined) $(id).value = d[id]; });
+  const u = sessionUser();
+  if (u && u.displayName && !$('who').value.trim()) $('who').value = u.displayName;
+}
+
+function refresh(){
+  renderTotals(); checkMetrics(); checkThreshold(); checkEvidence(); checkComplete(); save();
+}
+
+ALL.forEach(id => { $(id).addEventListener('input', refresh); $(id).addEventListener('change', refresh); });
+
+/* ---- ייצוא ---- */
+function report(){
+  const c = cells();
+  const L = [];
+  const line = (k, v) => L.push(k + ': ' + (String(v).trim() || '—'));
+  const block = (k, v) => { L.push(''); L.push('— ' + k + ' —'); L.push(String(v).trim() || '—'); };
+
+  L.push('תיק ההערכה של המודל שלי — מטלת כלי האבחון');
+  L.push('='.repeat(46));
+  line('שם', $('who').value);
+  line('קבוצה', $('grp').value);
+  line('תאריך', new Date().toLocaleDateString('he-IL'));
+  L.push('');
+  L.push('— חלק א׳: ארבעת התאים —');
+  line('TP (חריג, זוהה נכון)', $('tp').value);
+  line('FN (ממצא שהוחמץ)', $('fn').value);
+  line('FP (אזעקת שווא)', $('fp').value);
+  line('TN (תקין, זוהה נכון)', $('tn').value);
+  if (c){
+    line('סך תמונות', c.tp + c.fn + c.fp + c.tn);
+    line('חריגות / תקינות', (c.tp + c.fn) + ' / ' + (c.tn + c.fp));
+  }
+  L.push('');
+  L.push('— חלק ב׳: המדדים שחושבו —');
+  line('דיוק כולל %', $('acc').value);
+  line('רגישות %', $('sens').value);
+  line('ספציפיות %', $('spec').value);
+  line('דיוק חיובי %', $('prec').value);
+  block('1. מה הייתי מבקש מחבר שאמר 95% דיוק', $('q1').value);
+  block('2. רגישות מול ספציפיות אצלי', $('q2').value);
+  block('3. איזו טעות חמורה יותר במלריה', $('q3').value);
+  L.push('');
+  L.push('— חלק ג׳: הסף —');
+  [0,1,2].forEach(i => {
+    const nm = ['ברירת מחדל','סף נמוך','סף גבוה'][i];
+    L.push(nm + ': סף=' + ($('t'+i).value||'—') + '  רגישות=' + ($('s'+i).value||'—') +
+           '%  ספציפיות=' + ($('p'+i).value||'—') + '%  FN=' + ($('n'+i).value||'—') +
+           '  FP=' + ($('f'+i).value||'—'));
+  });
+  block('4. מה שילמתי כדי להרוויח רגישות', $('q4').value);
+  block('5. איזה סף הייתי בוחר, ולמה', $('q5').value);
+  L.push('');
+  L.push('— חלק ד׳: הטעות הבטוחה ביותר —');
+  line('סוג הטעות', $('eType').value);
+  line('ביטחון %', $('eConf').value);
+  line('איפה המודל הסתכל', $('eWhere').value);
+  block('6. תמונה קשה או קיצור דרך', $('q6').value);
+  L.push('');
+  L.push('— חלק ה׳: ההכרעה —');
+  block('הטענה', $('claim').value);
+  line('ראיה 1 — רכיב', $('ev1src').value);
+  block('ראיה 1 — מה ראיתי', $('ev1').value);
+  line('ראיה 2 — רכיב', $('ev2src').value);
+  block('ראיה 2 — מה ראיתי', $('ev2').value);
+  block('7. איך אנסה להפריך את עצמי', $('q7').value);
+  return L.join('\n');
+}
+
+const slug = s => (s || '').trim().replace(/[\\/:*?"<>|]/g, '-').replace(/\s+/g, '_');
+
+$('save').addEventListener('click', () => {
+  const name = 'מטלת_כלי_האבחון_' + (slug($('who').value) || 'תלמיד') + '.txt';
+  exportArtifact('notebook', name, report());
+});
+
+$('clear').addEventListener('click', () => {
+  if (!confirm('לנקות את כל הטופס? אי אפשר לבטל.')) return;
+  ALL.forEach(id => { if (id !== 't0') $(id).value = ''; });
+  try{ localStorage.removeItem(LS); }catch{}
+  refresh();
+});
+
+load(); refresh();
+</script>
+</body>
+</html>
