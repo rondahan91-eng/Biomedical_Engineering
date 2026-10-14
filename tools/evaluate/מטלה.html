@@ -59,9 +59,32 @@
           margin-top:12px;padding-top:12px;border-top:1px dashed var(--line2)}
   .totals b{color:var(--ink);font-variant-numeric:tabular-nums}
 
-  .formula{font-family:ui-monospace,"Consolas",monospace;font-size:13px;direction:ltr;
-           text-align:left;background:#f6fafc;border:1px solid var(--line);
-           border-radius:9px;padding:10px 13px;margin:10px 0;color:var(--ink2)}
+  /* טבלת הנוסחאות. כל כיווניות בתא משלה: תא הנוסחה הוא LTR מבודד (dir="ltr"
+     על code מפעיל unicode-bidi:isolate), והתאים העבריים נשארים RTL. ערבוב
+     השניים בשורת טקסט אחת הוא מה שהפך את זה קודם לבלתי קריא. */
+  table.fx{width:100%;border-collapse:collapse;margin:12px 0 0;
+           background:#f6fafc;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+  table.fx th{font-size:11.5px;color:var(--ink3);font-weight:700;letter-spacing:.3px;
+              text-align:start;padding:8px 13px;background:#eef5f9;
+              border-bottom:1px solid var(--line)}
+  table.fx td{padding:9px 13px;font-size:13.5px;color:var(--ink2);
+              border-bottom:1px solid var(--line);vertical-align:middle}
+  table.fx tr:last-child td{border-bottom:0}
+  table.fx td.nm{font-weight:700;color:var(--ink);white-space:nowrap}
+  table.fx td.eq{width:1%;white-space:nowrap}
+  table.fx code{font-family:ui-monospace,"Consolas",monospace;font-size:13px;
+                background:#fff;border:1px solid var(--line2);border-radius:7px;
+                padding:3px 9px;color:var(--brand2);display:inline-block}
+  @media(max-width:620px){
+    table.fx,table.fx tbody,table.fx tr,table.fx td{display:block;width:auto}
+    table.fx thead{display:none}
+    table.fx tr{border-bottom:1px solid var(--line);padding:9px 4px}
+    table.fx tr:last-child{border-bottom:0}
+    table.fx td{border:0;padding:2px 10px}
+    /* width:1% נועד לכווץ עמודה בטבלה אמיתית. כשהתא הופך לבלוק הוא רק
+       מצר אותו מתחת לנוסחה שבתוכו. */
+    table.fx td.eq{width:auto;margin:3px 0}
+  }
 
   .chk{font-size:12.5px;margin-top:5px;min-height:17px;font-weight:600}
   .chk.good{color:var(--ok)}
@@ -185,12 +208,27 @@
        הדף יגיד לכם אם הגעתם לאותו מספר שהכלי מציג. זו הנקודה: ארבעת האחוזים
        אינם ארבע מדידות נפרדות, הם ארבע דרכים לקרוא את אותה טבלה.</p>
 
-    <div class="formula">
-דיוק כולל  = (TP + TN) / (TP + FN + FP + TN)
-רגישות     =  TP / (TP + FN)        ← מתוך החריגים, כמה נתפסו
-ספציפיות   =  TN / (TN + FP)        ← מתוך התקינים, כמה לא הובהלו
-דיוק חיובי =  TP / (TP + FP)        ← כשאמר "חריג", כמה פעמים צדק
-    </div>
+    <table class="fx">
+      <thead><tr><th>המדד</th><th>איך מחשבים</th><th>מה הוא אומר</th></tr></thead>
+      <tbody>
+        <tr><td class="nm">דיוק כולל</td>
+            <td class="eq"><code dir="ltr">(TP + TN) / (TP + FN + FP + TN)</code></td>
+            <td>מתוך <b>כל</b> התמונות — כמה סווגו נכון</td></tr>
+        <tr><td class="nm">רגישות</td>
+            <td class="eq"><code dir="ltr">TP / (TP + FN)</code></td>
+            <td>מתוך <b>החריגים</b> — כמה נתפסו</td></tr>
+        <tr><td class="nm">ספציפיות</td>
+            <td class="eq"><code dir="ltr">TN / (TN + FP)</code></td>
+            <td>מתוך <b>התקינים</b> — כמה לא הובהלו</td></tr>
+        <tr><td class="nm">דיוק חיובי</td>
+            <td class="eq"><code dir="ltr">TP / (TP + FP)</code></td>
+            <td>מתוך <b>מי שהוכרז חריג</b> — כמה פעמים צדק</td></tr>
+      </tbody>
+    </table>
+    <p class="note" style="margin-top:8px">
+      שימו לב למכנה — הוא ההבדל היחיד בין שלושת האחרונים, והוא מה שקובע
+      "מתוך מי" סופרים. זו גם הטעות הנפוצה ביותר כאן.
+    </p>
 
     <div class="grid4">
       <div><label for="acc">דיוק כולל %</label>
