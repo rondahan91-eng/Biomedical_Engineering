@@ -91,6 +91,16 @@
   .btnrow{display:flex;gap:9px;flex-wrap:wrap;margin-top:6px}
 
   .note{font-size:12.5px;color:var(--ink3);margin-top:10px}
+
+  /* לוח ההרצה החיה — נדבק לראש המסך כדי שיהיה גלוי בזמן המילוי */
+  .live{position:sticky;top:10px;z-index:5;border-color:var(--line2)}
+  .live h2{font-size:16px}
+  .live #liveHead{font-size:13.5px;font-weight:600;color:var(--ink2)}
+  .live-cells{max-width:100%;grid-template-columns:repeat(4,1fr)}
+  .live-cells .big{font-size:21px;font-weight:800;font-variant-numeric:tabular-nums;line-height:1.2}
+  .live.stale{opacity:.6}
+  @media(max-width:620px){.live-cells{grid-template-columns:1fr 1fr}
+                          .live{position:static}}
   ol.steps{margin:8px 0 0;padding-inline-start:20px;font-size:13.5px;color:var(--ink2)}
   ol.steps li{margin-bottom:5px}
 </style>
@@ -99,7 +109,7 @@
 <div class="wrap">
 
   <div class="topbar">
-    <a class="back" href="./">← חזרה לכלי ההערכה</a>
+    <a class="back" href="./" id="backLink">← חזרה לכלי ההערכה</a>
     <span class="crumb">מטלה · כלי הערכת המודל</span>
   </div>
 
@@ -107,7 +117,27 @@
   <p class="lede">אימנתם מודל על 50 תמונות (25 תקינות, 25 חריגות) והרצתם אותו מול ערכת המבחן.
      עכשיו תקראו את התוצאה. המטלה הזו לא שואלת "כמה קיבלת" — היא שואלת
      <b>מה אתם יודעים על המודל שלכם, ואיך אתם יודעים את זה</b>.
-     מלאו מהמסך שלכם; הדף בודק לכם את החשבון תוך כדי.</p>
+     מלאו מהמסך שלכם; הדף בודק לכם את החשבון תוך כדי.<br>
+     <b>הכלי פתוח בלשונית הנפרדת שלו — אל תסגרו אותה.</b> ההרצה חיה שם בזיכרון,
+     וטעינה מחדש מוחקת אותה ומחייבת לבחור את התיקיות ולהריץ מהתחלה.
+     עברו בין הלשוניות חופשי; הלוח למטה מתעדכן משם תוך כדי.</p>
+
+  <!-- ===== לוח ההרצה החיה ===== -->
+  <div class="card live" id="liveCard">
+    <h2><span class="kicker">ההרצה שלי</span> <span id="liveHead">מחובר ללשונית הכלי</span></h2>
+    <p class="hint" id="liveHint"></p>
+    <div class="cells live-cells" id="liveCells">
+      <div class="cell tp"><div class="nm">TP · חריג, זוהה נכון</div><div class="big" id="lvTp">—</div></div>
+      <div class="cell fn"><div class="nm">FN · ממצא שהוחמץ</div><div class="big" id="lvFn">—</div></div>
+      <div class="cell fp"><div class="nm">FP · אזעקת שווא</div><div class="big" id="lvFp">—</div></div>
+      <div class="cell tn"><div class="nm">TN · תקין, זוהה נכון</div><div class="big" id="lvTn">—</div></div>
+    </div>
+    <div class="totals">
+      <span>הסף שמוצג כרגע בכלי: <b id="lvThr">—</b></span>
+      <button type="button" id="copyCells" class="secondary" style="padding:7px 14px;font-size:13px"
+              disabled>העתקה לחלק א׳</button>
+    </div>
+  </div>
 
   <!-- ===== זהות ===== -->
   <div class="card">
@@ -617,7 +647,85 @@ $('clear').addEventListener('click', () => {
   refresh();
 });
 
-load(); refresh();
+/* ---- לוח ההרצה החיה --------------------------------------------------
+   הכלי כותב את ארבעת התאים ל-localStorage בכל ציור מחדש, ו-localStorage
+   משדר אירוע storage לכל לשונית *אחרת* של אותו מקור. התוצאה: הזזת הסרגל
+   בלשונית הכלי מעדכנת את הלוח כאן תוך כדי, בלי לרענן כלום.
+   מה שלא נשלח: ארבעת המדדים. אותם התלמיד/ה מחשב/ת בעצמו/ה בחלק ב׳.      */
+const LIVE_KEY = 'ai-mentor-eval-live';
+const LIVE_STALE_MS = 6 * 60 * 60 * 1000;   // הרצה מאתמול אינה "ההרצה שלי"
+let live = null;
+
+function readLive(){
+  try{ return JSON.parse(localStorage.getItem(LIVE_KEY) || 'null'); }catch{ return null; }
+}
+
+function renderLive(){
+  const d = live, card = $('liveCard');
+  const put = (id, v) => $(id).textContent = (v === undefined || v === null) ? '—' : v;
+
+  if (!d || typeof d.tp !== 'number'){
+    card.classList.remove('stale');
+    $('liveHead').textContent = 'אין עדיין הרצה';
+    $('liveHint').innerHTML = 'פתחו את לשונית הכלי, הריצו את ההערכה, והמספרים יופיעו כאן — ' +
+      'ויתעדכנו תוך כדי כשתזיזו את הסרגל.';
+    ['lvTp','lvFn','lvFp','lvTn','lvThr'].forEach(id => put(id, null));
+    $('copyCells').disabled = true;
+    return;
+  }
+
+  const stale = Date.now() - (d.at || 0) > LIVE_STALE_MS;
+  card.classList.toggle('stale', stale);
+  $('liveHead').textContent = stale ? 'הרצה ישנה' : 'מתעדכן מלשונית הכלי';
+  $('liveHint').innerHTML = stale
+    ? 'המספרים האלה נקראו לפני יותר משש שעות — ייתכן שהם לא מההרצה הנוכחית שלכם. ' +
+      'הריצו שוב בכלי כדי לרענן.'
+    : 'אלה המספרים שעל מסך הכלי ברגע זה. הזיזו שם את הסרגל — והם ישתנו כאן.';
+
+  put('lvTp', d.tp); put('lvFn', d.fn); put('lvFp', d.fp); put('lvTn', d.tn);
+  put('lvThr', typeof d.thr === 'number' ? d.thr.toFixed(2) : '—');
+  $('copyCells').disabled = false;
+}
+
+// העתקת התאים בלבד. זו העברת נתון, לא פתרון: החישוב בחלק ב׳ נשאר שלהם.
+$('copyCells').addEventListener('click', () => {
+  if (!live) return;
+  if (Math.abs((live.thr ?? 0.5) - 0.5) > 0.001 &&
+      !confirm('הסף בכלי הוא ' + Number(live.thr).toFixed(2) + ' ולא 0.50.\n' +
+               'חלק א׳ מבקש את התאים בסף 0.50. להעתיק בכל זאת?')) return;
+  $('tp').value = live.tp; $('fn').value = live.fn;
+  $('fp').value = live.fp; $('tn').value = live.tn;
+  refresh();
+});
+
+window.addEventListener('storage', e => {
+  if (e.key !== LIVE_KEY) return;
+  live = readLive(); renderLive();
+});
+
+/* ---- חזרה ללשונית הכלי ----
+   ניווט רגיל היה טוען את הכלי מחדש ומוחק את ההרצה. אם הגענו מהכלי,
+   מחזירים אליו את המיקוד במקום לנווט. */
+$('backLink').addEventListener('click', e => {
+  let opener = null;
+  try{ opener = window.opener; }catch{ opener = null; }
+  if (!opener || opener.closed) return;        // נפתח ישירות - קישור רגיל
+  e.preventDefault();
+  try{ opener.focus(); }
+  catch{ /* הדפדפן חסם מיקוד - הלשונית עדיין פתוחה והתלמיד/ה יעבור/תעבור ידנית */ }
+});
+
+function initBackLink(){
+  let opener = null;
+  try{ opener = window.opener; }catch{ opener = null; }
+  if (opener && !opener.closed){
+    $('backLink').textContent = '← ללשונית הכלי';
+    $('backLink').title = 'הכלי פתוח בלשונית נפרדת. אל תסגרו אותה — ההרצה תאבד.';
+  }
+}
+
+live = readLive();
+load(); refresh(); renderLive(); initBackLink();
 </script>
 </body>
 </html>
