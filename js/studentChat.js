@@ -144,7 +144,10 @@ export async function mountStudentChat(app, session, onLogout) {
               <a class="tool-link" style="margin-top:8px" href="${escapeHtml(d.url)}"
                  target="_blank" rel="noopener noreferrer">
                 <b>${escapeHtml(d.name)} ↗</b><span>נפתח בשלב ${d.stage}</span></a>`).join('')
-            + `<p class="form-note" style="margin-top:6px;">אל תורידו את המאגר הגולמי ממקור
+            + `<p class="form-note" style="margin-top:6px;"><b>להורדה:</b> לחצו ימני על
+                 התיקייה ב-Drive ← <b>הורדה</b>. גוגל תארוז אותה ל-ZIP. חלצו אותו לפני
+                 שתעלו את התמונות ל-Teachable Machine.</p>
+               <p class="form-note" style="margin-top:6px;">אל תורידו את המאגר הגולמי ממקור
                  אחר — הערכות כאן בנויות כך שכל גודל מכיל את הקטן ממנו, ואותה שקופית לא
                  מופיעה גם באימון וגם במבחן.</p>`
           : `<p class="form-note" style="margin-top:6px;">המאגר נקבע על ידי המורה.
