@@ -285,11 +285,8 @@ export async function mountTeacherDashboard(app, session, onLogout) {
     // ולכן האישור מפרט בדיוק מה יורד.
     document.querySelectorAll('.del-checkin-btn').forEach(btn => {
       btn.addEventListener('click', async () => {
-        if (!confirm('למחוק את הצ׳ק-אין של שבוע ' + btn.dataset.week + '?
-
-' +
-                     'יימחקו הציון, התמלול ושתי תמונות ההתקדמות. היומן ב-Docs יישאר.
-' +
+        if (!confirm('למחוק את הצ׳ק-אין של שבוע ' + btn.dataset.week + '?\n\n' +
+                     'יימחקו הציון, התמלול ושתי תמונות ההתקדמות. היומן ב-Docs יישאר.\n' +
                      'אי אפשר לבטל — אבל התלמיד/ה יוכל/תוכל להגיש את השבוע מחדש.')) return;
         btn.disabled = true;
         try {
