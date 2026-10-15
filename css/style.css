@@ -574,3 +574,12 @@ table.data-table tr:hover td { background: var(--brand-soft); }
   animation: spin .8s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* תקציר המשימה בתוך חלון ההגשה. בלעדיו החלון היחיד שבו התלמיד/ה באמת
+   מגיש/ה לא אמר מה המשימה - רק כמה תמונות לצרף. */
+.task-brief {
+  background: var(--brand-soft); border: 1px solid #bae9f2; border-radius: 10px;
+  padding: 11px 14px; margin-bottom: 12px; font-size: 13.5px; line-height: 1.6;
+  color: var(--ink); white-space: pre-line;
+}
+.task-brief .mono-lbl { margin-bottom: 4px; }

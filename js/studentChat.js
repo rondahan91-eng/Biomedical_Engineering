@@ -342,6 +342,11 @@ export async function mountStudentChat(app, session, onLogout) {
           <h3>משימת שבוע ${ctx.weekNumber}</h3>
           <button class="modal-close" id="modal-close" title="סגירה">✕</button>
         </div>
+        ${ctx.topicText ? `
+        <div class="task-brief">
+          <div class="mono-lbl">המשימה של השבוע</div>
+          ${escapeHtml(ctx.topicText)}
+        </div>` : ''}
         <p class="form-note">שתי תמונות מהניסוי + סיכום קצר. מומלץ: תרשים אחד
           מכלי ההערכה ומפת קשב אחת שמדגימה את הממצא. השליחה פותחת את החלק המוערך.</p>
         <div class="tiles">
