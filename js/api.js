@@ -353,6 +353,15 @@ async function callLocal(action, payload) {
     return { files, complete: files.every(f => f.saved) };
   }
 
+  if (action === 'deleteCheckIn') {
+    const i = db.checkIns.findIndex(c => c.checkInId === payload.checkInId);
+    if (i < 0) throw new Error('הצ׳ק-אין לא נמצא (ייתכן שכבר נמחק)');
+    const [gone] = db.checkIns.splice(i, 1);
+    saveDB(db);
+    return { ok: true, checkInId: gone.checkInId, weekNumber: gone.weekNumber,
+             score: gone.score, imagesTrashed: 0 };
+  }
+
   if (action === 'getDashboard') {
     return db.users.filter(u => u.role === 'student').map(u => {
       const week = devWeek(db, u.group);
@@ -497,6 +506,9 @@ export async function getDashboard() {
 }
 export async function getStudentTranscripts(studentId) {
   return dispatch('getStudentTranscripts', { studentId });
+}
+export async function deleteCheckIn(checkInId) {
+  return dispatch('deleteCheckIn', { checkInId });
 }
 export async function setManualGrade(checkInId, score, note) {
   return dispatch('setManualGrade', { checkInId, score, note });

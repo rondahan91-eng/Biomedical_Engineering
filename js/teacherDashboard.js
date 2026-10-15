@@ -4,7 +4,7 @@
 // ==========================================================================
 import { escapeHtml, toast, topbarHtml, wireLogout, passwordField, wirePasswordEyes } from './ui.js';
 import {
-  getDashboard, getGroupWeeks, setGroupStage, startNewWeek, updateCurrentWeekTopic,
+  getDashboard, getGroupWeeks, setGroupStage, startNewWeek, updateCurrentWeekTopic, deleteCheckIn,
   getStudentTranscripts, setManualGrade, exportWeeklyReport, importRoster, resetStudentPassword,
   changePassword, deleteStudent,
 } from './api.js';
@@ -260,6 +260,9 @@ export async function mountTeacherDashboard(app, session, onLogout) {
             <input type="number" min="1" max="10" placeholder="דריסת ציון" style="width:110px;">
             <input type="text" placeholder="הערה" style="flex:1;">
             <button type="submit" class="secondary" style="padding:6px 12px;font-size:12.5px;">שמירה</button>
+            <button type="button" class="danger del-checkin-btn" data-checkin="${c.checkInId}"
+                    data-week="${c.weekNumber}" style="padding:6px 12px;font-size:12.5px;"
+                    title="מוחק את הצ׳ק-אין ומשחרר את השבוע להגשה מחדש">מחיקה</button>
           </form>
         </div>`).join('')}
       ${helpChats.length ? `<p class="form-note" style="margin-top:10px;">${helpChats.length} שיחות עזרה חופשיות נוספות נשמרו (לא מוערכות).</p>` : ''}
@@ -275,6 +278,30 @@ export async function mountTeacherDashboard(app, session, onLogout) {
         render();
         state.transcripts = await getStudentTranscripts(state.selectedStudentId);
         render();
+      });
+    });
+
+    // מחיקת צ׳ק-אין: הדרך היחידה לשחרר שבוע שננעל בהגשה. בלתי הפיכה,
+    // ולכן האישור מפרט בדיוק מה יורד.
+    document.querySelectorAll('.del-checkin-btn').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('למחוק את הצ׳ק-אין של שבוע ' + btn.dataset.week + '?
+
+' +
+                     'יימחקו הציון, התמלול ושתי תמונות ההתקדמות. היומן ב-Docs יישאר.
+' +
+                     'אי אפשר לבטל — אבל התלמיד/ה יוכל/תוכל להגיש את השבוע מחדש.')) return;
+        btn.disabled = true;
+        try {
+          const r = await deleteCheckIn(btn.dataset.checkin);
+          toast('הצ׳ק-אין של שבוע ' + r.weekNumber + ' נמחק' +
+                (r.imagesTrashed ? ' (' + r.imagesTrashed + ' תמונות לפח)' : ''));
+          state.transcripts = await getStudentTranscripts(state.selectedStudentId);
+          await refresh();
+        } catch (err) {
+          btn.disabled = false;
+          toast('המחיקה נכשלה: ' + err.message, true);
+        }
       });
     });
 
