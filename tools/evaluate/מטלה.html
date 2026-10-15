@@ -438,16 +438,54 @@ const sessionUser=()=>{ try{return JSON.parse(sessionStorage.getItem(SESSION_KEY
 const apiUrl=()=>localStorage.getItem(API_KEY_LS)||'';
 const filingEnabled=()=>{ const u=sessionUser(); return !!(u&&u.token&&apiUrl()); };
 
+/* ---- טוקן מתיישן בלשונית בת -------------------------------------------
+   ההתחברות נשמרת ב-sessionStorage, שהוא פר-לשונית. לשונית נפתחת יורשת
+   *עותק* ברגע הפתיחה ומאותו רגע הוא מנותק: התחברות מחדש בלשונית הראשית
+   לא מגיעה לכאן, ולכן "התחברו מחדש" לא פתר כלום - התלמיד התחבר במקום אחד
+   והגיש ממקום אחר.
+   התיקון: בשרשרת ה-opener יושבת הלשונית שפתחה אותנו, באותו origin. בכישלון
+   הרשאה מושכים ממנה טוקן עדכני, מאמצים אותו, ומנסים פעם אחת נוספת.        */
+const RE_AUTH = /פג תוקף ההתחברות|נדרשת התחברות|אין הרשאה/;
+
+function tokenFromOpenerChain(current){
+  let w = window, hops = 0;
+  try{
+    while (w.opener && w.opener !== w && hops < 5){
+      w = w.opener; hops++;
+      const raw = w.sessionStorage.getItem(SESSION_KEY);
+      if (!raw) continue;
+      const u = JSON.parse(raw);
+      if (u && u.token && u.token !== current) return u;
+    }
+  }catch(e){ /* הלשונית נסגרה, או נווטה למקור אחר */ }
+  return null;
+}
+
+async function postArtifact(u, kind, filename, blob, base64){
+  const resp = await fetch(apiUrl(), { method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body: JSON.stringify({ action:'saveArtifact', token:u.token, kind, filename,
+                           mimeType:blob.type, base64 }) });
+  return resp.json();
+}
+
 async function fileToServer(kind, filename, blob){
-  const u=sessionUser();
-  const base64=await new Promise((res,rej)=>{ const r=new FileReader();
+  let u = sessionUser();
+  const base64 = await new Promise((res,rej)=>{ const r=new FileReader();
     r.onload=()=>res(String(r.result).split(',')[1]);
     r.onerror=()=>rej(new Error('קריאת הקובץ נכשלה')); r.readAsDataURL(blob); });
-  const resp=await fetch(apiUrl(),{ method:'POST',
-    headers:{'Content-Type':'text/plain;charset=utf-8'},
-    body:JSON.stringify({action:'saveArtifact', token:u.token, kind, filename,
-                         mimeType:blob.type, base64}) });
-  const d=await resp.json();
+
+  let d = await postArtifact(u, kind, filename, blob, base64);
+
+  if (!d.ok && RE_AUTH.test(d.error || '')){
+    const fresh = tokenFromOpenerChain(u && u.token);
+    if (fresh){
+      // מאמצים את ההתחברות העדכנית גם ללשונית הזו, כדי שהבאות יעבדו מיד
+      try{ sessionStorage.setItem(SESSION_KEY, JSON.stringify(fresh)); }catch(e){}
+      note('ההתחברות רועננה. מנסה שוב...');
+      d = await postArtifact(fresh, kind, filename, blob, base64);
+    }
+  }
   if(!d.ok) throw new Error(d.error||'התיוק נכשל');
   return d.result;
 }
@@ -461,7 +499,15 @@ async function exportArtifact(kind, filename, text){
   note('מתייק את '+filename+'...');
   try{ const r=await fileToServer(kind,filename,blob);
        note('תויק בתיקייה "'+r.kind+'" · '+filename); }
-  catch(e){ note('התיוק נכשל ('+e.message+'). הקובץ ירד למחשב — הראו אותו למורה.'); }
+  catch(e){
+    // ההגשה נכשלה אך הקובץ כבר ירד. מה שחשוב עכשיו הוא שהתלמיד/ה יידע/תדע
+    // בדיוק מה לעשות, ולא ינסה/תנסה שוב את אותו הדבר.
+    note(RE_AUTH.test(e.message)
+      ? 'ההתחברות פגה. הקובץ ירד למחשב ולא אבד. סגרו את הלשונית הזו, ' +
+        'התחברו מחדש בלשונית הראשית, ופתחו את המטלה שוב מתוך הכלי — ' +
+        'מה שמילאתם נשמר ויחזור מעצמו.'
+      : 'התיוק נכשל ('+e.message+'). הקובץ ירד למחשב — הראו אותו למורה.');
+  }
 }
 
 function note(msg){
