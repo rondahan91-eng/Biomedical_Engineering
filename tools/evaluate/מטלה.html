@@ -95,6 +95,11 @@
   .verdict.good{background:var(--ok-soft);border:1px solid #bbf0da;color:var(--ok);display:block}
   .verdict.bad{background:var(--err-soft);border:1px solid #fecaca;color:var(--err);display:block}
   .verdict.warn{background:var(--warn-soft);border:1px solid #fde68a;color:var(--warn);display:block}
+  /* שם שדה חסר — לחיץ, קופץ אליו */
+  .verdict .miss{display:inline-block;background:#fff;border:1px solid #fde68a;
+    border-radius:7px;padding:2px 9px;margin:3px 2px 0;cursor:pointer;
+    font-weight:600;font-size:12.5px;white-space:nowrap}
+  .verdict .miss:hover{background:var(--warn);color:#fff;border-color:var(--warn)}
 
   table.thr{width:100%;border-collapse:collapse;margin-top:6px}
   table.thr th{font-size:12px;color:var(--ink3);font-weight:700;padding:6px 7px;text-align:center;
@@ -666,15 +671,51 @@ const REQUIRED = ['who','tp','fn','fp','tn','acc','sens','spec','prec',
                   'q1','q2','q3','s0','p0','t1','s1','p1','t2','s2','p2','q4','q5',
                   'eType','eWhere','q6','claim','ev1src','ev2src','ev1','ev2','q7'];
 
+/* "חסרים 12 שדות" שולח את התלמיד/ה לסרוק חמישה חלקים ולוותר. שם לכל שדה,
+   וקפיצה לראשון החסר, הופכים את זה למשימה של שניות. */
+const FIELD_LABELS = {
+  who:'שם מלא',
+  tp:'חלק א׳ · TP', fn:'חלק א׳ · FN', fp:'חלק א׳ · FP', tn:'חלק א׳ · TN',
+  acc:'חלק ב׳ · דיוק כולל', sens:'חלק ב׳ · רגישות',
+  spec:'חלק ב׳ · ספציפיות', prec:'חלק ב׳ · דיוק חיובי',
+  q1:'חלק ב׳ · שאלה 1', q2:'חלק ב׳ · שאלה 2', q3:'חלק ב׳ · שאלה 3',
+  s0:'חלק ג׳ · רגישות בסף 0.50', p0:'חלק ג׳ · ספציפיות בסף 0.50',
+  t1:'חלק ג׳ · הסף הנמוך', s1:'חלק ג׳ · רגישות בסף הנמוך',
+  p1:'חלק ג׳ · ספציפיות בסף הנמוך',
+  t2:'חלק ג׳ · הסף הגבוה', s2:'חלק ג׳ · רגישות בסף הגבוה',
+  p2:'חלק ג׳ · ספציפיות בסף הגבוה',
+  q4:'חלק ג׳ · שאלה 4', q5:'חלק ג׳ · שאלה 5',
+  eType:'חלק ד׳ · סוג הטעות', eWhere:'חלק ד׳ · איפה המודל הסתכל',
+  q6:'חלק ד׳ · שאלה 6',
+  claim:'חלק ה׳ · הטענה', ev1src:'חלק ה׳ · ראיה 1 — מאיזה רכיב',
+  ev2src:'חלק ה׳ · ראיה 2 — מאיזה רכיב',
+  ev1:'חלק ה׳ · ראיה 1 — מה ראיתם', ev2:'חלק ה׳ · ראיה 2 — מה ראיתם',
+  q7:'חלק ה׳ · שאלה 7',
+};
+
+function jumpTo(id){
+  const el = $(id);
+  if (!el) return;
+  el.scrollIntoView({ block:'center', behavior:'smooth' });
+  el.focus({ preventScroll:true });
+  el.style.transition = 'box-shadow .2s';
+  el.style.boxShadow = '0 0 0 3px rgba(220,38,38,.35)';
+  setTimeout(()=>{ el.style.boxShadow = ''; }, 1800);
+}
+
 function checkComplete(){
   const missing = REQUIRED.filter(id => String($(id).value).trim() === '');
   const sameSrc = $('ev1src').value && $('ev1src').value === $('ev2src').value;
   const box = $('subChk'), btn = $('save');
   if (missing.length){
     box.className = 'verdict warn';
-    box.textContent = missing.length === 1
-      ? 'חסר שדה אחד. מלאו אותו וההגשה תיפתח.'
-      : 'חסרים ' + missing.length + ' שדות. מלאו אותם וההגשה תיפתח.';
+    const names = missing.map(id => '<span class="miss" data-go="' + id + '">' +
+      (FIELD_LABELS[id] || id) + '</span>').join(' ');
+    box.innerHTML = (missing.length === 1 ? '<b>חסר שדה אחד:</b> ' :
+                     '<b>חסרים ' + missing.length + ' שדות:</b> ') + names +
+      '<br><span style="font-weight:400">לחצו על שם כדי לקפוץ אליו.</span>';
+    box.querySelectorAll('.miss').forEach(el =>
+      el.addEventListener('click', () => jumpTo(el.dataset.go)));
     btn.disabled = true;
   } else if (sameSrc){
     box.className = 'verdict warn';
