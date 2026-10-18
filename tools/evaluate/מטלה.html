@@ -417,6 +417,7 @@
       <li>לחצו "שמירה והגשה".</li>
       <li>אם מופיעה הודעה שהתיוק נכשל — שמרו את הקובץ שירד והראו אותו למורה.</li>
     </ol>
+    <div class="verdict" id="filingChk"></div>
     <div class="verdict" id="subChk"></div>
     <div class="btnrow">
       <button id="save" disabled>שמירה והגשה</button>
@@ -435,8 +436,47 @@ const SESSION_KEY = 'ai-mentor-biorefua-session';
 /* ---- תיוק אוטומטי — זהה לשאר הכלים (מקור: tools/_filing.js) ---- */
 const API_KEY_LS='ai-mentor-api-url';
 const sessionUser=()=>{ try{return JSON.parse(sessionStorage.getItem(SESSION_KEY)||'null');}catch{return null;} };
-const apiUrl=()=>localStorage.getItem(API_KEY_LS)||'';
+/* כתובת השרת נכתבת ל-localStorage רק ע"י js/config.js של הדף הראשי. דף
+   שנפתח בלי שהדף הראשי נטען אי פעם בדפדפן הזה לא ימצא אותה - ואז ההגשה
+   יורדת למחשב בשקט ולא מגיעה לשרת. לכן מחפשים אותה גם בשרשרת ה-opener,
+   שבה יושבות הלשוניות שפתחו אותנו. */
+function apiUrl(){
+  const own = localStorage.getItem(API_KEY_LS) || '';
+  if (own) return own;
+  let w = window, hops = 0;
+  try{
+    while (w.opener && w.opener !== w && hops < 5){
+      w = w.opener; hops++;
+      const u = w.localStorage.getItem(API_KEY_LS);
+      if (u) { try{ localStorage.setItem(API_KEY_LS, u); }catch(e){} return u; }
+    }
+  }catch(e){}
+  return '';
+}
 const filingEnabled=()=>{ const u=sessionUser(); return !!(u&&u.token&&apiUrl()); };
+
+/**
+ * מצב ההגשה, מוצג מראש ולא רק בלחיצה.
+ * תלמיד/ה שכתב/ה 31 תשובות ורק אז גילה/תה שהחיבור חסר - זו חוויה שאסור
+ * שתקרה, וזה גם מה שהסתיר מאיתנו למה אין הגשות בשרת.
+ */
+function renderFilingStatus(){
+  const box = document.getElementById('filingChk');
+  if (!box) return;
+  const u = sessionUser(), api = apiUrl();
+  if (u && u.token && api){
+    box.className = 'verdict good';
+    box.textContent = '✓ מחובר/ת כ' + (u.displayName ? '-' + u.displayName : 'תלמיד/ה') +
+      '. ההגשה תתויק אצל המורה.';
+  } else {
+    box.className = 'verdict bad';
+    box.innerHTML = '<b>אזהרה: ההגשה לא תגיע למורה.</b><br>' +
+      (!api ? 'הדף לא מוצא את כתובת השרת. ' : 'לא מזוהה התחברות. ') +
+      'כנראה פתחתם את המטלה מקישור ישיר או מסימנייה.<br>' +
+      'סגרו את הלשונית הזו, היכנסו למערכת, פתחו "הערכת מודל" מהמסילה, ומשם את המטלה. ' +
+      'מה שמילאתם כאן נשמר ויחזור מעצמו.';
+  }
+}
 
 /* ---- טוקן מתיישן בלשונית בת -------------------------------------------
    ההתחברות נשמרת ב-sessionStorage, שהוא פר-לשונית. לשונית נפתחת יורשת
@@ -815,7 +855,7 @@ function initBackLink(){
 }
 
 live = readLive();
-load(); refresh(); renderLive(); initBackLink();
+load(); refresh(); renderLive(); initBackLink(); renderFilingStatus();
 </script>
 </body>
 </html>

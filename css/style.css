@@ -210,6 +210,8 @@ label { display: block; font-size: 12.5px; font-weight: 600; color: var(--ink-2)
   display: none; color: var(--err); background: var(--err-soft);
   border: 1px solid #fecaca; border-radius: var(--r-sm);
   padding: 9px 12px; font-size: 13px; margin-bottom: 15px;
+  /* הודעת שגיאת רשת היא רשימת צעדים; בלי זה היא נדחסת לפסקה אחת */
+  white-space: pre-line; line-height: 1.7; text-align: start;
 }
 .login-error.show { display: block; }
 .auth-hint {

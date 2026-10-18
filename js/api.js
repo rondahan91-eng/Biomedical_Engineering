@@ -26,12 +26,27 @@ function handleExpiredSession() {
 }
 
 // ---------------------------------------------------------------- תקשורת אמיתית
+/**
+ * כשה-fetch עצמו נכשל הדפדפן זורק TypeError עם "Failed to fetch" - הודעה
+ * שלא אומרת לתלמיד/ה דבר, ושלחה אותנו לחפש באגים בשרת כשהשרת היה בריא.
+ * הכישלון הזה הוא תמיד שכבת הרשת, ובכיתה הוא כמעט תמיד אחד משניים.
+ */
+const NETWORK_HELP =
+  'לא הצלחנו להגיע לשרת. זו אינה שגיאה בשם המשתמש או בסיסמה.\n' +
+  '1. לחצו Ctrl+F5 — לרוב מדובר בגרסה ישנה ששמורה בדפדפן.\n' +
+  '2. אם זה לא עזר, הרשת כאן חוסמת את השרת. נסו רשת אחרת או חיבור מהנייד.';
+
 async function callRemote(action, payload) {
-  const res = await fetch(CONFIG.API_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ action, payload }),
-  });
+  let res;
+  try {
+    res = await fetch(CONFIG.API_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action, payload }),
+    });
+  } catch (err) {
+    throw new Error(NETWORK_HELP);
+  }
   if (!res.ok) throw new Error('שגיאת רשת מול השרת (' + res.status + ')');
   const data = await res.json();
   if (!data.ok) {
