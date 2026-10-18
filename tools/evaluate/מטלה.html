@@ -707,25 +707,39 @@ function checkComplete(){
   const missing = REQUIRED.filter(id => String($(id).value).trim() === '');
   const sameSrc = $('ev1src').value && $('ev1src').value === $('ev2src').value;
   const box = $('subChk'), btn = $('save');
-  if (missing.length){
-    box.className = 'verdict warn';
+  /* הגשה חלקית מותרת במכוון.
+     כשהכפתור היה נעול עד למילוי מלא, תלמיד/ה שעשה/תה 80% ייצר/ה אפס -
+     והמורה לא ראה/תה דבר. עדיף 80% מוגשים ומסומנים מאשר כלום. */
+  const noName = String($('who').value).trim() === '';
+  btn.disabled = noName;
+
+  if (noName){
+    box.className = 'verdict bad';
+    box.innerHTML = '<b>חסר השם שלכם.</b> בלעדיו אי אפשר לדעת של מי ההגשה. ' +
+      '<span class="miss" data-go="who">מלאו שם מלא</span>';
+  } else if (missing.length){
     const names = missing.map(id => '<span class="miss" data-go="' + id + '">' +
       (FIELD_LABELS[id] || id) + '</span>').join(' ');
-    box.innerHTML = (missing.length === 1 ? '<b>חסר שדה אחד:</b> ' :
-                     '<b>חסרים ' + missing.length + ' שדות:</b> ') + names +
+    box.className = 'verdict warn';
+    box.innerHTML = '<b>אפשר להגיש כך</b> — אבל ' +
+      (missing.length === 1 ? 'שדה אחד ריק' : missing.length + ' שדות ריקים') +
+      ', והמורה יראה בדיוק מה דילגתם עליו:<br>' + names +
       '<br><span style="font-weight:400">לחצו על שם כדי לקפוץ אליו.</span>';
-    box.querySelectorAll('.miss').forEach(el =>
-      el.addEventListener('click', () => jumpTo(el.dataset.go)));
-    btn.disabled = true;
   } else if (sameSrc){
     box.className = 'verdict warn';
-    box.textContent = 'שתי הראיות עדיין מאותו רכיב — תקנו את חלק ה׳ לפני ההגשה.';
-    btn.disabled = true;
+    box.innerHTML = '<b>אפשר להגיש</b> — אבל שתי הראיות מאותו רכיב. ' +
+      'שני מספרים מאותו מקום אומרים את אותו דבר פעמיים. שווה לתקן את חלק ה׳.';
   } else {
     box.className = 'verdict good';
     box.textContent = '✓ הכול מלא. אפשר להגיש.';
-    btn.disabled = false;
   }
+  box.querySelectorAll('.miss').forEach(el =>
+    el.addEventListener('click', () => jumpTo(el.dataset.go)));
+}
+
+/** רשימת מה שלא מולא, לצירוף לדוח כדי שהמורה יראה זאת מיד. */
+function missingFields(){
+  return REQUIRED.filter(id => String($(id).value).trim() === '');
 }
 
 /* ---- שמירה מקומית ---- */
@@ -758,6 +772,14 @@ function report(){
   line('שם', $('who').value);
   line('קבוצה', $('grp').value);
   line('תאריך', new Date().toLocaleDateString('he-IL'));
+
+  // שורת שלמות בראש הדוח: המורה רואה מיד אם ההגשה חלקית, בלי לקרוא הכול
+  const miss = missingFields();
+  line('שלמות', (REQUIRED.length - miss.length) + ' מתוך ' + REQUIRED.length + ' שדות חובה' +
+       (miss.length ? '  ← הגשה חלקית' : '  ✓ מלאה'));
+  if (miss.length){
+    L.push('לא מולאו: ' + miss.map(id => FIELD_LABELS[id] || id).join('; '));
+  }
   L.push('');
   L.push('— חלק א׳: ארבעת התאים —');
   line('TP (חריג, זוהה נכון)', $('tp').value);
@@ -807,6 +829,11 @@ function report(){
 const slug = s => (s || '').trim().replace(/[\\/:*?"<>|]/g, '-').replace(/\s+/g, '_');
 
 $('save').addEventListener('click', () => {
+  // הגשה חלקית מותרת, אבל לא בהיסח הדעת
+  const miss = missingFields();
+  if (miss.length && !confirm(
+        (miss.length === 1 ? 'שדה אחד עדיין ריק' : miss.length + ' שדות עדיין ריקים') +
+        '.\nאפשר להגיש כך, והמורה יראה מה דילגתם עליו.\n\nלהגיש עכשיו?')) return;
   const name = 'מטלת_כלי_האבחון_' + (slug($('who').value) || 'תלמיד') + '.txt';
   exportArtifact('notebook', name, report());
 });
