@@ -438,133 +438,254 @@ const $ = id => document.getElementById(id);
 const LS = 'ai-mentor-eval-assignment';
 const SESSION_KEY = 'ai-mentor-biorefua-session';
 
-/* ---- תיוק אוטומטי — זהה לשאר הכלים (מקור: tools/_filing.js) ---- */
-const API_KEY_LS='ai-mentor-api-url';
-const sessionUser=()=>{ try{return JSON.parse(sessionStorage.getItem(SESSION_KEY)||'null');}catch{return null;} };
-/* כתובת השרת נכתבת ל-localStorage רק ע"י js/config.js של הדף הראשי. דף
-   שנפתח בלי שהדף הראשי נטען אי פעם בדפדפן הזה לא ימצא אותה - ואז ההגשה
-   יורדת למחשב בשקט ולא מגיעה לשרת. לכן מחפשים אותה גם בשרשרת ה-opener,
-   שבה יושבות הלשוניות שפתחו אותנו. */
-function apiUrl(){
+/* ==========================================================================
+   הגשה שלא הולכת לאיבוד
+   --------------------------------------------------------------------------
+   שלושה דברים נכשלו כאן בעבר, וכולם בשקט: לא נמצאה כתובת שרת, לא נמצאה
+   התחברות, ופג תוקף הטוקן באמצע העבודה. בכל אחד מהם הקובץ ירד למחשב,
+   הופיעה הודעה קטנה שנעלמה, והתלמיד/ה המשיך/ה בהנחה שהגיש/ה.
+
+   המבנה כאן:
+     - כתובת השרת מגיעה מ-js/config.js עצמו, לא מחיפוש ב-localStorage.
+     - כל הגשה נכנסת *קודם* לתור מקומי, ורק אז מנסים לשלוח.
+     - כשלון אינו סוף: הפריט נשאר בתור ונשלח שוב בטעינה, בחזרה למסך,
+       ובניסיון תקופתי כל עוד הדף פתוח.
+     - הפס בראש כרטיס ההגשה מספר את האמת בכל רגע, ולא נעלם מעצמו.
+   ========================================================================== */
+const API_KEY_LS = 'ai-mentor-api-url';
+const QUEUE_KEY  = 'ai-mentor-submit-queue';
+const RE_AUTH    = /פג תוקף ההתחברות|נדרשת התחברות|אין הרשאה/;
+
+const sessionUser = () => {
+  try { return JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null'); }
+  catch { return null; }
+};
+
+/* ---- כתובת השרת ----
+   מיובאת מ-js/config.js, שהוא מקור האמת היחיד שלה. אותו origin, ולכן
+   הייבוא תמיד מצליח. localStorage ושרשרת ה-opener נשארים כגיבוי לרגעים
+   שלפני שהייבוא חוזר. */
+let CONFIG_API = '';
+
+function apiUrl() {
+  if (CONFIG_API) return CONFIG_API;
   const own = localStorage.getItem(API_KEY_LS) || '';
   if (own) return own;
   let w = window, hops = 0;
-  try{
-    while (w.opener && w.opener !== w && hops < 5){
+  try {
+    while (w.opener && w.opener !== w && hops < 5) {
       w = w.opener; hops++;
       const u = w.localStorage.getItem(API_KEY_LS);
-      if (u) { try{ localStorage.setItem(API_KEY_LS, u); }catch(e){} return u; }
+      if (u) return u;
     }
-  }catch(e){}
+  } catch (e) {}
   return '';
 }
-const filingEnabled=()=>{ const u=sessionUser(); return !!(u&&u.token&&apiUrl()); };
 
-/**
- * מצב ההגשה, מוצג מראש ולא רק בלחיצה.
- * תלמיד/ה שכתב/ה 31 תשובות ורק אז גילה/תה שהחיבור חסר - זו חוויה שאסור
- * שתקרה, וזה גם מה שהסתיר מאיתנו למה אין הגשות בשרת.
- */
-function renderFilingStatus(){
-  const box = document.getElementById('filingChk');
-  if (!box) return;
-  const u = sessionUser(), api = apiUrl();
-  if (u && u.token && api){
-    box.className = 'verdict good';
-    box.textContent = '✓ מחובר/ת כ' + (u.displayName ? '-' + u.displayName : 'תלמיד/ה') +
-      '. ההגשה תתויק אצל המורה.';
-  } else {
-    box.className = 'verdict bad';
-    box.innerHTML = '<b>אזהרה: ההגשה לא תגיע למורה.</b><br>' +
-      (!api ? 'הדף לא מוצא את כתובת השרת. ' : 'לא מזוהה התחברות. ') +
-      'כנראה פתחתם את המטלה מקישור ישיר או מסימנייה.<br>' +
-      'סגרו את הלשונית הזו, היכנסו למערכת, פתחו "הערכת מודל" מהמסילה, ומשם את המטלה. ' +
-      'מה שמילאתם כאן נשמר ויחזור מעצמו.';
-  }
+async function loadApiUrl() {
+  try {
+    const m = await import('../../js/config.js');
+    CONFIG_API = (m.CONFIG && m.CONFIG.API_URL) || '';
+    if (CONFIG_API) { try { localStorage.setItem(API_KEY_LS, CONFIG_API); } catch (e) {} }
+  } catch (e) { /* נשארים עם הגיבויים */ }
+  renderFilingStatus();
+  flushQueue();
 }
 
-/* ---- טוקן מתיישן בלשונית בת -------------------------------------------
-   ההתחברות נשמרת ב-sessionStorage, שהוא פר-לשונית. לשונית נפתחת יורשת
-   *עותק* ברגע הפתיחה ומאותו רגע הוא מנותק: התחברות מחדש בלשונית הראשית
-   לא מגיעה לכאן, ולכן "התחברו מחדש" לא פתר כלום - התלמיד התחבר במקום אחד
-   והגיש ממקום אחר.
-   התיקון: בשרשרת ה-opener יושבת הלשונית שפתחה אותנו, באותו origin. בכישלון
-   הרשאה מושכים ממנה טוקן עדכני, מאמצים אותו, ומנסים פעם אחת נוספת.        */
-const RE_AUTH = /פג תוקף ההתחברות|נדרשת התחברות|אין הרשאה/;
-
-function tokenFromOpenerChain(current){
+/* ---- התחברות ----
+   sessionStorage הוא פר-לשונית ולשונית בת מקבלת עותק מנותק. אם ההתחברות
+   כאן ישנה או חסרה, הלשונית שפתחה אותנו מחזיקה את העדכנית. */
+function tokenFromOpenerChain(current) {
   let w = window, hops = 0;
-  try{
-    while (w.opener && w.opener !== w && hops < 5){
+  try {
+    while (w.opener && w.opener !== w && hops < 5) {
       w = w.opener; hops++;
       const raw = w.sessionStorage.getItem(SESSION_KEY);
       if (!raw) continue;
       const u = JSON.parse(raw);
       if (u && u.token && u.token !== current) return u;
     }
-  }catch(e){ /* הלשונית נסגרה, או נווטה למקור אחר */ }
+  } catch (e) {}
   return null;
 }
 
-async function postArtifact(u, kind, filename, blob, base64){
-  const resp = await fetch(apiUrl(), { method:'POST',
-    headers:{'Content-Type':'text/plain;charset=utf-8'},
-    body: JSON.stringify({ action:'saveArtifact', token:u.token, kind, filename,
-                           mimeType:blob.type, base64 }) });
+/* העותק המשותף שהדף הראשי כותב בכניסה. זה מה שמאפשר להתחבר בלשונית אחת
+   ולהגיש מלשונית אחרת, גם אם זו נפתחה לפני ההתחברות או ישירות מסימנייה. */
+const SESSION_MIRROR = 'ai-mentor-session-mirror';
+const MIRROR_TTL = 24 * 60 * 60 * 1000;      // תוקף הטוקן בשרת
+
+function sessionFromMirror() {
+  try {
+    const u = JSON.parse(localStorage.getItem(SESSION_MIRROR) || 'null');
+    if (!u || !u.token) return null;
+    if (u.mirroredAt && Date.now() - u.mirroredAt > MIRROR_TTL) return null;
+    return u;
+  } catch { return null; }
+}
+
+function currentUser() {
+  const mine = sessionUser();
+  if (mine && mine.token) return mine;
+  // הלשונית שפתחה אותנו מחזיקה את ההתחברות הטרייה ביותר
+  const borrowed = tokenFromOpenerChain(null) || sessionFromMirror();
+  if (borrowed) {
+    try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(borrowed)); } catch (e) {}
+    return borrowed;
+  }
+  return null;
+}
+
+/* ---- התור ---- */
+const loadQueue = () => {
+  try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]'); } catch { return []; }
+};
+const saveQueue = q => {
+  try { localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); } catch (e) {}
+};
+
+function enqueue(item) {
+  const q = loadQueue();
+  q.push(item);
+  saveQueue(q);
+}
+
+let flushing = false;
+
+/**
+ * מנסה לשלוח את כל מה שממתין. בטוח להרצה חוזרת: פריט נמחק מהתור רק
+ * אחרי שהשרת אישר אותו.
+ */
+async function flushQueue() {
+  if (flushing) return;
+  const q = loadQueue();
+  if (!q.length) { renderFilingStatus(); return; }
+
+  const api = apiUrl();
+  const u = currentUser();
+  if (!api || !u) { renderFilingStatus(); return; }   // אין למי לשלוח - נשאר בתור
+
+  flushing = true;
+  try {
+    for (const item of q.slice()) {
+      let d;
+      try {
+        d = await postArtifact(u.token, item);
+      } catch (netErr) {
+        break;                       // רשת נפלה - שאר התור ימתין לניסיון הבא
+      }
+      if (!d.ok && RE_AUTH.test(d.error || '')) {
+        const fresh = tokenFromOpenerChain(u.token);
+        if (!fresh) break;           // אין טוקן טרי - ממתינים להתחברות
+        try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(fresh)); } catch (e) {}
+        try { d = await postArtifact(fresh.token, item); } catch (e2) { break; }
+      }
+      if (!d.ok) { item.lastError = d.error || 'שגיאה לא ידועה'; saveQueue(loadQueue()); break; }
+
+      // נקלט. מסירים מהתור ורושמים אישור שנשאר על המסך.
+      const rest = loadQueue().filter(x => x.id !== item.id);
+      saveQueue(rest);
+      lastConfirmed = { filename: item.filename, kind: d.result && d.result.kind, at: Date.now() };
+      try { localStorage.setItem('ai-mentor-last-confirmed', JSON.stringify(lastConfirmed)); } catch (e) {}
+    }
+  } finally {
+    flushing = false;
+    renderFilingStatus();
+  }
+}
+
+async function postArtifact(token, item) {
+  const resp = await fetch(apiUrl(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({
+      action: 'saveArtifact', token: token, kind: item.kind,
+      filename: item.filename, mimeType: item.mimeType, base64: item.base64,
+    }),
+  });
   return resp.json();
 }
 
-async function fileToServer(kind, filename, blob){
-  let u = sessionUser();
-  const base64 = await new Promise((res,rej)=>{ const r=new FileReader();
-    r.onload=()=>res(String(r.result).split(',')[1]);
-    r.onerror=()=>rej(new Error('קריאת הקובץ נכשלה')); r.readAsDataURL(blob); });
+let lastConfirmed = null;
+try { lastConfirmed = JSON.parse(localStorage.getItem('ai-mentor-last-confirmed') || 'null'); }
+catch { lastConfirmed = null; }
 
-  let d = await postArtifact(u, kind, filename, blob, base64);
+/* ---- הפס שמספר את האמת ---- */
+function renderFilingStatus() {
+  const box = document.getElementById('filingChk');
+  if (!box) return;
+  const u = currentUser(), api = apiUrl(), q = loadQueue();
 
-  if (!d.ok && RE_AUTH.test(d.error || '')){
-    const fresh = tokenFromOpenerChain(u && u.token);
-    if (fresh){
-      // מאמצים את ההתחברות העדכנית גם ללשונית הזו, כדי שהבאות יעבדו מיד
-      try{ sessionStorage.setItem(SESSION_KEY, JSON.stringify(fresh)); }catch(e){}
-      note('ההתחברות רועננה. מנסה שוב...');
-      d = await postArtifact(fresh, kind, filename, blob, base64);
-    }
+  if (q.length) {
+    const needsLogin = !u;
+    box.className = 'verdict warn';
+    box.innerHTML = '<b>⏳ ההגשה שלך שמורה וממתינה לשליחה.</b><br>' +
+      (needsLogin
+        ? 'כדי לשלוח אותה צריך להיות מחוברים. היכנסו למערכת באותו דפדפן — ' +
+          'היא תישלח לבד ברגע שתחזרו לכאן.<br>' +
+          '<a href="../../" target="_blank" rel="opener" style="color:inherit;font-weight:700">' +
+          'פתיחת מסך הכניסה ↗</a>'
+        : !api
+        ? 'מחפש את כתובת השרת. אם זה לא נפתר תוך כמה שניות — רעננו את הדף.'
+        : 'מנסה לשלוח שוב. אפשר להשאיר את הדף פתוח.') +
+      '<br><span style="font-weight:400">הקובץ כבר ירד למחשב שלכם, ושום דבר לא אבד.</span>';
+    return;
   }
-  if(!d.ok) throw new Error(d.error||'התיוק נכשל');
-  return d.result;
-}
 
-async function exportArtifact(kind, filename, text){
-  const blob=new Blob(['﻿'+text],{type:'text/plain;charset=utf-8'});
-  const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob); a.download=filename; a.click();
-  setTimeout(()=>URL.revokeObjectURL(a.href),4000);
-  if(!filingEnabled()){ note('הקובץ ירד למחשב. אין תיוק — לא נכנסתם דרך המערכת.'); return; }
-  note('מתייק את '+filename+'...');
-  try{ const r=await fileToServer(kind,filename,blob);
-       note('תויק בתיקייה "'+r.kind+'" · '+filename); }
-  catch(e){
-    // ההגשה נכשלה אך הקובץ כבר ירד. מה שחשוב עכשיו הוא שהתלמיד/ה יידע/תדע
-    // בדיוק מה לעשות, ולא ינסה/תנסה שוב את אותו הדבר.
-    note(RE_AUTH.test(e.message)
-      ? 'ההתחברות פגה. הקובץ ירד למחשב ולא אבד. סגרו את הלשונית הזו, ' +
-        'התחברו מחדש בלשונית הראשית, ופתחו את המטלה שוב מתוך הכלי — ' +
-        'מה שמילאתם נשמר ויחזור מעצמו.'
-      : 'התיוק נכשל ('+e.message+'). הקובץ ירד למחשב — הראו אותו למורה.');
+  if (lastConfirmed) {
+    box.className = 'verdict good';
+    box.innerHTML = '<b>✓ ההגשה נקלטה אצל המורה.</b> ' +
+      new Date(lastConfirmed.at).toLocaleString('he-IL',
+        { day: 'numeric', month: 'numeric', hour: '2-digit', minute: '2-digit' }) +
+      (lastConfirmed.kind ? ' · תיקייה "' + lastConfirmed.kind + '"' : '');
+    return;
+  }
+
+  if (u && api) {
+    box.className = 'verdict good';
+    box.textContent = '✓ מחובר/ת כ' + (u.displayName ? '-' + u.displayName : 'תלמיד/ה') +
+      '. ההגשה תתויק אצל המורה.';
+  } else {
+    box.className = 'verdict warn';
+    box.innerHTML = '<b>עדיין לא מזוהה התחברות.</b> אפשר למלא בשקט — ' +
+      'מה שתכתבו נשמר, וההגשה תמתין בתור עד שתתחברו. ' +
+      'עדיף להיכנס עכשיו: <a href="../../" target="_blank" rel="opener" ' +
+      'style="color:inherit;font-weight:700">מסך הכניסה ↗</a>';
   }
 }
 
-function note(msg){
-  let el=$('filingNote');
-  if(!el){ el=document.createElement('div'); el.id='filingNote';
-    el.style.cssText='position:fixed;inset-block-end:18px;inset-inline-start:18px;z-index:99;'+
-      'background:#0d1f2b;color:#fff;font-size:12.5px;padding:9px 15px;border-radius:10px;'+
-      'box-shadow:0 4px 16px rgba(0,0,0,.22);max-width:min(420px,80vw)';
-    document.body.appendChild(el); }
-  el.textContent=msg; el.style.display='block';
-  clearTimeout(el._t); el._t=setTimeout(()=>el.style.display='none', 7000);
+/* ---- ההגשה ---- */
+function stamp() {
+  const d = new Date(), p = n => String(n).padStart(2, '0');
+  return p(d.getDate()) + '-' + p(d.getMonth() + 1) + '_' + p(d.getHours()) + p(d.getMinutes());
 }
+
+async function exportArtifact(kind, filename, text) {
+  // 1. הורדה למחשב - תמיד, ולפני כל דבר אחר
+  const blob = new Blob(['﻿' + text], { type: 'text/plain;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+
+  // 2. לתור. גם אם אין כרגע חיבור - הוא יישלח כשיהיה.
+  const base64 = await new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(String(r.result).split(',')[1]);
+    r.onerror = () => rej(new Error('קריאת הקובץ נכשלה'));
+    r.readAsDataURL(blob);
+  });
+  enqueue({ id: 'q' + Date.now() + Math.random().toString(36).slice(2, 7),
+            kind, filename, mimeType: 'text/plain', base64, at: Date.now() });
+  renderFilingStatus();
+
+  // 3. ניסיון מיידי
+  await flushQueue();
+}
+
+/* ---- טריגרים לניסיון חוזר ---- */
+window.addEventListener('focus', flushQueue);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) flushQueue(); });
+window.addEventListener('online', flushQueue);
+setInterval(() => { if (loadQueue().length) flushQueue(); }, 20000);
 
 /* ---- שדות ---- */
 const CELLS = ['tp','fn','fp','tn'];
@@ -834,7 +955,8 @@ $('save').addEventListener('click', () => {
   if (miss.length && !confirm(
         (miss.length === 1 ? 'שדה אחד עדיין ריק' : miss.length + ' שדות עדיין ריקים') +
         '.\nאפשר להגיש כך, והמורה יראה מה דילגתם עליו.\n\nלהגיש עכשיו?')) return;
-  const name = 'מטלת_כלי_האבחון_' + (slug($('who').value) || 'תלמיד') + '.txt';
+  const name = 'מטלת_כלי_האבחון_' + (slug($('who').value) || 'תלמיד') +
+                 '_' + stamp() + '.txt';
   exportArtifact('notebook', name, report());
 });
 
@@ -924,6 +1046,8 @@ function initBackLink(){
 
 live = readLive();
 load(); refresh(); renderLive(); initBackLink(); renderFilingStatus();
+loadApiUrl();          // מייבא את כתובת השרת ואז מנסה לשלוח מה שממתין
+flushQueue();
 </script>
 </body>
 </html>

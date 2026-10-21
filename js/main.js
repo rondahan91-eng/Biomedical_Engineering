@@ -13,8 +13,28 @@ function loadSession() {
   try { return JSON.parse(sessionStorage.getItem(CONFIG.SESSION_KEY) || 'null'); }
   catch { return null; }
 }
-function saveSession(user) { sessionStorage.setItem(CONFIG.SESSION_KEY, JSON.stringify(user)); }
-function clearSession() { sessionStorage.removeItem(CONFIG.SESSION_KEY); }
+/**
+ * ההתחברות נשמרת ב-sessionStorage, שהוא פר-לשונית: לשונית שנפתחת מכאן
+ * מקבלת *עותק* ומאותו רגע הוא מנותק. לכן התחברות מחדש כאן לא הגיעה לדף
+ * המטלה, והוא נכשל בתיוק גם כשהמשתמש/ת בדיוק התחבר/ה.
+ *
+ * העותק ב-localStorage משותף לכל הלשוניות ופותר את זה. הוא נמחק ביציאה,
+ * ונושא חותמת זמן כדי שהכלים יתעלמו ממנו אחרי שפג תוקפו בשרת (24 שעות).
+ */
+const SESSION_MIRROR = 'ai-mentor-session-mirror';
+
+function saveSession(user) {
+  sessionStorage.setItem(CONFIG.SESSION_KEY, JSON.stringify(user));
+  try {
+    localStorage.setItem(SESSION_MIRROR, JSON.stringify(
+      Object.assign({}, user, { mirroredAt: Date.now() })));
+  } catch {}
+}
+
+function clearSession() {
+  sessionStorage.removeItem(CONFIG.SESSION_KEY);
+  try { localStorage.removeItem(SESSION_MIRROR); } catch {}
+}
 
 function route() {
   const session = loadSession();
