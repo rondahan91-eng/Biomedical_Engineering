@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>דמו פריסה · AI Mentor</title>
+<style>
+  :root{
+    --bg:#eef3f7; --surface:#fff; --surface-2:#f6f9fb; --surface-3:#eaf1f6;
+    --line:#e0e9f0; --line-2:#ccdae5;
+    --ink:#0d1f2b; --ink-2:#4a6478; --ink-3:#8aa2b3;
+    --brand:#0891b2; --brand-2:#0e7490; --brand-soft:#e6fafd; --accent:#14b8a6;
+    --ok:#059669; --ok-soft:#e9fbf3; --warn:#b45309; --warn-soft:#fff8ec;
+    --err:#dc2626; --err-soft:#fef2f2;
+    --r-sm:10px; --r-md:16px; --r-lg:22px;
+    --sh-1:0 1px 2px rgba(13,31,43,.05); --sh-2:0 4px 16px rgba(13,31,43,.07);
+    --font:'Segoe UI','Assistant','Rubik',Arial,sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#dde6ee;color:var(--ink);font:15px/1.6 var(--font)}
+
+  /* ---------- מעטפת הדמו ---------- */
+  .demo-bar{position:sticky;top:0;z-index:50;background:#0d1f2b;color:#fff;
+    padding:10px 18px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;
+    box-shadow:0 2px 14px rgba(0,0,0,.25)}
+  .demo-bar b{font-size:14px;letter-spacing:.2px}
+  .demo-bar .sp{margin-inline-start:auto}
+  .seg{display:flex;background:rgba(255,255,255,.1);border-radius:9px;padding:3px;gap:2px}
+  .seg button{font:inherit;font-size:12.5px;border:0;background:transparent;color:#cfe0ea;
+    padding:6px 13px;border-radius:7px;cursor:pointer;white-space:nowrap}
+  .seg button.on{background:#fff;color:#0d1f2b;font-weight:700}
+  .hint{font-size:12px;color:#9fb6c4}
+
+  .stage{padding:22px;display:flex;justify-content:center}
+  .frame{width:100%;max-width:1100px}
+  .caption{font-size:13px;color:#4a6478;margin:0 0 10px;text-align:center}
+  .screen{background:var(--bg);border:1px solid #c4d4e0;border-radius:var(--r-md);
+    overflow:hidden;box-shadow:var(--sh-2);height:620px;display:flex;flex-direction:column}
+  .screen.laptop{height:510px}
+  .foldline{position:relative}
+  .foldline::after{content:'⟵ קו הקפל במסך 768px';position:absolute;inset-inline:0;
+    border-top:2px dashed var(--err);color:var(--err);font-size:11px;font-weight:700;
+    padding:3px 8px;background:rgba(255,255,255,.9);pointer-events:none}
+
+  /* ---------- הפס העליון החדש ---------- */
+  .topbar{display:flex;align-items:center;gap:12px;padding:9px 16px;background:#fff;
+    border-bottom:1px solid var(--line);flex-shrink:0}
+  .logo{width:26px;height:26px;border-radius:8px;background:var(--brand-2);color:#fff;
+    display:grid;place-items:center;font-size:13px;font-weight:800}
+  .wk{font-size:12.5px;color:var(--ink-2)}
+  .wk b{color:var(--ink)}
+  .tools-chips{margin-inline-start:auto;display:flex;gap:7px}
+  .chip{font-size:12.5px;padding:6px 13px;border-radius:999px;border:1px solid var(--line-2);
+    background:var(--surface-2);color:var(--ink-2);cursor:pointer;white-space:nowrap}
+  .chip.key{background:var(--brand-soft);border-color:#bae9f2;color:var(--brand-2);font-weight:700}
+  .chip.lock{opacity:.45;cursor:default}
+
+  .body{display:flex;flex:1;min-height:0}
+  .chat{flex:1;padding:20px;display:flex;flex-direction:column;gap:12px;overflow:hidden}
+  .bub{background:#fff;border:1px solid var(--line);border-radius:14px;padding:11px 14px;
+    font-size:13.5px;max-width:78%;box-shadow:var(--sh-1)}
+  .bub.me{background:var(--brand-2);color:#fff;border-color:var(--brand-2);align-self:flex-start}
+  .composer{margin-top:auto;display:flex;gap:8px}
+  .composer input{flex:1;font:inherit;font-size:13px;padding:10px 13px;border-radius:11px;
+    border:1px solid var(--line-2);background:#fff}
+  .composer button{font:inherit;font-size:13px;font-weight:700;border:0;border-radius:11px;
+    background:var(--brand-2);color:#fff;padding:0 20px;cursor:pointer}
+
+  /* ---------- המסילה ---------- */
+  .rail{width:290px;flex-shrink:0;background:#fff;border-inline-start:1px solid var(--line);
+    padding:14px;overflow-y:auto}
+  .rail.old{padding:14px}
+
+  .nowcard{background:linear-gradient(160deg,#0e7490,#0891b2);color:#fff;border-radius:var(--r-md);
+    padding:15px;box-shadow:0 6px 18px rgba(14,116,144,.3)}
+  .nowcard .lbl{font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;opacity:.85;
+    font-weight:700;margin-bottom:7px}
+  .nowcard h3{margin:0 0 5px;font-size:16.5px;line-height:1.35}
+  .nowcard p{margin:0 0 13px;font-size:12.5px;opacity:.92;line-height:1.55}
+  .nowcard .go{display:block;width:100%;text-align:center;font:inherit;font-size:14px;
+    font-weight:700;border:0;border-radius:11px;background:#fff;color:var(--brand-2);
+    padding:11px;cursor:pointer;text-decoration:none}
+  .nowcard .go.ghost{background:rgba(255,255,255,.16);color:#fff;
+    border:1px solid rgba(255,255,255,.4)}
+
+  .steps{margin:14px 0 0;padding:0;list-style:none}
+  .steps li{display:flex;gap:9px;align-items:center;font-size:12.5px;color:var(--ink-3);
+    padding:5px 0}
+  .steps li .m{width:18px;height:18px;border-radius:50%;flex-shrink:0;display:grid;
+    place-items:center;font-size:10px;font-weight:700;border:1.5px solid var(--line-2);
+    background:var(--surface-2);color:var(--ink-3)}
+  .steps li.done{color:var(--ink-2)}
+  .steps li.done .m{background:var(--ok-soft);border-color:#a7f3d0;color:var(--ok)}
+  .steps li.cur{color:var(--ink);font-weight:700}
+  .steps li.cur .m{background:var(--brand);border-color:var(--brand);color:#fff}
+
+  details.fold{border-top:1px solid var(--line);margin-top:4px}
+  details.fold summary{list-style:none;cursor:pointer;padding:11px 2px;font-size:13px;
+    font-weight:700;color:var(--ink-2);display:flex;align-items:center;gap:7px}
+  details.fold summary::-webkit-details-marker{display:none}
+  details.fold summary::before{content:'▸';color:var(--ink-3);font-size:11px;transition:.15s}
+  details.fold[open] summary::before{transform:rotate(-90deg)}
+  details.fold .in{padding:0 2px 12px;font-size:12.5px;color:var(--ink-2)}
+
+  /* ---------- המסילה הישנה ---------- */
+  .sec{border:1px solid var(--line);border-radius:14px;padding:13px;margin-bottom:11px}
+  .sec h4{margin:0 0 10px;font-size:11px;letter-spacing:.6px;text-transform:uppercase;
+    color:var(--ink-3)}
+  .tl{display:block;text-decoration:none;padding:8px 10px;margin-bottom:6px;
+    border:1px solid var(--line);border-radius:9px;background:#fff}
+  .tl b{display:block;font-size:13px;color:var(--ink)}
+  .tl span{font-size:11.5px;color:var(--ink-3)}
+  .expb{display:flex;gap:9px;align-items:center;width:100%;text-align:start;font:inherit;
+    background:#fff;border:1px solid var(--line);border-radius:10px;padding:8px 10px;
+    margin-bottom:6px;cursor:pointer}
+  .expb .n{width:21px;height:21px;border-radius:50%;background:var(--surface-3);
+    display:grid;place-items:center;font-size:11px;font-weight:700;color:var(--ink-3)}
+  .expb.cur{border-color:var(--brand);background:var(--brand-soft)}
+  .expb.cur .n{background:var(--brand);color:#fff}
+  .idc{display:flex;gap:10px;align-items:center;margin-bottom:12px}
+  .av{width:36px;height:36px;border-radius:11px;background:var(--brand-2);color:#fff;
+    display:grid;place-items:center;font-weight:700}
+
+  .metrics{display:flex;gap:10px;justify-content:center;margin-top:14px;flex-wrap:wrap}
+  .met{background:#fff;border:1px solid var(--line);border-radius:12px;padding:9px 15px;
+    font-size:12.5px;color:var(--ink-2);box-shadow:var(--sh-1)}
+  .met b{display:block;font-size:19px;color:var(--ink);font-variant-numeric:tabular-nums}
+  .met.bad b{color:var(--err)}
+  .met.good b{color:var(--ok)}
+  @media(max-width:900px){.body{flex-direction:column}.rail{width:auto;border-inline-start:0;
+    border-top:1px solid var(--line)}.screen,.screen.laptop{height:auto}}
+</style>
+</head>
+<body>
+
+<div class="demo-bar">
+  <b>דמו פריסה — מסך התלמיד</b>
+  <span class="seg" id="viewSeg">
+    <button data-v="new" class="on">הפריסה החדשה</button>
+    <button data-v="old">מה שיש היום</button>
+    <button data-v="both">זה מול זה</button>
+  </span>
+  <span class="seg" id="stepSeg">
+    <button data-s="0" class="on">טרם אימן</button>
+    <button data-s="1">יש מודל</button>
+    <button data-s="2">יש הרצה</button>
+    <button data-s="3">מטלה מולאה</button>
+    <button data-s="4">הוגש</button>
+  </span>
+  <span class="sp hint">לחצו על שלב כדי לראות איך הכרטיס משתנה</span>
+</div>
+
+<div class="stage"><div class="frame" id="frame"></div></div>
+
+<script>
+const STEPS = [
+  { lbl:'מה עכשיו · שלב 1 מתוך 4', h:'אמנו מודל ראשון',
+    p:'פתחו את Teachable Machine, העלו את ערכת האימון של 25 תמונות לכל מחלקה, ואמנו. בסוף — ייצאו את המודל.',
+    go:'פתיחת Teachable Machine ↗', ghost:false },
+  { lbl:'מה עכשיו · שלב 2 מתוך 4', h:'בדקו כמה הוא טוב',
+    p:'פתחו את כלי ההערכה, טענו את המודל שייצאתם ואת ערכת המבחן, והריצו. תקבלו מטריצת בלבול וארבעה מדדים.',
+    go:'פתיחת כלי ההערכה ←', ghost:false },
+  { lbl:'מה עכשיו · שלב 3 מתוך 4', h:'מלאו את תיק ההערכה',
+    p:'המטלה השבועית. היא נפתחת מתוך כלי ההערכה, והמספרים שלכם מופיעים בה לבד.',
+    go:'פתיחת המטלה ←', ghost:false },
+  { lbl:'מה עכשיו · שלב 4 מתוך 4', h:'הגישו למנטור',
+    p:'העלו שתי תמונות — מסך התוצאות ומפת הקשב — וכתבו סיכום קצר. המנטור ישאל שאלות וייתן ציון.',
+    go:'כתיבה למנטור →', ghost:true },
+  { lbl:'השבוע הושלם', h:'סיימתם את שבוע 1 ✓',
+    p:'ההגשה נקלטה וקיבלתם ציון. אפשר להמשיך לשאול את המנטור כל שאלה — בלי שזה נמדד.',
+    go:'צפייה במשוב', ghost:true },
+];
+const LABELS = ['אימנתי מודל','הרצתי הערכה','מילאתי את המטלה','הגשתי למנטור'];
+let view = 'new', step = 0;
+
+const chat = () => `
+  <div class="chat">
+    <div class="bub">שלום מיכל. אני רואה שאת/ה על ניסוי עקומת הלמידה במאגר המלריה.
+      במה אפשר לעזור?</div>
+    <div class="bub me">איפה אני רואה את מטריצת הבלבול?</div>
+    <div class="bub">היא בכלי ההערכה, מיד אחרי שמריצים. הכפתור נמצא למעלה — "הערכת מודל".</div>
+    <div class="composer"><input placeholder="כתבו הודעה למנטור..."><button>שליחה</button></div>
+  </div>`;
+
+function railNew(){
+  const s = STEPS[step];
+  const li = LABELS.map((t,i)=>{
+    const cls = i < step ? 'done' : (i === step ? 'cur' : '');
+    return `<li class="${cls}"><span class="m">${i<step?'✓':i+1}</span>${t}</li>`;
+  }).join('');
+  return `<aside class="rail">
+    <div class="nowcard">
+      <div class="lbl">${s.lbl}</div>
+      <h3>${s.h}</h3><p>${s.p}</p>
+      <a class="go ${s.ghost?'ghost':''}" href="#">${s.go}</a>
+    </div>
+    <ul class="steps">${li}</ul>
+    <details class="fold"><summary>המחקר שלי</summary>
+      <div class="in">מלריה — תאי דם · ערכות עקומת הלמידה ↗</div></details>
+    <details class="fold"><summary>סולם הניסויים</summary>
+      <div class="in">1 · עקומת למידה ← כאן<br>2–4 · טרם נפתחו</div></details>
+    <details class="fold"><summary>המודל שלי</summary>
+      <div class="in">${step>=1?'מודל שמור ✓ · הורדה':'אין מודל שמור'}</div></details>
+  </aside>`;
+}
+
+function railOld(){
+  return `<aside class="rail old">
+    <div class="idc"><div class="av">מ</div><div><b style="font-size:14px">מיכל</b>
+      <div style="font-size:11.5px;color:var(--ink-3)">קבוצה 1</div></div></div>
+    <div class="sec"><h4>המחקר שלי</h4>
+      <div style="font-size:12.5px;color:var(--ink-2)">המאגר הפעיל · <b>מלריה — תאי דם</b></div>
+      <a class="tl" style="margin-top:8px"><b>ערכות עקומת הלמידה ↗</b><span>נפתח בשלב 1</span></a>
+      <p style="font-size:11.5px;color:var(--ink-3);margin:6px 0 0">אל תורידו את המאגר
+        הגולמי ממקור אחר — הערכות כאן בנויות כך שכל גודל מכיל את הקטן ממנו.</p></div>
+    <div class="sec"><h4>סולם הניסויים</h4>
+      <button class="expb cur"><span class="n">1</span><span><b style="font-size:13px">עקומת למידה</b>
+        <span style="display:block;font-size:11px;color:var(--ink-3)">כמה תמונות באמת צריך</span></span></button>
+      <button class="expb"><span class="n">🔒</span><span><b style="font-size:13px">יחסי איזון</b>
+        <span style="display:block;font-size:11px;color:var(--ink-3)">טרם נפתח</span></span></button>
+      <button class="expb"><span class="n">🔒</span><span><b style="font-size:13px">הכללה בין מקורות</b>
+        <span style="display:block;font-size:11px;color:var(--ink-3)">טרם נפתח</span></span></button>
+      <button class="expb"><span class="n">🔒</span><span><b style="font-size:13px">התערבות</b>
+        <span style="display:block;font-size:11px;color:var(--ink-3)">טרם נפתח</span></span></button></div>
+    <div class="sec"><h4>המשימה השבועית</h4>
+      <div style="font-size:12.5px;color:var(--ink-2)">2 תמונות + סיכום<br>מענה על שאלות<br>ציון ומשוב</div></div>
+    <div class="sec"><h4>המודל שלי</h4>
+      <div style="font-size:12.5px;color:var(--ink-3)">אין מודל שמור</div>
+      <a class="tl" style="margin-top:8px"><b>שמירת המודל במערכת</b><span>בחרו את קובץ ה-zip</span></a></div>
+    <div class="sec"><h4>כלי המחקר</h4>
+      <a class="tl"><b>Teachable Machine ↗</b><span>כלי האימון</span></a>
+      <a class="tl"><b>מחברת ניסוי</b><span>השערה, מדידה, מסקנה</span></a>
+      <a class="tl"><b>הערכת מודל</b><span>דיוק, רגישות, מפת קשב</span></a></div>
+  </aside>`;
+}
+
+const topNew = () => `
+  <div class="topbar">
+    <div class="logo">AI</div>
+    <div class="wk">שבוע 1 · <b>תיק ההערכה של המודל</b></div>
+    <div class="tools-chips">
+      <span class="chip">Teachable Machine ↗</span>
+      <span class="chip key">הערכת מודל</span>
+      <span class="chip">מחברת ניסוי</span>
+      <span class="chip lock">כלי הפרעות 🔒</span>
+    </div>
+  </div>`;
+
+const topOld = () => `
+  <div class="topbar">
+    <div class="wk" style="margin-inline-start:auto">שבוע 1 · נושא השבוע: תיק ההערכה —
+      <span style="color:var(--ink-3)">טרם בוצע</span></div>
+  </div>`;
+
+function screen(kind, laptop){
+  const isNew = kind === 'new';
+  return `<div class="screen ${laptop?'laptop':''}">
+    ${isNew?topNew():topOld()}
+    <div class="body">${chat()}${isNew?railNew():railOld()}</div>
+  </div>`;
+}
+
+function render(){
+  const f = document.getElementById('frame');
+  if (view === 'both'){
+    f.innerHTML =
+      `<p class="caption"><b>מה שיש היום</b> — המסילה 1,970px במסך של 768px.
+         "הערכת מודל" נמצא 1,489px למטה, מחוץ למסך.</p>${screen('old', true)}
+       <p class="caption" style="margin-top:20px"><b>הפריסה החדשה</b> — הכלים בפס העליון,
+         ומה-שעכשיו למעלה. שום דבר קריטי מתחת לקפל.</p>${screen('new', true)}`;
+  } else if (view === 'old'){
+    f.innerHTML = `<p class="caption">המסילה כפי שהיא היום, במסך מחשב נייד של בית ספר.
+      גללו בתוך המסילה כדי לראות כמה רחוק נמצאים הכלים.</p>${screen('old', false)}`;
+  } else {
+    f.innerHTML = `<p class="caption">הפריסה המוצעת. החליפו שלב בסרגל למעלה
+      כדי לראות איך כרטיס "מה עכשיו" מתחלף.</p>${screen('new', false)}
+      <div class="metrics">
+        <div class="met good"><b>0</b>אלמנטים קריטיים מתחת לקפל</div>
+        <div class="met good"><b>1</b>פעולה ראשית גלויה</div>
+        <div class="met"><b>4</b>כלים תמיד בהישג יד</div>
+      </div>`;
+  }
+}
+
+document.getElementById('viewSeg').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  view = b.dataset.v;
+  [...e.currentTarget.children].forEach(x => x.classList.toggle('on', x === b));
+  render();
+});
+document.getElementById('stepSeg').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  step = +b.dataset.s;
+  [...e.currentTarget.children].forEach(x => x.classList.toggle('on', x === b));
+  if (view !== 'new'){ view = 'new';
+    [...document.getElementById('viewSeg').children]
+      .forEach(x => x.classList.toggle('on', x.dataset.v === 'new')); }
+  render();
+});
+render();
+</script>
+</body>
+</html>
