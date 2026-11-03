@@ -16,6 +16,9 @@ const SHEET_SESSIONS = 'Sessions';
 const SHEET_USAGE = 'Usage';
 const SHEET_ARTIFACTS = 'Artifacts';
 const SHEET_STAGES = 'GroupStages';
+const SHEET_PLANS = 'WeeklyPlans';
+const SHEET_PROGRESS = 'TaskProgress';
+const SHEET_RUNS = 'Runs';
 
 /**
  * מבנה הקורס: שדרה אחת של שיטה, שרצה על מודולים מתחלפים של מאגרים.
@@ -86,6 +89,286 @@ const ASSIGNMENT = {
   title: 'תיק ההערכה של המודל שלי',
   filePrefix: 'מטלת_כלי_האבחון_',
 };
+
+// ---- צ׳קליסט המשימה השבועית ---------------------------------------------
+// התבניות נמצאות בקוד ולא בגיליון, בכוונה: הטקסט ארוך, מכויל מול נוסח הכלים
+// ושמות התיקיות ב-Drive, ותא בגיליון שאפשר לערוך בטעות הוא דרך להפיל את
+// המסילה לכיתה שלמה באמצע שיעור. מה שהמורה בוחר/ת הוא *מפתח* תבנית בלבד,
+// והוא נבדק מול הרשימה כאן.
+const CHECKLIST_MIN_NOTE = 12;   // תווים. סימון עצמי עולה משפט, לא קליק.
+
+/**
+ * דגל ההפעלה של החסימה. Script Property ולא קבוע בקוד, בדיוק כמו GEMINI_MODEL:
+ * אפשר לכבות את החסימה לכל הכיתה בעשר שניות בלי פריסה מחדש, וגם אם הפאנל
+ * עצמו תקול. ברירת המחדל - כשהמאפיין אינו קיים - היא *לא חוסם*.
+ */
+function checklistGateOn() {
+  return PropertiesService.getScriptProperties().getProperty('CHECKLIST_GATE') === 'on';
+}
+
+/** מחלץ את מספר ה-n מתווית הרצה. 'n=100 א' ו-'n=100' מחזירים שניהם 100. */
+function runN(label) {
+  const m = String(label == null ? '' : label).match(/n\s*=\s*(\d+)/i);
+  return m ? Number(m[1]) : null;
+}
+
+/**
+ * substring ולא תחילית: fname() שם את שם התלמיד/ה *ראשון* בכל ייצוא מהכלים,
+ * ולכן indexOf(...) === 0 נכשל לכל תרשים ו-CSV. היוצא היחיד הוא המטלה הכתובה,
+ * ששמה מתחיל ב-ASSIGNMENT.filePrefix ולה יש בודק משלה.
+ */
+function nameHas(name, needle) {
+  return String(name == null ? '' : name).indexOf(String(needle)) >= 0;
+}
+
+/**
+ * הבודקים האוטומטיים. כל אחד מקבל את הסעיף ואת אוסף הראיות שנבנה פעם אחת
+ * ב-checklistEvidence, ומחזיר בוליאני. אין כאן קריאה לגיליון: הקריאות כולן
+ * כבר נעשו, אחת לכל גיליון, לפני הלולאה.
+ */
+const STEP_DETECTORS = {
+  // 1. מודל שמור במערכת. החזק ביותר: עובר דרך js/api.js ולא דרך נתיב התיוק
+  //    של הכלים, ושמות הקבצים קבועים ב-MODEL_FILES ולא נחתכים.
+  model:         function (it, ev) { return ev.modelComplete; },
+  // 2. המטלה הכתובה הוגשה. התוצר היחיד שמוגן בתור חוזר (tools/evaluate/מטלה.html).
+  assignment:    function (it, ev) { return !!(ev.assignment && ev.assignment.submitted); },
+  // 3. הייתה הרצת הערכה אחת לפחות בשבוע הזה.
+  run1:          function (it, ev) { return ev.runs.length >= 1; },
+  // 4. חמש נקודות שונות על ציר אחד. *distinct* n=, לא חמש שמירות.
+  runsDistinct5: function (it, ev) { return ev.nDistinct >= (Number(it.min) || 5); },
+  // 5. סרגל הרעש: אותו n= שמור פעמיים.
+  runsNoisePair: function (it, ev) { return ev.nRepeated >= 1; },
+  // 6. תרשים/CSV מכלי ההערכה תויק (kind='charts').
+  chartHas:      function (it, ev) { return ev.charts.some(function (f) { return nameHas(f, it.match); }); },
+  // 7. רשומת מחברת ניסוי תויקה (kind='notebook', למעט המטלה הכתובה).
+  notebookHas:   function (it, ev) { return ev.notebooks.some(function (f) { return nameHas(f, it.match); }); },
+};
+
+/**
+ * ארבעה סוגי סעיפים:
+ *   auto    - המערכת מזהה לבד. אם לא זיהתה, התלמיד/ה יכול/ה לטעון שביצע/ה.
+ *   soft    - אותו דבר, אבל הראיה רוכבת על נתיב תיוק שעדיין לא מוקשח.
+ *             לכן לכל סעיף soft יש gate:false - שום חסימה לא נשענת עליו.
+ *   declare - המערכת אינה יכולה לראות זאת גם בעיקרון (הורדה מ-Drive, אימון
+ *             ב-Teachable Machine, קריאת מפת קשב). הסימון דורש משפט.
+ *   advice  - המלצה. gate:false תמיד.
+ *
+ * link הוא *מפתח* ולא נתיב: הדף מתרגם אותו מול ctx.tools, ולכן שורה כאן
+ * לא יכולה לחלק כתובת לכלי שנעול ב-TOOL_STAGE.
+ */
+const CHECKLIST_TEMPLATES = {
+
+  // =======================================================================
+  dossier: {
+    title: 'תיק ההערכה של המודל שלי',
+    note: 'השבוע ממלאים את תיק ההערכה. עבדו מתוך כלי ההערכה, לא מתוך המדריך.',
+    items: [
+
+    { id: 'model', kind: 'auto', verify: 'model', gate: true, scope: 'ever', needsStage: 1,
+      link: 'locker',
+      title: 'ייצוא המודל מ-Teachable Machine ושמירתו במערכת',
+      why: 'כלי ההערכה מריץ את המודל בדפדפן. בלי שלושת הקבצים אין מה למדוד, וכל שאר הסעיפים חסומים. ומודל שיושב רק בתיקיית ההורדות של מחשב בכיתה אבוד בשיעור הבא.',
+      how: 'ב-Teachable Machine: Export Model ← לשונית Tensorflow.js ← Download my model. בכרטיס "המודל שלי" במסילה העלו את אותו קובץ zip — השרת פורק אותו לבד, אין צורך לחלץ.',
+      refs: 'הקישור ל-Teachable Machine נמצא במסילה תחת "כלי המחקר" · כרטיס "המודל שלי" במסילה',
+      proof: 'בכרטיס "המודל שלי" כתוב "מודל שמור ✓" (שלושה קבצים מתוך שלושה). הסעיף נדלק לבד.',
+      pitfall: 'שמות קלאסים שנשארו Class 1 / Class 2 — אז הכלי נופל לברירת מחדל ולוקח את הקלאס השני כחריג, ובחצי מהמקרים זה בדיוק הפוך. ולהוריד מהלשונית הנכונה: Tensorflow.js, לא Keras ולא tflite.' },
+
+    { id: 'run', kind: 'auto', verify: 'run1', gate: true, needsStage: 1,
+      link: 'evaluate',
+      title: 'הרצת ההערכה על ערכת המבחן',
+      why: 'ציון על תמונות שאימנתם עליהן אינו מדידה. התוויות נלקחות משמות תתי-התיקיות, ולכן תיקייה שגויה נותנת טבלה שגויה — והכלי אינו יכול לדעת זאת.',
+      how: 'שלב 1 — תיקיית המודל. שלב 2 — תיקיית "ערכת מבחן" (בתוכה נגוע ותקין). שלב 3 — "הרצת ההערכה". אחרי ההרצה לחצו "שמירה" עם תווית. אל תסגרו את הלשונית: ההרצה חיה בזיכרון הדף בלבד.',
+      refs: 'כלי "הערכת מודל" · תיקיית "ערכת המבחן" ברשימת הערכות במסילה · המדריך, סעיף 1',
+      proof: 'הסעיף נדלק אחרי שלחצתם "שמירה" על ההרצה. השמירה היא מה שמגיע למערכת — הרצה שלא נשמרה אינה קיימת מחוץ ללשונית הזו.',
+      pitfall: 'בחירת תיקייה של מחלקה אחת בלבד — אז הדיוק הכולל והדיוק החיובי מוצגים כ-"—". ואם הופיעה קופסה אדומה "N תמונות לא נכללו", התיקייה אינה מה שחשבתם.' },
+
+    { id: 'cells', kind: 'declare', gate: true, needsStage: 1,
+      link: 'assignment',
+      title: 'חלק א׳ ו-ב׳ — ארבעת התאים בסף 0.50, וארבעת המדדים מתוכם',
+      ask: 'כתבו בשורה אחת: TP / FN / FP / TN בסף 0.50, ומה יצא לרגישות ולספציפיות.',
+      why: 'ארבעת האחוזים אינם ארבע מדידות אלא ארבע דרכים לקרוא את אותה טבלה. הטבלה היא המקור; האחוזים הם התוצאה.',
+      how: 'ודאו שהסף מציג 0.50, קראו TP/FN/FP/TN ממטריצת הבלבול (או לחצו "העתקה לחלק א׳"), ואז חשבו ביד: דיוק כולל=(TP+TN)/הכל · רגישות=TP/(TP+FN) · ספציפיות=TN/(TN+FP) · דיוק חיובי=TP/(TP+FP). עגלו לאחוז שלם.',
+      refs: 'מטלת כלי האבחון, חלקים א׳ ו-ב׳ · המדריך, סעיף 1 (מטריצת הבלבול) וסעיף 2 (ארבעת המדדים)',
+      proof: 'בדף המטלה: שורת הסכומים מראה את סך התמונות, וליד כל אחד מארבעת המדדים מופיע "✓ נכון" (סובלנות של נקודת אחוז).',
+      pitfall: 'המכנה — זה ההבדל היחיד בין שלושת המדדים האחרונים, וזו הטעות הנפוצה ביותר כאן. ושני התאים הירוקים נושאים את אותה תווית "זוהה נכון": רק השורה מבדילה ביניהם.' },
+
+    { id: 'threshold', kind: 'declare', gate: true, needsStage: 1,
+      link: 'evaluate',
+      title: 'חלק ג׳ — שלוש שורות סף, ומה שילמתם כדי להרוויח רגישות',
+      ask: 'כתבו בשורה אחת: בסף הנמוך כמה החמצות נחסכו, וכמה אזעקות שווא זה עלה.',
+      why: 'אותו מודל, אותם ציונים, הכרעה אחרת. זה מראה שאפשר לייפות מדד בגרירה אחת בלי שהמודל למד דבר — וששיפור במדד אחד נגבה מהשני.',
+      how: 'מלאו שלוש שורות: ברירת המחדל, סף נמוך יותר, סף גבוה יותר. בכל שורה רגישות, ספציפיות, וגם FN ו-FP — צריך אותם לשאלה 4. הדף RTL ולכן הסרגל הפוך: המינימום 0.05 בצד ימין. סמכו על המספר שליד "סף החלטה", לא על מקום הידית.',
+      refs: 'מטלת כלי האבחון, חלק ג׳ ושאלות 4 ו-5 · המדריך, סעיף 3 (סף ההחלטה)',
+      proof: 'בדף המטלה מופיעה הקופסה הירוקה "✓ שלוש השורות עקביות זו עם זו".',
+      pitfall: 'רישום הסף ההפוך בגלל כיווניות הסרגל, והחלפה בין עמודות FN ו-FP. וצעד של 0.01 לא חייב לשנות כלום — ייתכן שאין אף ציון בתחום שנחצה.' },
+
+    { id: 'heatmap', kind: 'declare', gate: true, needsStage: 1,
+      link: 'evaluate',
+      title: 'חלק ד׳ — מפת קשב על הטעות שהמודל היה בטוח בה ביותר',
+      ask: 'כתבו בשורה אחת: סוג הטעות, הביטחון שהכלי הציג, איפה האזור המשפיע, ומה היה "שינוי מרבי בתחזית".',
+      why: 'טעות שהמודל היה בטוח בה היא המקום שבו הכלל שהוא למד נכשל בגלוי. זו הבדיקה היחידה בכלי שמנסה להבדיל בין "המודל צדק" ל"המודל צדק מהסיבה הנכונה".',
+      how: 'בטבלה "טעויות — מהבטוחה ביותר לפחותה" לחצו על השורה הראשונה. התחילו ב-48px · מהיר (25 אזורים), וירדו ל-16px רק אם מצאתם השפעה. רשמו את סוג הטעות, את הביטחון, את האזור, ואת "שינוי מרבי בתחזית".',
+      refs: 'כלי "הערכת מודל" — טבלת הטעויות ומפת הקשב · המדריך, סעיף 4 וסעיף 6',
+      proof: 'השדות "סוג הטעות" / "ביטחון" / "איפה" ושאלה 6 במטלה מלאים ומסתדרים זה עם זה (בהחמצה, הביטחון הוא 1 פחות הציון).',
+      pitfall: 'צבע חזק אינו "השפעה גדולה": המפה מנורמלת לכל תמונה בנפרד, ולכן בכל מפה לא-ריקה יש אדום מלא. רק "שינוי מרבי בתחזית" ניתן להשוואה. מפה ריקה היא תוצאה ולא תקלה. ואל תעשו ניתוח טעויות אחרי הזזת הסרגל — המיון עוגן ל-0.5.' },
+
+    { id: 'claim2', kind: 'declare', gate: true, needsStage: 1,
+      link: 'assignment',
+      title: 'חלק ה׳ — טענה אחת, שתי ראיות משני רכיבים, והבדיקה שתפריך אותה',
+      ask: 'כתבו בשורה אחת את הטענה שלכם, ואת הבדיקה שאם תיכשל — הטענה הופרכה.',
+      why: 'זה החלק היחיד במטלה שבו אתם קובעים משהו ולא רק מדווחים. טענה שאין בדיקה שיכולה לומר עליה "לא" אינה טענה מדעית.',
+      how: 'טענה אחת שניתנת לבדיקה; ראיה 1 מספרית מרכיב אחד; ראיה 2 מרכיב *אחר* (הדף מזהיר אם בחרתם פעמיים אותו רכיב). בשאלה 7 — בדיקה אחת קונקרטית עם תנאי כשלון מספרי, למשל "אם הרגישות תרד ביותר מ-10 נקודות".',
+      refs: 'מטלת כלי האבחון, חלק ה׳ ושאלה 7 · המדריך, סעיפים 4 עד 6 (מאיפה לוקחים ראיות)',
+      proof: 'בדף המטלה: "✓ שתי ראיות משני רכיבים שונים", ושני השדות מכילים מספר או תצפית קונקרטית.',
+      pitfall: '"אבדוק עם עוד תמונות" אינה בדיקה — זו בקשה לעוד נתונים. ושתי ראיות שהן אותו מספר בשני שמות הן ראיה אחת, גם אם הדף אינו חוסם.' },
+
+    { id: 'submit', kind: 'auto', verify: 'assignment', gate: true, scope: 'ever', needsStage: 1,
+      link: 'assignment',
+      title: 'הגשת תיק ההערכה — והקובץ נקלט אצל המורה',
+      why: 'אין מנגנון הגשה נפרד: ההגשה מזוהה מתוך הקובץ שהגיע. קובץ שירד למחשב בלבד אינו הגשה.',
+      how: 'בדף המטלה מלאו את השם (רק הוא נועל את הכפתור) ולחצו "שמירה והגשה". הקובץ יורד למחשב וגם נכנס לתור ונשלח.',
+      refs: 'מטלת כלי האבחון, כפתור "שמירה והגשה" · תיקיית היעד: AI Mentor · הנדסה ביו-רפואית / השם שלכם / 04_מחברת ניסוי',
+      proof: 'הפס הירוק בראש דף המטלה: "✓ ההגשה נקלטה אצל המורה", עם שעה ושם תיקייה. אם הוא לא הופיע — ההגשה ממתינה בתור: התחברו למערכת באותו דפדפן, פתחו שוב את דף המטלה, והיא תישלח לבד.',
+      pitfall: 'פתיחת הדף מסימנייה ולא מתוך המערכת — אז אין התחברות וההגשה ממתינה. ושורת "שלמות" בראש הדוח מונה "X מתוך 31 שדות חובה": הגשה חלקית נראית בדיוק כמו מלאה עד שקוראים אותה.' },
+
+    { id: 'charts', kind: 'soft', verify: 'chartHas', match: 'evaluation_results.csv',
+      gate: false, needsStage: 1, link: 'evaluate',
+      title: 'מומלץ — תיוק ארבעת התרשימים וטבלת התוצאות',
+      why: 'זו הראיה היחידה שנשארת אחרי שהלשונית נסגרת. ההרצה עצמה אינה ניתנת לשחזור.',
+      how: '"הורדת התרשים" בכל אחד מארבעת הגרפים, ואז "ייצוא כל התוצאות ל-CSV".',
+      refs: 'כלי "הערכת מודל", הכפתורים מתחת לכל גרף',
+      proof: 'שורות בתיקייה "01_גרפים" שלכם. הסעיף נדלק לבד כשה-CSV מגיע.',
+      pitfall: 'שם הקובץ אינו מכיל את הסף, ולכן שני קבצי PNG באותו שם יכולים להיות שתי מציאויות שונות.' },
+    ],
+  },
+
+  // =======================================================================
+  curve: {
+    title: 'שבוע עקומת הלמידה',
+    note: 'כמה תמונות באמת צריך, ואיפה העקומה מתיישרת. חמש נקודות, ערכת מבחן אחת, סף אחד.',
+    items: [
+
+    { id: 'exp_marked', kind: 'declare', gate: true, needsStage: 1, link: 'notebook',
+      title: 'סימון הניסוי "עקומת למידה" ופתיחת רשומה במחברת',
+      ask: 'כתבו בשורה אחת: איזה מאגר, ובאיזה תאריך פתחתם את הרשומה.',
+      why: 'הניסוי המסומן הוא מה שהמנטור שואל עליו, והמחברת היא המקום שבו ההשערה ננעלת לפני המדידה.',
+      how: 'במסילה, תחת "סולם הניסויים", לחצו על "עקומת למידה". בכלי "מחברת ניסוי", שלב 1: מאגר, שם מלא, תאריך.',
+      refs: 'כלי "מחברת ניסוי", שלב 1 · "סולם הניסויים" במסילה',
+      proof: 'הרשומה מופיעה ב"רשומות שמורות" בכלי המחברת, בשם הניסוי.',
+      pitfall: 'ניסוי שמעבר לשלב הפתוח יידחה על ידי השרת — כפתור מושבת הוא בקשה, לא מניעה.' },
+
+    { id: 'sizes', kind: 'declare', gate: true, needsStage: 2, link: 'notebook',
+      title: 'ספירת הגדלים שנבנו בפועל — וכתיבת הרשימה',
+      ask: 'כתבו בשורה אחת את הגדלים שחזרו לכם בפועל, למשל 25, 50, 100, 200.',
+      why: 'עקומה שנעצרה כי הנתונים נגמרו אינה עקומה שהתיישרה. אלה שני דברים שונים לגמרי, וחייבים להיכתב בנפרד.',
+      how: 'במסילה, תחת "המחקר שלי", ספרו אילו קישורי "ערכת אימון" חזרו: 25 / 50 / 100 / 200 / 400 לכל מחלקה. רשמו את הרשימה בשדה "הערות על התנאים" במחברת.',
+      refs: 'רשימת הערכות במסילה · תיקיות Drive: ניסויים/עקומת למידה/גודל 0025 עד גודל 0400',
+      proof: 'השדה "הערות על התנאים" במחברת מכיל את רשימת הגדלים שבאמת קיימים אצלכם.',
+      pitfall: 'להניח חמש נקודות. בשלב 1 פתוחות רק "גודל 0025" ו"ערכת מבחן"; השאר נפתחות בשלב 2.' },
+
+    { id: 'hypothesis', kind: 'declare', gate: true, needsStage: 1, link: 'notebook',
+      title: 'נעילת השערה שנוקבת במספר — לפני המדידה',
+      ask: 'כתבו בשורה אחת את ההשערה שנעלתם, עם מספר.',
+      why: 'השערה שנכתבת אחרי שרואים את התוצאה תמיד מתאמתת, וכך הניסוי מפסיק ללמד משהו.',
+      how: 'במחברת, שלב 2 ← "נעילת ההשערה ומעבר למדידה". הניסוח חייב להיות מופרך: ✅ "מ-200 ל-400 יתווספו פחות מ-3 נקודות דיוק" ❌ "הדיוק ימשיך להשתפר". ענו גם בכתב: אם העקומה מתיישרת בין 100 ל-200 — מה נגמר שם, התמונות, המודל או המדד, ואיזו בדיקה אחת תבדיל בין שלוש התשובות.',
+      refs: 'כלי "מחברת ניסוי", שלב 2 · מערך שיעור 2, שקף 17',
+      proof: 'חותמת הנעילה מופיעה בסיכום הרשומה. פתיחה חוזרת לעריכה מצוינת שם במפורש.',
+      pitfall: 'השערה שאינה ניתנת להפרכה. ואין טעם "לנעול" אחרי שההרצה הראשונה כבר רצה — הנעילה חותמת שעה.' },
+
+    { id: 'noise', kind: 'auto', verify: 'runsNoisePair', gate: true, needsStage: 1,
+      link: 'evaluate',
+      title: 'סרגל הרעש — שתי הרצות על אותה ערכה בדיוק',
+      why: 'שתי הרצות על אותה ערכה נותנות תוצאות שונות, כי משקולות ההתחלה וסדר התמונות מוגרלים. בלי הסרגל הזה כל הפרש קטן הוא טענה בלי בסיס.',
+      how: 'אמנו פעמיים על אותה ערכה בדיוק ובאותן הגדרות, העריכו את שני המודלים על אותה ערכת מבחן, ושמרו שתי הרצות בתוויות "n=100 א" ו-"n=100 ב". רשמו את הפער במחברת.',
+      refs: 'מערך שיעור 2, שקף 17 (סרגל הרעש) · כלי "הערכת מודל", שורת שמירת ההרצה',
+      proof: 'הסעיף נדלק לבד כששתי הרצות שמורות באותו שבוע נושאות אותו מספר n= בתווית.',
+      pitfall: 'לדלג על זה ואז לקרוא ל-1.5 נקודות "שיפור". ולהניח שהרעש שנמדד בגודל הקטן תקף גם לגדול.' },
+
+    { id: 'models', kind: 'declare', gate: true, needsStage: 2, link: 'trainer',
+      title: 'אימון מודל נפרד לכל גודל — כל אחד מאפס, באותן הגדרות',
+      ask: 'כתבו בשורה אחת: כמה מודלים אימנתם, ומה השארתם זהה בכולם.',
+      why: 'כל נקודה על הגרף היא אימון נפרד. המודל של 100 אינו המודל של 50 שהשתפר — אימנתם מודלים שונים, לא מודל אחד שלמד כמה פעמים.',
+      how: 'לכל תיקיית "גודל NNNN": פרויקט Teachable Machine חדש, אותם שמות קלאסים, בלי לגעת ב-Epochs, ב-Learning rate או ב-Batch size, וייצוא Tensorflow.js לתיקייה שנקראת בשם הגודל. סמנו במחברת את ארבעת התנאים הקבועים.',
+      refs: 'מערך שיעור 2, שקף 15 · כלי "מחברת ניסוי", שלב 3 (תנאים)',
+      proof: 'תיקיית מודל לכל גודל, כל אחת עם שלושת הקבצים, והגודל בשם התיקייה.',
+      pitfall: 'לשנות גם את מספר הסבבים "כי זה יותר תמונות". ולהתאכזב מ-97% כבר ב-25 תמונות — Teachable Machine בונה על רשת שאומנה מראש, ולכן ההתמתנות מתחילה מוקדם. זה ממצא, לא כישלון.' },
+
+    { id: 'runs5', kind: 'auto', verify: 'runsDistinct5', min: 5, gate: true, needsStage: 2,
+      link: 'evaluate',
+      title: 'חמש הרצות שמורות, כל אחת עם תווית n=, כולן באותו סף',
+      why: 'ההרצה השמורה היא הדבר היחיד שמצמיד יחד תווית, סף, ארבעה תאים ושלושה מדדים. הכלי אינו יודע על כמה תמונות אימנתם — התווית היא ציר ה-X שלכם.',
+      how: 'לכל מודל: שלב 1 תיקיית המודל ← שלב 2 אותה "ערכת מבחן" בכל הנקודות ← "הרצת ההערכה". ודאו שהסף 0.50 לפני כל שמירה, הקלידו n=25 / n=50 / n=100 / n=200 / n=400, ושמרו בסדר עולה.',
+      refs: 'כלי "הערכת מודל", שדה "תווית — למשל n=50" · המדריך, סעיף 7',
+      proof: 'הסעיף נדלק לבד כשיש חמש הרצות שמורות באותו שבוע עם חמישה מספרי n= שונים.',
+      pitfall: 'תווית ריקה הופכת ל"הרצה 1", ועקומת הלמידה מאבדת את ציר ה-X שלה לנצח. ושמירה בשני ספים שונים — הסף נצרב בתוך ההרצה בלי אזהרה, ושתי נקודות ייראו כהפרש כמות.' },
+
+    { id: 'read3', kind: 'declare', gate: true, needsStage: 1, link: 'evaluate',
+      title: 'קריאת שלושת הקווים — וחישוב הדיוק החיובי מה-CSV',
+      ask: 'כתבו בשורה אחת: בין איזה שתי נקודות העקומה התיישרה, ובכמה נקודות.',
+      why: 'הדיוק יכול להישאר קפוא בזמן שהרגישות עולה והספציפיות יורדת. זה לא "אין שינוי" — זה שינוי שמתבטל בחישוב. ובעין, 3% הם כקוטר נקודה אחת.',
+      how: '"ייצוא טבלת ההרצות ל-CSV", וקראו מספרים ולא צורת קו. בערכת מבחן של 200 תמונות כל תמונה שווה חצי נקודת דיוק, ולכן הפרש של נקודה אחת הוא שתי תמונות — רעש. השוו כל הפרש לסרגל הרעש. הדיוק החיובי אינו מצויר ואינו נשמר: חשבו TP/(TP+FP) לכל הרצה בעצמכם.',
+      refs: 'המדריך, סעיף 5 (גרף 4 — השוואת ההרצות) · כלי "הערכת מודל", "ייצוא טבלת ההרצות ל-CSV"',
+      proof: 'טבלה במחברת, שלב 4, שבה לכל תנאי נבחרה ההרצה המתאימה והמספרים נשלפו מההרצות ולא הוקלדו ביד.',
+      pitfall: 'ציר ה-X הוא סדר השמירה ולא n: המרחק בין 25 ל-50 זהה למרחק בין 200 ל-400, והכתובית קוראת לזה "עקומת הלמידה" בכל זאת.' },
+
+    { id: 'maps', kind: 'declare', gate: true, needsStage: 1, link: 'evaluate',
+      title: 'מפת קשב בנקודה הראשונה ובאחרונה — האם האזור זז',
+      ask: 'כתבו בשורה אחת: על מה הסתכל המודל הקטן, על מה הגדול, ומה היה "שינוי מרבי בתחזית" בכל אחד.',
+      why: 'מודל שלמד קיצור דרך משפר את עצמו עם עוד נתונים בדיוק כמו מודל שלמד את הטפיל, והעקומה תיראה כמעט אותו דבר. אם הדיוק עלה והקשב נשאר על המסגרת — מה ששיפרתם אינו האבחון.',
+      how: 'בשתי הנקודות: פתחו את שתיים-שלוש הטעויות הבטוחות ביותר, הריצו 48px, ורשמו את האזור ואת "שינוי מרבי בתחזית". כדי לפתוח מפה על תשובה נכונה, העלו את סף ההחלטה עד שאותה תמונה נספרת כהחמצה ונכנסת לטבלה.',
+      refs: 'מערך שיעור 2, שקף 18 · המדריך, סעיף 6 ("מה אפשר לפתוח, ומה לא") · כלי "מחברת ניסוי", שלב 5',
+      proof: 'שני השדות בשלב 5 במחברת מלאים: האזור, מספר האזורים, ואחוז השינוי המרבי.',
+      pitfall: '"מפת הקשב מראה שהמודל מבין" — היא רמז שמחייב בדיקה, לא הוכחה. ואין בשום כלי דרך לתייק את המפה עצמה: מה שנשאר הוא מה שכתבתם, או צילום מסך שתשלחו בצ׳אט המנטור.' },
+
+    { id: 'conclusion', kind: 'declare', gate: true, needsStage: 1, link: 'notebook',
+      title: 'מסקנה — ואם המדידה לא הכריעה, לכתוב זאת',
+      ask: 'כתבו בשורה אחת: האם ההשערה התאמתה, ומה הניסוי הזה לא יכול להוכיח.',
+      why: 'שתי המסקנות "הכמות שיפרה את הלמידה" ו"הכמות שיפרה את ניצול קיצור הדרך" מתאימות לאותם נתונים בדיוק. "המדידה לא הכריעה" היא תשובה לגיטימית ומזכה.',
+      how: 'במחברת, שלב 6: האם ההשערה התאמתה (התאמתה / חלקית / הופרכה / המדידה לא הכריעה), מה אני יודע/ת עכשיו שלא ידעתי קודם, מה הניסוי לא יכול להוכיח, והשאלה הבאה שנפתחה.',
+      refs: 'כלי "מחברת ניסוי", שלב 6 · מערך שיעור 2, שקף 18',
+      proof: 'השדה "מה הניסוי לא יכול להוכיח" מזכיר במפורש לפחות אחת מהמגבלות: גודל ערכת המבחן, מאגר יחיד, אותו מקור, רעש התיוג.',
+      pitfall: '"העקומה התיישרה אז הגעתי לתקרה" — הטעות המרכזית של השיעור. ו"הדיוק לא עלה, הניסוי נכשל": טווח קטן מ-2% הוא ממצא בפני עצמו.' },
+
+    { id: 'record', kind: 'soft', verify: 'notebookHas', match: 'ניסוי_',
+      gate: false, needsStage: 1, link: 'notebook',
+      title: 'מומלץ — ייצוא רשומת המחברת ותרשים השוואת ההרצות',
+      why: 'ההרצות יושבות ב-localStorage של המחשב הזה. "איפוס הרצות", או מחשב אחר, והן איננו.',
+      how: 'במחברת — "הורדה כקובץ". בכלי ההערכה — "הורדת התרשים" של השוואת ההרצות, ו"ייצוא טבלת ההרצות ל-CSV".',
+      refs: 'כלי "מחברת ניסוי" · כלי "הערכת מודל"',
+      proof: 'שורות בתיקיות "04_מחברת ניסוי" ו-"01_גרפים" שלכם, באותו תאריך.',
+      pitfall: 'ההודעה הקטנה בפינה היא הדבר היחיד שאומר אם התיוק הצליח או רק ההורדה — ובכלי המחברת היא נעלמת אחרי 6 שניות ואין תור חוזר.' },
+    ],
+  },
+};
+
+/**
+ * בדיקה עצמית של התבניות. מריצים אותה פעם אחת מתפריט הפונקציות בעורך אחרי
+ * הדבקה. היא מה שהופך "סעיף חוסם בלי הסבר" לבלתי אפשרי מבחינה מבנית.
+ */
+function assertChecklistTemplates() {
+  const seen = {};
+  Object.keys(CHECKLIST_TEMPLATES).forEach(function (k) {
+    CHECKLIST_TEMPLATES[k].items.forEach(function (it) {
+      const key = k + '/' + it.id;
+      if (seen[key]) throw new Error('מזהה כפול בתבנית ' + k + ': ' + it.id);
+      seen[key] = true;
+      if (['auto', 'soft', 'declare', 'advice'].indexOf(it.kind) < 0) {
+        throw new Error('סוג סעיף לא מוכר ב-' + key + ': ' + it.kind);
+      }
+      if ((it.kind === 'auto' || it.kind === 'soft') && !STEP_DETECTORS[it.verify]) {
+        throw new Error('אין בודק אוטומטי בשם ' + it.verify + ' (' + key + ')');
+      }
+      if (it.kind === 'declare' && !it.ask) throw new Error('סעיף הצהרה בלי שאלה: ' + key);
+      if (it.gate && (!it.why || !it.how || !it.proof)) {
+        throw new Error('סעיף חוסם בלי הסבר מלא: ' + key);
+      }
+      if (it.kind === 'soft' && it.gate) {
+        throw new Error('סעיף soft אינו יכול לחסום (' + key + '): נתיב התיוק שלו עדיין לא מוקשח.');
+      }
+    });
+  });
+  return { ok: true, templates: Object.keys(CHECKLIST_TEMPLATES).length };
+}
 
 const ARTIFACT_MAX_BYTES = 6 * 1024 * 1024;   // תרשים או מפת קשב הם עשרות KB
 const ARTIFACT_WEEKLY_CAP = 300;              // תקרה שמונעת העלאה בלולאה
@@ -189,6 +472,13 @@ function routeAction(action, payload) {
       return saveMyModel(requireAuth(payload).studentId, payload.filename, payload.base64);
     case 'downloadMyModel':
       return downloadMyModel(requireAuth(payload).studentId);
+    // סימון תת-משימה. הזהות מהטוקן: אחרת תלמיד/ה יכול/ה לסמן עבור אחר/ת.
+    case 'setChecklistItem':
+      return setChecklistItem(requireAuth(payload).studentId,
+        payload.itemId, payload.done, payload.note);
+    // רישום הרצת הערכה. גם כאן הזהות מהטוקן ולא מהבקשה.
+    case 'saveRun':
+      return saveRun(requireAuth(payload).studentId, payload.run);
 
     // --- מורה בלבד ---
     case 'resetStudentPassword':
@@ -220,6 +510,16 @@ function routeAction(action, payload) {
     case 'deleteCheckIn':
       requireAdmin(payload);
       return deleteCheckIn(payload.checkInId);
+    case 'setWeekChecklist':
+      return setWeekChecklist(payload.group, payload.templateKey,
+        requireAdmin(payload).studentId);
+    // פתח המילוט של המורה. כל סעיף מותר כאן, כולל auto, וזו כל הנקודה.
+    case 'overrideChecklistItem':
+      return overrideChecklistItem(payload.studentId, payload.itemId, payload.done,
+        requireAdmin(payload).studentId);
+    case 'resetWeeklyUsage':
+      requireAdmin(payload);
+      return resetWeeklyUsage(payload.studentId);
     case 'exportWeeklyReport':
       requireAdmin(payload);
       return exportWeeklyReport();
@@ -303,6 +603,26 @@ SHEET_SCHEMAS[SHEET_USAGE] = ['studentId', 'weekNumber', 'messageCount', 'lastMe
 SHEET_SCHEMAS[SHEET_ARTIFACTS] = ['artifactId', 'studentId', 'weekNumber', 'kind', 'filename',
   'fileId', 'url', 'sizeBytes', 'createdAt'];
 SHEET_SCHEMAS[SHEET_STAGES] = ['group', 'unlockedStage', 'setAt'];
+
+// איזה צ׳קליסט מוגדר לאיזה שבוע של איזו קבוצה. append-only: השורה בעלת ה-rev
+// הגבוה ביותר עבור (group, weekNumber) היא הקובעת, והקודמות הן ההיסטוריה.
+// בכוונה גיליון נפרד ולא עמודה ב-WeeklyTopics: עמודה שם דורשת הגירה שלישית
+// *וגם* שורה חדשה בתוך getSheet, ושכחה של החלק השני מפילה את השרת לשתי
+// הקבוצות בבת אחת - מסך התלמיד, המנטור, פאנל המורה וחיפוש השבוע של saveArtifact.
+SHEET_SCHEMAS[SHEET_PLANS] = ['planId', 'group', 'weekNumber', 'rev', 'templateKey', 'setAt', 'setBy'];
+
+// תת-משימה אחת, אירוע אחד, שורה אחת. append-only ובלי נעילה: אין כאן מונה
+// ואין עותק יחיד, ולכן אין read-then-write. השורה האחרונה (לפי __row) עבור
+// (studentId, weekNumber, itemId) היא המצב הנוכחי. ביטול סימון מוסיף שורה
+// ולא מוחק, ולכן ההיסטוריה נשארת ניתנת לביקורת.
+SHEET_SCHEMAS[SHEET_PROGRESS] = ['eventId', 'studentId', 'weekNumber', 'itemId',
+  'state', 'source', 'note', 'setAt', 'setBy'];
+
+// הרשומה הראשונה בשרת לכך שהייתה הרצת הערכה בכלל. גיליון ולא Artifacts:
+// שורה כאן אינה נוגעת ב-ARTIFACT_WEEKLY_CAP, אינה כותבת ל-Drive, ואינה
+// נכנסת לנעילה של 20 השניות ש-saveArtifact מחזיקה.
+SHEET_SCHEMAS[SHEET_RUNS] = ['runId', 'studentId', 'weekNumber', 'label', 'threshold',
+  'images', 'tp', 'fn', 'fp', 'tn', 'acc', 'sens', 'spec', 'createdAt'];
 
 function getSheet(name) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -982,6 +1302,15 @@ function getGroupWeeks() {
     week.studentCount = g.studentCount;
     week.unlockedStage = getGroupStage(g.group);
     week.stageName = EXPERIMENTS[EXPERIMENT_ORDER[week.unlockedStage - 1]];
+    week.templateKey = currentPlanKey(g.group, week.weekNumber);
+    // הקטלוג רוכב על השורות הקיימות בכוונה: refresh() בפאנל מצפה למערך,
+    // ובקשה שלישית לרשימה שלא משתנה היא בזבוז של עוד נסיעה לשרת.
+    week.checklistCatalog = Object.keys(CHECKLIST_TEMPLATES).map(function (k) {
+      const t = CHECKLIST_TEMPLATES[k];
+      return { key: k, title: t.title, itemCount: t.items.length,
+               gateCount: t.items.filter(function (i) { return i.gate; }).length,
+               maxStage: Math.max.apply(null, t.items.map(function (i) { return Number(i.needsStage) || 1; })) };
+    });
     return week;
   });
 }
@@ -1101,8 +1430,11 @@ function updateCurrentWeekTopic(group, topicText, datasetUrl, checkIn) {
  * האם המטלה הכתובה הוגשה, ומתי. נקרא בכל הודעה למנטור, ולכן הוא יודע על
  * הגשה בשנייה שהיא קורית - בלי דגל נפרד שאפשר לשכוח לעדכן.
  */
-function assignmentStatus(studentId) {
-  const rows = sheetToObjects(getSheet(SHEET_ARTIFACTS)).filter(function (a) {
+// artifactRows אופציונלי: מי שכבר קרא את הגיליון מעביר אותו, כדי שהקשר
+// התלמיד/ה לא יקרא את Artifacts פעמיים. קריאה בלי הפרמטר נשארת כשהייתה.
+function assignmentStatus(studentId, artifactRows) {
+  const all = artifactRows || sheetToObjects(getSheet(SHEET_ARTIFACTS));
+  const rows = all.filter(function (a) {
     return a.studentId === studentId &&
            String(a.filename || '').indexOf(ASSIGNMENT.filePrefix) === 0;
   });
@@ -1115,6 +1447,312 @@ function assignmentStatus(studentId) {
            submittedAt: latest.createdAt, times: rows.length };
 }
 
+// -------------------------------------------------------- צ׳קליסט שבועי
+/**
+ * מפתח התבנית שהוגדר ל-(קבוצה, שבוע). '' = אין צ׳קליסט, וזו ברירת המחדל
+ * של כל שבוע עד שהמורה בוחר/ת. מפתח שאינו מוכר נחשב כאין - כך שגם אם
+ * מישהו ערך את הגיליון ביד, התוצאה היא "בלי צ׳קליסט" ולא שגיאה.
+ */
+function currentPlanKey(group, weekNumber) {
+  const g = normGroup(group);
+  const rows = sheetToObjects(getSheet(SHEET_PLANS)).filter(function (p) {
+    return normGroup(p.group) === g && Number(p.weekNumber) === Number(weekNumber);
+  });
+  if (!rows.length) return '';
+  const latest = rows.reduce(function (a, b) { return Number(b.rev) >= Number(a.rev) ? b : a; });
+  const key = String(latest.templateKey || '').trim();
+  return CHECKLIST_TEMPLATES[key] ? key : '';
+}
+
+/**
+ * אוסף הראיות, נבנה פעם אחת מתוך שורות שכבר נקראו. אין כאן קריאת גיליון -
+ * אחרת כל סעיף היה קורא מחדש, ו-55 תלמידים כפול עשרה סעיפים הם 550 קריאות.
+ */
+function checklistEvidence(studentId, weekNumber, artifactRows, runRows) {
+  const mine = artifactRows.filter(function (a) { return a.studentId === studentId; });
+  const wk = function (a) { return Number(a.weekNumber) === Number(weekNumber); };
+
+  // המודל אינו פר-שבוע: מודל שנשמר בשבוע 2 הוא עדיין המודל שלך.
+  const modelComplete = MODEL_FILES.every(function (f) {
+    return mine.some(function (a) { return a.kind === 'model' && a.filename === f; });
+  });
+
+  const runs = runRows.filter(function (r) {
+    return r.studentId === studentId && Number(r.weekNumber) === Number(weekNumber);
+  });
+  const counts = {};
+  runs.forEach(function (r) {
+    const n = runN(r.label);
+    if (n !== null) counts[n] = (counts[n] || 0) + 1;
+  });
+  const ns = Object.keys(counts);
+
+  return {
+    modelComplete: modelComplete,
+    assignment: assignmentStatus(studentId, artifactRows),
+    runs: runs,
+    nDistinct: ns.length,
+    nRepeated: ns.filter(function (n) { return counts[n] >= 2; }).length,
+    charts: mine.filter(function (a) { return a.kind === 'charts' && wk(a); })
+                .map(function (a) { return a.filename; }),
+    // המטלה הכתובה מתויקת גם היא כ-notebook, ואסור שהיא תדליק סעיף מחברת.
+    notebooks: mine.filter(function (a) {
+                 return a.kind === 'notebook' && wk(a) &&
+                        String(a.filename || '').indexOf(ASSIGNMENT.filePrefix) !== 0;
+               }).map(function (a) { return a.filename; }),
+  };
+}
+
+/** המצב האנושי האחרון לכל סעיף: latest-__row-wins, ובנפרד לשבוע ולתמיד. */
+function progressMap(progressRows, studentId, weekNumber) {
+  const mine = progressRows.filter(function (p) { return p.studentId === studentId; });
+  const byWeek = {}, byEver = {};
+  let waived = false;
+  mine.forEach(function (p) {
+    const rec = { state: p.state, source: p.source, note: p.note,
+                  setAt: p.setAt, setBy: p.setBy, __row: Number(p.__row) };
+    const thisWeek = Number(p.weekNumber) === Number(weekNumber);
+    if (!byEver[p.itemId] || rec.__row >= byEver[p.itemId].__row) byEver[p.itemId] = rec;
+    if (thisWeek && (!byWeek[p.itemId] || rec.__row >= byWeek[p.itemId].__row)) {
+      byWeek[p.itemId] = rec;
+    }
+    if (thisWeek && p.itemId === '*' && p.state === 'done' && p.source === 'waive') waived = true;
+  });
+  return { byWeek: byWeek, byEver: byEver, waived: waived };
+}
+
+/**
+ * הצ׳קליסט המלא של תלמיד/ה לשבוע הנוכחי.
+ *
+ * *לעולם לא זורק.* הפונקציה הזו נקראת מתוך getStudentContext, כלומר מתוך
+ * כל טעינת מסך ומתוך כל הודעה למנטור. שגיאה כאן הייתה משביתה את המערכת
+ * לכיתה שלמה - ולכן כל תקלה מחזירה צ׳קליסט *פתוח*. ברירת המחדל הבטוחה
+ * היא תמיד "לא חוסם".
+ */
+function weeklyChecklist(studentId, user, week, stage, gradedThisWeek,
+                         artifactRows, runRows, progressRows) {
+  try {
+    const key = currentPlanKey(user.group, week.weekNumber);
+    if (!key) return null;
+    const tpl = CHECKLIST_TEMPLATES[key];
+    const ev = checklistEvidence(studentId, week.weekNumber, artifactRows, runRows);
+    const pm = progressMap(progressRows, studentId, week.weekNumber);
+
+    const items = tpl.items.map(function (it) {
+      const available = (Number(it.needsStage) || 1) <= Number(stage || 1);
+      const human = (it.scope === 'ever' ? pm.byEver : pm.byWeek)[it.id] || null;
+
+      // סדר הכרעה: ויתור כללי ← המורה ← זיהוי אוטומטי ← סימון עצמי ← לא בוצע.
+      let done = false, source = '';
+      if (pm.waived) { done = true; source = 'waived'; }
+      else if (human && human.source === 'teacher') { done = human.state === 'done'; source = 'teacher'; }
+      else {
+        const det = STEP_DETECTORS[it.verify];
+        if ((it.kind === 'auto' || it.kind === 'soft') && det && det(it, ev)) {
+          done = true; source = 'auto';
+        } else if (human && human.state === 'done') {
+          done = true; source = human.source || 'self';
+        }
+      }
+
+      return {
+        id: it.id, title: it.title, why: it.why || '', how: it.how || '',
+        refs: it.refs || '', proof: it.proof || '', pitfall: it.pitfall || '',
+        ask: it.ask || '', link: it.link || '', kind: it.kind,
+        gate: !!it.gate, needsStage: Number(it.needsStage) || 1,
+        available: available, done: done, source: source,
+        note: human ? String(human.note || '') : '',
+      };
+    });
+
+    const gateItems = items.filter(function (i) { return i.gate && i.available; });
+    const gateDone = gateItems.filter(function (i) { return i.done; }).length;
+    const gateOn = checklistGateOn();
+
+    return {
+      key: key, title: tpl.title, note: tpl.note || '', weekNumber: week.weekNumber,
+      items: items,
+      total: items.filter(function (i) { return i.available; }).length,
+      doneCount: items.filter(function (i) { return i.available && i.done; }).length,
+      gateTotal: gateItems.length, gateDone: gateDone,
+      missing: gateItems.filter(function (i) { return !i.done; })
+                        .map(function (i) { return i.title; }),
+      complete: gateDone >= gateItems.length,
+      gateOn: gateOn,
+      blocked: gateOn && week.checkIn !== false && !gradedThisWeek &&
+               !pm.waived && gateDone < gateItems.length,
+    };
+  } catch (e) {
+    return { key: '', title: '', note: '', items: [], total: 0, doneCount: 0,
+             gateTotal: 0, gateDone: 0, missing: [], complete: true,
+             blocked: false, gateOn: false, error: String((e && e.message) || e) };
+  }
+}
+
+/** כל הקריאות שצריך כדי לבנות צ׳קליסט אחד, במקום אחד. */
+function checklistBundle(studentId) {
+  const user = sheetToObjects(getSheet(SHEET_USERS)).find(u => u.studentId === studentId);
+  if (!user) throw new Error('תלמיד לא נמצא');
+  const week = getCurrentWeekInfo(user.group);
+  const graded = sheetToObjects(getSheet(SHEET_CHECKINS)).some(function (c) {
+    return c.studentId === studentId && Number(c.weekNumber) === Number(week.weekNumber) &&
+           c.status === 'graded';
+  });
+  const cl = weeklyChecklist(studentId, user, week, getGroupStage(user.group), graded,
+    sheetToObjects(getSheet(SHEET_ARTIFACTS)),
+    sheetToObjects(getSheet(SHEET_RUNS)),
+    sheetToObjects(getSheet(SHEET_PROGRESS)));
+  return { user: user, week: week, checklist: cl };
+}
+
+/**
+ * סימון או ביטול סימון של תת-משימה, על ידי התלמיד/ה.
+ *
+ * אף הודעת שגיאה כאן אינה מכילה את המחרוזת 'פג תוקף ההתחברות': js/api.js
+ * מזהה אותה ומרענן את הדף, וזה היה מנתק תלמיד/ה באמצע סימון.
+ */
+function setChecklistItem(studentId, itemId, done, note) {
+  const user = sheetToObjects(getSheet(SHEET_USERS)).find(u => u.studentId === studentId);
+  if (!user) throw new Error('תלמיד לא נמצא');
+  const week = getCurrentWeekInfo(user.group);
+  const key = currentPlanKey(user.group, week.weekNumber);
+  if (!key) throw new Error('אין צ׳קליסט לשבוע הזה.');
+
+  const it = CHECKLIST_TEMPLATES[key].items.filter(function (x) { return x.id === itemId; })[0];
+  if (!it) throw new Error('תת-משימה לא מוכרת במשימה של השבוע.');
+
+  const stage = getGroupStage(user.group);
+  if ((Number(it.needsStage) || 1) > stage) {
+    throw new Error('תת-המשימה הזו נפתחת בשלב ' + (Number(it.needsStage) || 1) +
+      '. אין צורך לסמן אותה עכשיו.');
+  }
+
+  const text = String(note == null ? '' : note).trim();
+  const want = !!done;
+  if (want && text.length < CHECKLIST_MIN_NOTE) {
+    throw new Error(it.kind === 'declare'
+      ? 'כדי לסמן את הסעיף הזה צריך לכתוב בשורה אחת מה יצא לך — לפחות ' +
+        CHECKLIST_MIN_NOTE + ' תווים.'
+      : 'כדי לסמן סעיף שהמערכת לא זיהתה צריך לכתוב בשורה אחת מה עשית — לפחות ' +
+        CHECKLIST_MIN_NOTE + ' תווים. המורה רואה את המשפט.');
+  }
+
+  // declare = הצהרה; auto/soft = טענה שהמערכת לא ראתה, והיא נצבעת אחרת אצל המורה.
+  const src = want ? (it.kind === 'declare' ? 'self' : 'claim') : 'self';
+  getSheet(SHEET_PROGRESS).appendRow([
+    'TPE' + new Date().getTime() + Utilities.getUuid().slice(0, 3),
+    studentId, week.weekNumber, itemId, want ? 'done' : 'open', src,
+    text.slice(0, 400), new Date(), studentId]);
+
+  return { ok: true, checklist: checklistBundle(studentId).checklist };
+}
+
+/**
+ * פתח המילוט של המורה. כל סעיף מותר, כולל auto - וזו כל הנקודה.
+ * itemId === '*' עם done=true משחרר את כל השבוע של התלמיד/ה הזה/זו.
+ */
+function overrideChecklistItem(studentId, itemId, done, teacherId) {
+  const user = sheetToObjects(getSheet(SHEET_USERS)).find(u => u.studentId === studentId);
+  if (!user) throw new Error('תלמיד לא נמצא');
+  const week = getCurrentWeekInfo(user.group);
+  const id = String(itemId || '').trim();
+  if (!id) throw new Error('לא צוינה תת-משימה');
+  const want = !!done;
+  getSheet(SHEET_PROGRESS).appendRow([
+    'TPE' + new Date().getTime() + Utilities.getUuid().slice(0, 3),
+    studentId, week.weekNumber, id, want ? 'done' : 'open',
+    want && id === '*' ? 'waive' : 'teacher',
+    want && id === '*' ? 'שוחרר על ידי המורה' : '', new Date(), teacherId || '']);
+  return { ok: true, checklist: checklistBundle(studentId).checklist };
+}
+
+/** בחירת הצ׳קליסט לשבוע הנוכחי של קבוצה. '' מסיר אותו. */
+function setWeekChecklist(group, templateKey, teacherId) {
+  const g = requireGroup(group);
+  const key = String(templateKey || '').trim();
+  if (key && !CHECKLIST_TEMPLATES[key]) throw new Error('צ׳קליסט לא מוכר: ' + key);
+  const week = getCurrentWeekInfo(g);
+  if (!week.weekNumber) throw new Error('טרם נפתח שבוע לקבוצה הזו.');
+
+  const sheet = getSheet(SHEET_PLANS);
+  const prev = sheetToObjects(sheet).filter(function (p) {
+    return normGroup(p.group) === g && Number(p.weekNumber) === Number(week.weekNumber);
+  });
+  const rev = prev.length ? Math.max.apply(null, prev.map(function (p) { return Number(p.rev) || 0; })) + 1 : 1;
+  sheet.appendRow(['PLAN' + new Date().getTime(), g, week.weekNumber, rev, key,
+                   new Date(), teacherId || '']);
+
+  const tpl = key ? CHECKLIST_TEMPLATES[key] : null;
+  return { ok: true, group: g, weekNumber: week.weekNumber, templateKey: key, rev: rev,
+           title: tpl ? tpl.title : '',
+           itemCount: tpl ? tpl.items.length : 0,
+           gateCount: tpl ? tpl.items.filter(function (i) { return i.gate; }).length : 0 };
+}
+
+/**
+ * רישום הרצת הערכה. גיליון ולא Artifacts: בלי Drive, בלי נעילה, ובלי
+ * להיספר בתקרת הקבצים השבועית.
+ */
+function saveRun(studentId, run) {
+  if (!run) throw new Error('לא התקבלו נתוני הרצה');
+  // הכלי מחזיק את המספרים באותיות גדולות (currentMetrics), ומפרסם אותם
+  // באותיות קטנות ל-localStorage. מקבלים את שתי הצורות.
+  const pick = function (o, a, b) {
+    const v = o && (o[a] !== undefined ? o[a] : o[b]);
+    return Number(v);
+  };
+  const tp = pick(run, 'TP', 'tp'), fn = pick(run, 'FN', 'fn');
+  const fp = pick(run, 'FP', 'fp'), tn = pick(run, 'TN', 'tn');
+  if ([tp, fn, fp, tn].some(isNaN)) {
+    throw new Error('הרצה חסרת מספרים — יש לנסות לשמור שוב מתוך הכלי.');
+  }
+  const images = Number(run.images);
+  if (!isNaN(images) && images > 0 && tp + fn + fp + tn !== images) {
+    throw new Error('מספרי ההרצה אינם מסתכמים למספר התמונות — יש לנסות לשמור שוב.');
+  }
+
+  const label = String(run.label == null ? '' : run.label)
+    .replace(/[\u0000-\u001f]/g, '').trim().slice(0, 40) || 'הרצה';
+  const owner = sheetToObjects(getSheet(SHEET_USERS)).find(u => u.studentId === studentId);
+  const week = Number(getCurrentWeekInfo(owner && owner.group).weekNumber) || 0;
+  const threshold = Number(run.threshold);
+  const now = new Date();
+
+  // לחיצה כפולה על "שמירה" אינה נקודה שנייה על העקומה.
+  const sheet = getSheet(SHEET_RUNS);
+  const dup = sheetToObjects(sheet).filter(function (r) {
+    return r.studentId === studentId && Number(r.weekNumber) === week &&
+           String(r.label) === label && Number(r.tp) === tp && Number(r.fn) === fn &&
+           Number(r.fp) === fp && Number(r.tn) === tn &&
+           Math.abs(now.getTime() - new Date(r.createdAt).getTime()) < 90000;
+  })[0];
+  if (dup) return { ok: true, runId: dup.runId, weekNumber: week, duplicate: true };
+
+  const runId = 'RUN' + now.getTime() + Utilities.getUuid().slice(0, 3);
+  sheet.appendRow([runId, studentId, week, label, isNaN(threshold) ? '' : threshold,
+                   isNaN(images) ? '' : images, tp, fn, fp, tn,
+                   Number(run.acc), Number(run.sens), Number(run.spec), now]);
+  return { ok: true, runId: runId, weekNumber: week };
+}
+
+/**
+ * איפוס מונה ההודעות של תלמיד/ה לשבוע הנוכחי.
+ * קיים כי תלמיד/ה שהגיע/ה לתקרה אינו/ה יכול/ה להשלים משימה חסומה, והמוצא
+ * היחיד עד היום היה לפתוח שבוע חדש לכל הקבוצה.
+ */
+function resetWeeklyUsage(studentId) {
+  const user = sheetToObjects(getSheet(SHEET_USERS)).find(u => u.studentId === studentId);
+  if (!user) throw new Error('תלמיד לא נמצא');
+  const week = Number(getCurrentWeekInfo(user.group).weekNumber) || 0;
+  const sheet = getSheet(SHEET_USAGE);
+  const row = sheetToObjects(sheet).find(function (r) {
+    return r.studentId === studentId && Number(r.weekNumber) === week;
+  });
+  if (!row) return { ok: true, studentId: studentId, weekNumber: week, deleted: 0 };
+  sheet.deleteRow(row.__row);
+  return { ok: true, studentId: studentId, weekNumber: week, deleted: 1 };
+}
+
 // -------------------------------------------------------------- הקשר תלמיד
 function getStudentContext(studentId) {
   const user = sheetToObjects(getSheet(SHEET_USERS)).find(u => u.studentId === studentId);
@@ -1122,6 +1760,13 @@ function getStudentContext(studentId) {
   // השבוע נקבע לפי הקבוצה של התלמיד/ה, ולכן קבוצה שמתקדמת מהר לא גוררת
   // איתה את האחרות ולהפך.
   const week = getCurrentWeekInfo(user.group);
+  // קריאה אחת של Artifacts, משותפת ל-assignmentStatus ולאוסף הראיות.
+  const artifactRows = sheetToObjects(getSheet(SHEET_ARTIFACTS));
+  // שתי הקריאות הנוספות נעשות *רק* כשיש תבנית לשבוע הזה. בלי תבנית התוספת
+  // לעלות הקריאה היא אפס, וזה המצב של כל שבוע עד שהמורה בוחר/ת צ׳קליסט.
+  const planKey = currentPlanKey(user.group, week.weekNumber);
+  const runRows = planKey ? sheetToObjects(getSheet(SHEET_RUNS)) : [];
+  const progRows = planKey ? sheetToObjects(getSheet(SHEET_PROGRESS)) : [];
   const checkIns = sheetToObjects(getSheet(SHEET_CHECKINS)).filter(c => c.studentId === studentId);
   const thisWeekCheckIn = checkIns.find(c => Number(c.weekNumber) === Number(week.weekNumber));
   const lastGraded = checkIns.filter(c => c.status === 'graded').sort((a, b) => b.weekNumber - a.weekNumber)[0];
@@ -1155,7 +1800,14 @@ function getStudentContext(studentId) {
     // שבוע ללא צ׳ק-אין מוערך: אין משימת תמונות, אין שאלות מוערכות ואין ציון.
     // השדה נשלח תמיד כך שגם התצוגה וגם ה-prompt נגזרים מאותו מקור אחד.
     checkInEnabled: week.checkIn !== false,
-    assignment: assignmentStatus(studentId),
+    assignment: assignmentStatus(studentId, artifactRows),
+    // כמו assignment: מצב נגזר, שמחושב מהראיות בכל קריאה ולא נשמר כדגל שאפשר
+    // לשכוח לעדכן. null = אין צ׳קליסט לשבוע הזה, וזו ברירת המחדל.
+    checklist: planKey
+      ? weeklyChecklist(studentId, user, week, stage,
+          !!(thisWeekCheckIn && thisWeekCheckIn.status === 'graded'),
+          artifactRows, runRows, progRows)
+      : null,
     trainerUrl: TRAINER_URL,
     priorSummary: lastGraded ? lastGraded.aiMemorySummary : '',
     gradedThisWeek: !!(thisWeekCheckIn && thisWeekCheckIn.status === 'graded'),
@@ -1214,6 +1866,27 @@ function buildSystemPrompt(ctx) {
     'מפסיק למדוד את מה שהוא אמור למדוד.',
     'אם ערך כלשהו מופיע כ-"(חסר)" - אל תמציא אותו ואל תבקש מהתלמיד/ה להשלים אותו;',
     'ציין/י בקצרה שיש תקלה בנתונים ושכדאי לפנות למורה.',
+    '',
+    '[צ׳קליסט המשימה השבועית - נשלף מהמערכת, לא מהתלמיד]',
+    (ctx.checklist && ctx.checklist.items && ctx.checklist.items.length)
+      ? [
+        'שם המשימה: ' + (ctx.checklist.title || '(חסר)'),
+        'התקדמות: ' + ctx.checklist.gateDone + ' מתוך ' + ctx.checklist.gateTotal +
+          ' תת-משימות חוסמות.',
+        ctx.checklist.items.map(function (it) {
+          return '  ' + (!it.available ? '[נעול] ' : it.done ? '[בוצע] ' : '[חסר]  ') +
+                 it.title + (it.gate ? '' : ' (לא חוסם)');
+        }).join('\n'),
+        'מה שמסומן [בוצע] כבר נעשה: **אסור לבקש לעשות אותו שוב ואסור לשאול אם עשו אותו.**',
+        'מה שמסומן [נעול] עוד לא נפתח לקבוצה הזו - אל תבקש/י אותו ואל תזכיר/י אותו.',
+        'אם נשאלת "מה עוד נשאר" - ענה/י מהרשימה הזו ואל תשאל/י מה בוצע.',
+        'חלק מהסימונים הם הצהרה של התלמיד/ה ולא אימות של המערכת. מותר לשאול "איך יצא',
+        'לך X" ולבדוק מול המספרים שלו/ה; אסור להאשים אותו/ה שלא עשה/תה.',
+        'אסור לך לסמן תת-משימה, אסור להבטיח שתת-משימה תסומן, ואסור לומר שתת-משימה',
+        'בוצעה אם היא [חסר]. הסימון נעשה בכרטיס "המשימה השבועית" במסך, בצד המסילה.',
+        'אסור לך לחסום את התלמיד/ה בעצמך - החסימה היא של המערכת, לא שלך.',
+      ].join('\n')
+      : 'אין צ׳קליסט לשבוע הזה. המשימה היא בדיוק "נושא השיעור השבועי" למעלה.',
     '',
     '[ידע מקצועי - קריאת התוצאות של כלי ההערכה]',
     'זה הידע שממנו את/ה מסביר/ה כששואלים אותך על המושגים האלה. הסבר/י בפשטות,',
@@ -1311,6 +1984,23 @@ function buildSystemPrompt(ctx) {
       ].join('\n')
       : ctx.gradedThisWeek
       ? '--- החלק המוערך של השבוע הזה כבר בוצע. פעל אך ורק לפי "מצב ב׳" למטה. ---'
+      : (ctx.checklist && ctx.checklist.blocked)
+      ? [
+        '--- החלק המוערך של השבוע נעול עד להשלמת הצ׳קליסט ---',
+        '',
+        'בשלב הזה **אסור לבקש תמונות התקדמות, אסור לבקש סיכום שבועי, אסור להודיע על',
+        'שאלות שמזכות בציון ואסור לתת ציון.** אל תבטיח/י שהחלק המוערך "ייפתח בהמשך".',
+        'תת-המשימות שעוד לא בוצעו: ' + ctx.checklist.missing.join(' · ') + '.',
+        'פתח/י בפנייה בשם הפרטי, אמור/י באיזו תת-משימה הוא/היא עומד/ת עכשיו - הראשונה',
+        'ברשימה שלמעלה - ועזור/י בה מעשית, שלב אחרי שלב, בלי תשאול ובלי לפתור במקומו/ה.',
+        'אם הוא/היא טוען/ת שביצע/ה תת-משימה שאינה מסומנת: תת-משימה שמסמנים ביד -',
+        'הפנה/י לכרטיס "המשימה השבועית" במסך. תת-משימה שהמערכת מסמנת לבד - אמור/י',
+        'שיש שם כפתור "עשיתי, והמערכת לא רואה את זה", ושאחריו אפשר להמשיך. אל',
+        'תתנצל/י יותר מפעם אחת ואל תתווכח/י על מה בוצע.',
+        'המשך/י לפי "מצב ב׳" למטה.',
+        '',
+        '--- מצב ב׳ ---',
+      ].join('\n')
       : [
         '--- מצב א׳: החלק המוערך של השבוע (אם עוד לא בוצע) ---',
         '',
@@ -1330,6 +2020,9 @@ function buildSystemPrompt(ctx) {
         'העדף/י שאלות שדורשות להתייחס למספרים שהתלמיד/ה עצמו/ה מדד/ה, ולסתירות בין',
         'המספר לבין מה שכלי הבדיקה הראו. ההבחנה בין "המודל צדק" ל"המודל צדק מהסיבה',
         'הנכונה" היא לב הקורס.',
+        '',
+        'אם הגעת לכאן, כל תת-המשימות החוסמות של השבוע כבר סומנו. אל תחזור/תחזרי על',
+        'הצ׳קליסט ואל תתנה/י את תחילת החלק המוערך בשום תת-משימה נוספת.',
         '',
         'ניהול השיחה: שאל שאלה אחת בלבד והמתן לתשובה. בלי פסקאות ארוכות. סולם סוקרטי לפי',
         'איכות התשובה:',
@@ -1388,14 +2081,29 @@ function buildSystemPrompt(ctx) {
 function sendMentorMessage(studentId, history, images, elapsedSeconds) {
   const ctx = getStudentContext(studentId);
 
+  // "המערכת לא מתקדמת": הדבר היחיד שנחסם הוא *פתיחת* החלק המוערך, והחסימה
+  // כאן ולא בפרומפט - הנחיה לדגם היא בקשה, ובדיקה בשרת היא מה שקובע (אותו
+  // תקדים כמו שמירת הציון למטה). הבדיקה לפני enforceUsageLimits, ולכן ניסיון
+  // שנדחה אינו עולה הודעה מהמכסה. ההודעה נוקבת בשמות הסעיפים כי היא נכתבת
+  // לתוך התמליל אצל התלמיד/ה, וזה ההסבר היחיד ששורד גרסה ישנה של הדף
+  // ששמורה במטמון של מחשב בכיתה.
+  if (images && images.length && ctx.checklist && ctx.checklist.blocked) {
+    throw new Error('כדי לפתוח את החלק המוערך יש להשלים את תת-המשימות: ' +
+      ctx.checklist.missing.join(' · ') +
+      '. אם רשימת תת-המשימות אינה מופיעה במסך — לחצו Ctrl+F5 ואז נסו שוב.');
+  }
+
   const lastTurn = (history || [])[history.length - 1];
   if (lastTurn && String(lastTurn.text || '').length > MAX_MESSAGE_CHARS) {
     throw new Error('ההודעה ארוכה מדי (עד ' + MAX_MESSAGE_CHARS + ' תווים). נסו לקצר או לפצל אותה.');
   }
   // בשבוע ללא צ׳ק-אין אין שיחה מוערכת לשמור לה מכסה, ולכן הרזרבה משוחררת
-  // לשימוש חופשי במקום להישאר נעולה עד סוף השבוע.
+  // לשימוש חופשי במקום להישאר נעולה עד סוף השבוע. כשהצ׳קליסט חוסם הרזרבה
+  // נשארת נעולה דווקא: תלמיד/ה חסום/ה מדבר/ת עם המנטור כדי להשתחרר, ובלי
+  // התנאי הזה הוא/היא שורף/ת בדיוק את עשר ההודעות שנועדו לחלק המוערך.
   enforceUsageLimits(studentId, ctx.weekNumber,
-    ctx.gradedThisWeek || ctx.checkInEnabled === false);
+    ctx.gradedThisWeek || ctx.checkInEnabled === false ||
+    !!(ctx.checklist && ctx.checklist.blocked));
 
   const systemPrompt = buildSystemPrompt(ctx);
 
@@ -1420,7 +2128,8 @@ function sendMentorMessage(studentId, history, images, elapsedSeconds) {
 
   // גם אם המודל בחר בכל זאת לכתוב ציון בשבוע לא-מוערך, הוא לא נשמר:
   // ההנחיה היא בקשה, והבדיקה כאן היא מה שבאמת קובע.
-  if (scoreMatch && !ctx.gradedThisWeek && ctx.checkInEnabled !== false) {
+  if (scoreMatch && !ctx.gradedThisWeek && ctx.checkInEnabled !== false &&
+      !(ctx.checklist && ctx.checklist.blocked)) {
     const score = Math.max(1, Math.min(10, Number(scoreMatch[1])));
     const aiMemorySummary = summaryMatch ? summaryMatch[1].trim() : '';
     saveGradedCheckIn(studentId, ctx.weekNumber, images, history.concat([{ role: 'model', text: visibleText }]),
@@ -1877,11 +2586,22 @@ function getDashboard() {
   // שבוע לכל קבוצה, ולא שבוע אחד לכיתה: הציון נמדד מול מספר השבועות שהקבוצה
   // *שלה* עברה. אחרת קבוצה שנמצאת בשבוע 2 הייתה נענשת על שבועות שקבוצה
   // אחרת הספיקה לעבור.
-  const weekByGroup = {};
+  const weekByGroup = {}, stageByGroup = {}, planByGroup = {};
   users.forEach(u => {
     const g = normGroup(u.group);
-    if (!(g in weekByGroup)) weekByGroup[g] = getCurrentWeekInfo(g);
+    if (!(g in weekByGroup)) {
+      weekByGroup[g] = getCurrentWeekInfo(g);
+      stageByGroup[g] = getGroupStage(g);
+      planByGroup[g] = currentPlanKey(g, weekByGroup[g].weekNumber);
+    }
   });
+  // שלוש קריאות לכל הכיתה, לא קריאה לכל תלמיד/ה. הן נעשות רק אם לקבוצה
+  // כלשהי יש בכלל צ׳קליסט השבוע.
+  const anyPlan = Object.keys(planByGroup).some(function (g) { return !!planByGroup[g]; });
+  const artifactRows = anyPlan ? sheetToObjects(getSheet(SHEET_ARTIFACTS)) : [];
+  const runRows = anyPlan ? sheetToObjects(getSheet(SHEET_RUNS)) : [];
+  const progRows = anyPlan ? sheetToObjects(getSheet(SHEET_PROGRESS)) : [];
+
   return users.map(u => {
     const week = weekByGroup[normGroup(u.group)];
     const mine = checkIns.filter(c => c.studentId === u.studentId);
@@ -1902,6 +2622,24 @@ function getDashboard() {
       experimentName: experimentName(u.currentExperiment),
       weeksCompleted: mine.length, mentorGrade: grade, surplusPoints,
       doneThisWeek, lastScore: mine.length ? scores[scores.length - 1] : null,
+      // מי תקוע/ה על מה. selfCount מול claims הוא ההבדל בין "הצהיר" לבין
+      // "טען שהמערכת לא ראתה" - ושניהם אינם "המערכת ראתה".
+      checklist: (function () {
+        if (!planByGroup[normGroup(u.group)]) return null;
+        const cl = weeklyChecklist(u.studentId, u, week, stageByGroup[normGroup(u.group)],
+          doneThisWeek, artifactRows, runRows, progRows);
+        if (!cl) return null;
+        return {
+          title: cl.title, gateDone: cl.gateDone, gateTotal: cl.gateTotal,
+          stuckOn: cl.missing[0] || '', blocked: cl.blocked,
+          claims: cl.items.filter(function (i) { return i.source === 'claim'; }).length,
+          selfCount: cl.items.filter(function (i) { return i.source === 'self'; }).length,
+          cells: cl.items.map(function (i) {
+            return { id: i.id, title: i.title, gate: i.gate, available: i.available,
+                     done: i.done, source: i.source, note: i.note };
+          }),
+        };
+      })(),
     };
   });
 }
