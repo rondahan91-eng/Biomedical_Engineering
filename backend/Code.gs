@@ -385,14 +385,37 @@ const MIN_SECONDS_BETWEEN_MESSAGES = 3;   // בלימת סקריפטים אוט�
 const MAX_HISTORY_TURNS = 16;             // כמה תורות נשלחות ל-Gemini (בולם תפיחת עלות)
 const MAX_MESSAGE_CHARS = 4000;           // בולם הדבקת קבצי קוד ענקיים
 
-// מודל ברירת המחדל. אפשר לעקוף אותו בלי לגעת בקוד: Project Settings →
-// Script Properties → מאפיין בשם GEMINI_MODEL. שימושי כשגוגל מוציאה משימוש
-// מודל ישן (הרצת listAvailableModels תראה מה זמין למפתח שלכם).
+// ---- המנוע של המנטור -----------------------------------------------------
+// המערכת עובדת מול Claude כשיש מפתח, ונופלת ל-Gemini כשאין. זה לא היסוס:
+// זה מה שמאפשר להדביק את הקוד הזה *לפני* שהמפתח מוגדר, ולחזור אחורה
+// במחיקת מאפיין אחד - בלי פריסה מחדש ובלי שיעור בלי מנטור.
+const CLAUDE_API_URL = 'https://api.anthropic.com/v1/messages';
+const CLAUDE_API_VERSION = '2026-10-21';
+// החלפת מודל בלי לגעת בקוד: Project Settings ← Script Properties ← CLAUDE_MODEL.
+// claude-sonnet-5-5 עולה חצי, claude-haiku-5-5 עולה כעשירית.
+const DEFAULT_CLAUDE_MODEL = 'claude-opus-5-5';
+// תקרת הפלט לתשובה אחת. בניגוד ל-Gemini, ב-Claude *חובה* לציין אותה,
+// והיא כוללת גם את טוקני החשיבה - ולכן היא גבוהה מ-1024 ששימשו קודם.
+const CLAUDE_MAX_TOKENS = 4000;
+// תשובת מנטור היא פסקה קצרה ושאלה אחת, לא הוכחה מתמטית. effort נמוך
+// מקצר את החשיבה ואת החשבון, ושומר על זמן תגובה סביר בשיעור.
+const CLAUDE_EFFORT = 'low';
+
 const DEFAULT_GEMINI_MODEL = 'gemini-3.1-flash-lite';
 const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models/';
 
+function claudeModel() {
+  return PropertiesService.getScriptProperties().getProperty('CLAUDE_MODEL') || DEFAULT_CLAUDE_MODEL;
+}
+
 function geminiModel() {
   return PropertiesService.getScriptProperties().getProperty('GEMINI_MODEL') || DEFAULT_GEMINI_MODEL;
+}
+
+/** מפתח Claude אם הוגדר. מחזיר '' ולא זורק - היעדר מפתח הוא מצב תקין. */
+function claudeApiKey() {
+  return String(PropertiesService.getScriptProperties()
+    .getProperty('CLAUDE_API_KEY') || '').trim();
 }
 
 // -------------------------------------------------------------- כניסה ל-Web App
@@ -2107,19 +2130,12 @@ function sendMentorMessage(studentId, history, images, elapsedSeconds) {
 
   const systemPrompt = buildSystemPrompt(ctx);
 
-  // שולחים ל-Gemini רק חלון מההיסטוריה. התור הראשון נשמר תמיד כי אליו מצורפות
+  // שולחים למודל רק חלון מההיסטוריה. התור הראשון נשמר תמיד כי אליו מצורפות
   // התמונות והסיכום השבועי - בלעדיו החלק המוערך מאבד את ההקשר שלו.
-  const contents = trimHistory(history || []).map((turn, idx) => {
-    const parts = [{ text: turn.text }];
-    if (idx === 0 && images && images.length && !ctx.gradedThisWeek) {
-      images.forEach(img => {
-        parts.push({ inline_data: { mime_type: img.mimeType, data: img.base64 } });
-      });
-    }
-    return { role: turn.role === 'model' ? 'model' : 'user', parts };
-  });
+  const messages = claudeMessagesFrom(trimHistory(history || []),
+    (images && images.length && !ctx.gradedThisWeek) ? images : null);
 
-  const raw = callGemini(systemPrompt, contents);
+  const raw = callMentorModel(systemPrompt, messages);
   const summaryMatch = raw.match(/###SUMMARY###\s*([\s\S]*)$/);
   const visibleText = raw.replace(/###SUMMARY###[\s\S]*$/, '').trim();
   const scoreMatch = visibleText.match(/ציון ההערכה לשבוע זה:\s*\[?(\d{1,2})\]?/);
@@ -2239,6 +2255,144 @@ function testGeminiKey() {
       (JSON.parse(text).candidates || [{}])[0].content.parts[0].text);
   } else {
     Logger.log('❌ נדחה (HTTP ' + code + '):\n' + text.slice(0, 600));
+  }
+}
+
+/**
+ * בוחר מנוע. Claude כשיש מפתח, אחרת Gemini.
+ *
+ * messages הוא תמיד בפורמט של Claude; המרה ל-Gemini נעשית כאן ולא בקריאה,
+ * כך שיש *צורה אחת* שמישהו צריך להכיר כדי לקרוא את sendMentorMessage.
+ */
+function callMentorModel(systemPrompt, messages) {
+  return claudeApiKey()
+    ? callClaude(systemPrompt, messages)
+    : callGemini(systemPrompt, geminiContentsFrom(messages));
+}
+
+/**
+ * Claude דורש החלפה קפדנית: user, assistant, user... וההודעה הראשונה חייבת
+ * להיות של המשתמש. trimHistory שומר את התור הראשון ואז חלון מהסוף, ולכן
+ * הוא יכול לייצר שתי הודעות רצופות של אותו צד. כאן מאחדים אותן.
+ */
+function claudeMessagesFrom(turns, images) {
+  const out = [];
+  turns.forEach(function (turn, idx) {
+    const role = turn.role === 'model' ? 'assistant' : 'user';
+    const content = [];
+    // התמונות לפני הטקסט: זה הסדר שממנו Claude קורא טוב יותר.
+    if (idx === 0 && images && images.length) {
+      images.forEach(function (img) {
+        content.push({ type: 'image', source: { type: 'base64',
+          media_type: img.mimeType, data: img.base64 } });
+      });
+    }
+    content.push({ type: 'text', text: String(turn.text == null ? '' : turn.text) });
+
+    const prev = out[out.length - 1];
+    if (prev && prev.role === role) prev.content = prev.content.concat(content);
+    else out.push({ role: role, content: content });
+  });
+  // הודעת assistant בפתיחה נדחית; מוחקים עד להודעת משתמש ראשונה.
+  while (out.length && out[0].role !== 'user') out.shift();
+  return out;
+}
+
+/** אותן הודעות בצורת Gemini, לנפילה אחורה. */
+function geminiContentsFrom(messages) {
+  return messages.map(function (m) {
+    const parts = [];
+    m.content.forEach(function (b) {
+      if (b.type === 'text') parts.push({ text: b.text });
+      else if (b.type === 'image') {
+        parts.push({ inline_data: { mime_type: b.source.media_type, data: b.source.data } });
+      }
+    });
+    return { role: m.role === 'assistant' ? 'model' : 'user', parts: parts };
+  });
+}
+
+/**
+ * קריאה ל-Claude.
+ *
+ * שלושה דברים שונים מ-Gemini ושווה לדעת עליהם:
+ *  - temperature הוסר מה-API. שליחתו מחזירה 400 בכל מודל.
+ *  - max_tokens חובה, והוא כולל את טוקני החשיבה.
+ *  - הפרומפט המערכתי נשלח עם cache_control: הוא כ-10,000 תווים ונשלח
+ *    מחדש בכל הודעה, וקריאה מהמטמון עולה כחמישית ממחיר קלט רגיל.
+ *    הוא משתנה רק כשמצב התלמיד/ה משתנה, ולכן ברצף הודעות בשיעור הוא נפגע.
+ */
+function callClaude(systemPrompt, messages) {
+  const key = claudeApiKey();
+  if (!key) throw new Error('לא הוגדר CLAUDE_API_KEY ב-Script Properties.');
+  if (/\s/.test(key)) {
+    throw new Error('המפתח שב-CLAUDE_API_KEY מכיל רווח או ירידת שורה (' + key.length +
+      ' תווים). כנראה נדבק טקסט נוסף. הדביקו מחדש את המפתח בלבד, והריצו ' +
+      'testClaudeKey בעורך כדי לאמת.');
+  }
+  const payload = {
+    model: claudeModel(),
+    max_tokens: CLAUDE_MAX_TOKENS,
+    system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
+    messages: messages,
+    output_config: { effort: CLAUDE_EFFORT },
+    // סירוב של מסנני הבטיחות עוצר את התשובה. בכיתה זה שיעור בלי מנטור,
+    // ולכן השרת מנותב אוטומטית למודל גיבוי באותה קריאה.
+    fallbacks: 'default',
+  };
+  const res = UrlFetchApp.fetch(CLAUDE_API_URL, {
+    method: 'post',
+    contentType: 'application/json',
+    headers: {
+      'x-api-key': key,
+      'anthropic-version': CLAUDE_API_VERSION,
+      'anthropic-beta': 'server-side-fallback-2026-07-01',
+    },
+    payload: JSON.stringify(payload),
+    muteHttpExceptions: true,
+  });
+
+  const code = res.getResponseCode();
+  const raw = res.getContentText();
+  let data;
+  try { data = JSON.parse(raw); }
+  catch (e) { throw new Error('תשובה לא קריאה מ-Claude (HTTP ' + code + '): ' + raw.slice(0, 300)); }
+
+  if (code !== 200 || data.type === 'error') {
+    const msg = (data.error && data.error.message) || raw.slice(0, 300);
+    throw new Error('שגיאת Claude (HTTP ' + code + ', מודל: ' + claudeModel() + '): ' + msg +
+      '\nהריצו testClaudeKey בעורך ה-Apps Script כדי לבדוק את המפתח ואת המודל.');
+  }
+  if (data.stop_reason === 'refusal') {
+    throw new Error('המודל סירב לענות על ההודעה הזו. נסחו אותה אחרת, ואם זה חוזר — פנו למורה.');
+  }
+  const text = (data.content || [])
+    .filter(function (b) { return b.type === 'text'; })
+    .map(function (b) { return b.text || ''; }).join('');
+  if (!text) throw new Error('Claude החזיר תשובה ריקה (stop_reason: ' + data.stop_reason + ').');
+  // תשובה שנקטעה מאבדת את ###SUMMARY### ואת שורת הציון, ואז צ׳ק-אין מוערך
+  // נשמר בלי ציון בלי שאיש ידע. עדיף להגיד את זה במפורש.
+  if (data.stop_reason === 'max_tokens') {
+    return text + '\n\n(התשובה נקטעה באמצע. בקשו מהמנטור לקצר, או פנו למורה.)';
+  }
+  return text;
+}
+
+/**
+ * בודק את מפתח Claude מול ה-API בפועל ומדפיס את מה שחזר.
+ * להרצה מתוך עורך ה-Apps Script; התוצאה ב"יומן ביצוע".
+ */
+function testClaudeKey() {
+  const key = claudeApiKey();
+  if (!key) { Logger.log('לא הוגדר CLAUDE_API_KEY — המנטור עובד מול Gemini.'); return; }
+  Logger.log('אורך המפתח: ' + key.length + ' תווים, מתחיל ב-"' + key.slice(0, 7) + '"');
+  Logger.log('מודל: ' + claudeModel());
+  try {
+    const reply = callClaude('ענה במילה אחת בעברית.',
+      [{ role: 'user', content: [{ type: 'text', text: 'אמור רק: תקין' }] }]);
+    Logger.log('✅ המפתח עובד. התשובה: ' + reply);
+  } catch (e) {
+    Logger.log('❌ ' + e.message);
   }
 }
 
