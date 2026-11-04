@@ -238,6 +238,11 @@ async function callLocal(action, payload) {
         opensAtName: (DEV_EXPERIMENTS[DEV_TOOL_STAGE[k] - 1] || {}).name,
       })),
       checkInEnabled: week.checkIn !== false,
+      assignment: { title: 'תיק ההערכה של המודל שלי', submitted: false },
+      // מצב פיתוח מראה את הכרטיס הקודם, לא את הצ׳קליסט. עותק שני של
+      // CHECKLIST_TEMPLATES כאן היה אוצר מילים מקביל, וזה כבר גרם בפרויקט
+      // הזה להיפוך מלא של תוצאות - ראו ההערה בראש Code.gs.
+      checklist: null,
       trainerUrl: 'https://teachablemachine.withgoogle.com/train/image',
       priorSummary: lastGraded ? lastGraded.aiMemorySummary : '', gradedThisWeek: doneThisWeek,
     };
@@ -443,6 +448,18 @@ async function callLocal(action, payload) {
     return { url: '(מצב פיתוח - ייצוא אמיתי דורש שרת)' };
   }
 
+  // פעולות הצ׳קליסט. חובה שיהיו כאן: במצב פיתוח כל פעולה שנופלת לזריקה
+  // למטה שוברת את *כל* מסך התלמיד, לא רק את התכונה. checklist: null
+  // מחזיר את המסך לכרטיס הקודם, שזו ההתנהגות הנכונה בלי שרת.
+  if (action === 'setChecklistItem' || action === 'overrideChecklistItem') {
+    return { ok: true, checklist: null };
+  }
+  if (action === 'saveRun') return { ok: true, runId: 'RUNDEV', weekNumber: 0 };
+  if (action === 'setWeekChecklist') {
+    return { ok: true, templateKey: payload.templateKey || '', rev: 1 };
+  }
+  if (action === 'resetWeeklyUsage') return { ok: true, deleted: 0 };
+
   throw new Error('פעולה לא מוכרת: ' + action);
 }
 
@@ -516,6 +533,26 @@ export async function saveMyModel(studentId, filename, base64) {
 export async function downloadMyModel(studentId) {
   return dispatch('downloadMyModel', { studentId });
 }
+
+// --- צ׳קליסט המשימה השבועית ---
+// לשתי הראשונות אין studentId בכוונה: הזהות נלקחת מהטוקן בשרת, והחתימה
+// כאן היא מה שמונע מהלקוח אפילו לנסות לסמן בשם מישהו אחר.
+export async function setChecklistItem(itemId, done, note) {
+  return dispatch('setChecklistItem', { itemId, done, note });
+}
+export async function saveRun(run) {
+  return dispatch('saveRun', { run });
+}
+export async function setWeekChecklist(group, templateKey) {
+  return dispatch('setWeekChecklist', { group, templateKey });
+}
+export async function overrideChecklistItem(studentId, itemId, done) {
+  return dispatch('overrideChecklistItem', { studentId, itemId, done });
+}
+export async function resetWeeklyUsage(studentId) {
+  return dispatch('resetWeeklyUsage', { studentId });
+}
+
 export async function getDashboard() {
   return dispatch('getDashboard', {});
 }

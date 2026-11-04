@@ -585,3 +585,26 @@ table.data-table tr:hover td { background: var(--brand-soft); }
   color: var(--ink); white-space: pre-line;
 }
 .task-brief .mono-lbl { margin-bottom: 4px; }
+
+
+/* ---------- צ׳קליסט המשימה השבועית ----------
+   נספח בסוף הקובץ ולא נערך בתוך הכללים הקיימים: .step/.dot/.txt נשארים
+   בדיוק כפי שהם, כולל קו החיבור בין הצעדים והטבעת של הצעד הפעיל. */
+.step.blocked .dot { background: var(--surface-2); border-style: dashed; color: var(--ink-3); }
+.step.blocked .txt { color: var(--ink-3); }
+.cl-state { display: block; font-size: 11px; color: var(--ink-3); margin-top: 2px; font-weight: 400; }
+.cl-why { margin: 2px 0 0 0; padding-inline-start: 33px; }
+.chk-list { margin: 0 0 14px; }
+.chk-list .mono-lbl { margin-bottom: 8px; }
+details.chk > summary { list-style: none; cursor: pointer; }
+details.chk > summary::-webkit-details-marker { display: none; }
+details.chk > summary:hover .txt { color: var(--ink); }
+.step-why { margin: 0 0 10px 0; padding-inline-start: 33px; }
+.step-why .form-note { margin: 6px 0; }
+.step-why textarea { width: 100%; margin: 6px 0; }
+
+/* בלוק @media שני ונפרד: בבלוק הקיים .rail הופך לרשת דו-טורית, וצ׳קליסט
+   בן עשר שורות בחצי רוחב הוא בדיוק הגלילה שהשינוי הזה בא לבטל. */
+@media (max-width: 980px) {
+  .rail .steps { grid-column: 1 / -1; }
+}

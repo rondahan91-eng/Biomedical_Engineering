@@ -5,7 +5,8 @@
 // ==========================================================================
 import { escapeHtml, toast, logoMark } from './ui.js';
 import { getStudentContext, sendMentorMessage, setCurrentExperiment,
-         getMyModel, saveMyModel, downloadMyModel } from './api.js';
+         getMyModel, saveMyModel, downloadMyModel, setChecklistItem } from './api.js';
+import { checklistCardHtml, checklistModalHtml, wireChecklist } from './checklist.js';
 
 // הקטנת תמונות לפני השליחה. צילומי טלפון/מסך מגיעים לעיתים במגה-בייטים,
 // ו-Gemini מחייב על תמונות לפי רזולוציה - ההקטנה חוסכת עלות טוקנים, זמן
@@ -75,7 +76,21 @@ export async function mountStudentChat(app, session, onLogout) {
     summaryDraft: '', // נשמר כדי שסגירת החלון לא תמחק מה שנכתב
     model: null,      // { files:[{name,saved,...}], complete } - נטען אחרי הציור הראשון
     modelBusy: '',    // טקסט שמוצג בכרטיס בזמן העלאה/הורדה
+    // הצ׳קליסט מגיע מההקשר ומוחלף בכל תשובה של השרת. null = אין צ׳קליסט
+    // לשבוע הזה, או ששרת ישן לא שלח אותו - ואז נופלים לכרטיס הקודם.
+    checklist: ctx.checklist || null,
+    openItem: '',     // איזה סעיף פתוח בחלון המשימה
+    noteDraft: {},    // itemId -> טקסט שנכתב ועוד לא נשמר
+    tickBusy: '',     // itemId שנמצא בשמירה כרגע
+    // מראה של #chat-input. בלעדיו הודעה שנכתבה למחצה נמחקת בכל ציור מחדש,
+    // והצ׳קליסט מוסיף הרבה סיבות לצייר מחדש.
+    draft: '',
   };
+
+  /** נבדק בכל ציור ולא פעם אחת: state.checklist מתחלף אחרי כל סימון. */
+  const hasChecklist = () => !!(state.checklist && state.checklist.items &&
+                                state.checklist.items.length);
+  const blocked = () => !!(hasChecklist() && state.checklist.blocked);
 
   // שבוע ללא צ׳ק-אין מוערך: אין משימת תמונות, אין שאלות מוערכות ואין ציון.
   // שרת ישן אינו שולח את השדה, ולכן חוסר ערך נחשב שבוע מוערך - ההתנהגות
@@ -172,21 +187,15 @@ export async function mountStudentChat(app, session, onLogout) {
           המנטור ישאל על הניסוי המסומן. ניסוי נפתח על ידי המורה.</p>
       </div>
 
-      ${gradedWeek ? `
-      <div class="steps">
-        <h4>המשימה השבועית</h4>
-        ${step(imagesDone, !imagesDone, '2 תמונות התקדמות + סיכום')}
-        ${step(scored, answering, 'מענה על שאלות המנטור')}
-        ${step(scored, false, 'קבלת ציון ומשוב')}
-      </div>` : `
-      <div class="steps">
-        <h4>המשימה של שבוע ${ctx.weekNumber}</h4>
-        <p class="form-note" style="margin:0;">${ctx.topicText
-          ? escapeHtml(ctx.topicText)
-          : 'טרם הוזנה משימה לשבוע הזה.'}</p>
-        <p class="form-note" style="margin-top:8px;">בשבוע הזה אין חלק מוערך —
-          אין תמונות להעלות ואין ציון. המנטור כאן לעזרה מעשית.</p>
-      </div>`}
+      ${(function () {
+        // צ׳קליסט אם יש, ואחרת בדיוק הכרטיס שהיה כאן עד היום. כל תקלה
+        // בציור הצ׳קליסט נופלת לכרטיס הקודם ולא למסך לבן.
+        try {
+          const html = checklistCardHtml(ctx, state);
+          if (html) return html;
+        } catch (e) { /* נופלים לכרטיס הקודם */ }
+        return legacyStepsHtml(step, imagesDone, answering, scored);
+      })()}
 
       ${modelCardHtml()}
 
@@ -220,6 +229,31 @@ export async function mountStudentChat(app, session, onLogout) {
              Teachable Machine, על האימון ועל כל מה שנתקעתם בו.`}
       </div>
     </aside>`;
+  }
+
+  /**
+   * הכרטיס שהיה כאן לפני הצ׳קליסט, מילה במילה.
+   *
+   * הוא לא קוד מת: זה מה שרואים בשבוע בלי צ׳קליסט, מול שרת שעוד לא עודכן,
+   * ובמצב פיתוח. כל שלושת המצבים אמיתיים, ולכן המסלול הזה חייב להישאר
+   * עובד ולא רק להתקמפל.
+   */
+  function legacyStepsHtml(step, imagesDone, answering, scored) {
+    return gradedWeek ? `
+      <div class="steps">
+        <h4>המשימה השבועית</h4>
+        ${step(imagesDone, !imagesDone, '2 תמונות התקדמות + סיכום')}
+        ${step(scored, answering, 'מענה על שאלות המנטור')}
+        ${step(scored, false, 'קבלת ציון ומשוב')}
+      </div>` : `
+      <div class="steps">
+        <h4>המשימה של שבוע ${ctx.weekNumber}</h4>
+        <p class="form-note" style="margin:0;">${ctx.topicText
+          ? escapeHtml(ctx.topicText)
+          : 'טרם הוזנה משימה לשבוע הזה.'}</p>
+        <p class="form-note" style="margin-top:8px;">בשבוע הזה אין חלק מוערך —
+          אין תמונות להעלות ואין ציון. המנטור כאן לעזרה מעשית.</p>
+      </div>`;
   }
 
   // ------------------------------------------------------------- המודל שלי
@@ -310,7 +344,23 @@ export async function mountStudentChat(app, session, onLogout) {
 
   /** כפתור צף בפינת הצ'אט - מחליף את הרצועה שגזלה גובה מהשיחה */
   function taskFabHtml() {
-    if (!gradedWeek) return '';   // אין משימת תמונות בשבוע לא-מוערך
+    // בשבוע לא-מוערך אין משימת תמונות - אבל אם יש צ׳קליסט, הכפתור הוא
+    // הדרך היחידה להגיע להסברים ולסימון, ולכן הוא כן מצויר.
+    if (!gradedWeek && !hasChecklist()) return '';
+    // הכפתור לעולם אינו מושבת: כפתור מת בלי הסבר הוא בדיוק הדרך שבה
+    // תלמיד/ה נתקע/ת.
+    if (blocked()) {
+      return `<button class="task-fab pending" id="task-fab" title="פתיחת משימת השבוע">
+          <span class="fab-icon">🔒</span><span>נותרו ${
+            state.checklist.gateTotal - state.checklist.gateDone} תת-משימות</span>
+        </button>`;
+    }
+    if (hasChecklist() && !gradedWeek) {
+      return `<button class="task-fab pending" id="task-fab" title="פתיחת משימת השבוע">
+          <span class="fab-icon">☑</span><span>משימת שבוע ${ctx.weekNumber} · ${
+            state.checklist.gateDone}/${state.checklist.gateTotal}</span>
+        </button>`;
+    }
     if (state.submittedTask) {
       return `<button class="task-fab done" id="task-fab" title="משימת השבוע הוגשה">
           <span class="fab-icon">✓</span><span>משימת השבוע הוגשה</span>
@@ -322,31 +372,23 @@ export async function mountStudentChat(app, session, onLogout) {
   }
 
   function taskModalHtml() {
-    if (!state.taskModalOpen || !gradedWeek) return '';
-    if (state.submittedTask) {
-      return `
-      <div class="modal-veil" id="modal-veil">
-        <div class="modal">
-          <div class="modal-head">
-            <h3>משימת שבוע ${ctx.weekNumber}</h3>
-            <button class="modal-close" id="modal-close" title="סגירה">✕</button>
-          </div>
-          <p class="form-note">התמונות והסיכום לשבוע זה כבר נשלחו. אפשר להמשיך בשיחה.</p>
-        </div>
-      </div>`;
-    }
-    return `
-    <div class="modal-veil" id="modal-veil">
-      <div class="modal">
-        <div class="modal-head">
-          <h3>משימת שבוע ${ctx.weekNumber}</h3>
-          <button class="modal-close" id="modal-close" title="סגירה">✕</button>
-        </div>
-        ${ctx.topicText ? `
-        <div class="task-brief">
-          <div class="mono-lbl">המשימה של השבוע</div>
-          ${escapeHtml(ctx.topicText)}
-        </div>` : ''}
+    if (!state.taskModalOpen || (!gradedWeek && !hasChecklist())) return '';
+
+    let chk = '';
+    try { chk = checklistModalHtml(ctx, state); }
+    catch (e) { chk = ''; }   // החלון חייב להיפתח גם אם הצ׳קליסט נשבר
+
+    // זנב אחד משלושה: חסום / טרם הוגש / כבר הוגש.
+    const tail = blocked()
+      ? `<p class="form-note">הצ׳ק-אין המוערך נפתח אחרי שכל תת-המשימות החוסמות
+           מסומנות. נותרו: <b>${escapeHtml(state.checklist.missing.join(' · '))}</b>.<br>
+           סעיף שהמערכת מסמנת לבד ולא נדלק אף שביצעתם — לחצו "עשיתי, והמערכת
+           לא רואה את זה", או פנו למורה.</p>`
+      : !gradedWeek
+      ? `<p class="form-note">בשבוע הזה אין חלק מוערך — אין תמונות להעלות ואין ציון.</p>`
+      : state.submittedTask
+      ? `<p class="form-note">התמונות והסיכום לשבוע זה כבר נשלחו. אפשר להמשיך בשיחה.</p>`
+      : `
         <p class="form-note">שתי תמונות מהניסוי + סיכום קצר. מומלץ: תרשים אחד
           מכלי ההערכה ומפת קשב אחת שמדגימה את הממצא. השליחה פותחת את החלק המוערך.</p>
         <div class="tiles">
@@ -361,13 +403,30 @@ export async function mountStudentChat(app, session, onLogout) {
         <div class="field" style="margin:12px 0 10px;">
           <textarea id="week-summary" rows="3" placeholder="מה הרצת השבוע, מה יצא, ומה הפתיע אותך?">${escapeHtml(state.summaryDraft || '')}</textarea>
         </div>
-        <button type="button" id="start-graded-btn" style="width:100%;">שליחה והתחלת החלק המוערך</button>
+        <button type="button" id="start-graded-btn" style="width:100%;">שליחה והתחלת החלק המוערך</button>`;
+
+    return `
+    <div class="modal-veil" id="modal-veil">
+      <div class="modal">
+        <div class="modal-head">
+          <h3>משימת שבוע ${ctx.weekNumber}</h3>
+          <button class="modal-close" id="modal-close" title="סגירה">✕</button>
+        </div>
+        ${ctx.topicText ? `
+        <div class="task-brief">
+          <div class="mono-lbl">המשימה של השבוע</div>
+          ${escapeHtml(ctx.topicText)}
+        </div>` : ''}
+        ${chk}
+        ${tail}
       </div>
     </div>`;
   }
 
   function render() {
-    const statusPill = !gradedWeek
+    const statusPill = blocked()
+      ? `<span class="pill warn">צ׳קליסט ${state.checklist.gateDone}/${state.checklist.gateTotal}</span>`
+      : !gradedWeek
       ? '<span class="pill neutral">שבוע ללא ציון</span>'
       : ctx.gradedThisWeek
       ? '<span class="pill ok">החלק המוערך הושלם ✓</span>'
@@ -400,10 +459,12 @@ export async function mountStudentChat(app, session, onLogout) {
         <div class="dock">
           <div class="dock-inner">
             <form class="composer" id="chat-form">
-              <textarea id="chat-input" rows="1" placeholder="כתבו הודעה למנטור..." required></textarea>
+              <textarea id="chat-input" rows="1" placeholder="כתבו הודעה למנטור..." required>${escapeHtml(state.draft || '')}</textarea>
               <button type="submit" id="send-btn">שליחה</button>
             </form>
-            <div class="dock-note">${!gradedWeek
+            <div class="dock-note">${blocked()
+              ? 'הצ׳ק-אין המוערך נעול עד שכל תת-המשימות החוסמות מסומנות. השיחה פתוחה — אם נתקעתם בסעיף, שאלו כאן.'
+              : !gradedWeek
               ? 'בשבוע הזה אין חלק מוערך — כל השיחה חופשית ואינה נמדדת.'
               : ctx.gradedThisWeek
               ? 'החלק המוערך של השבוע הסתיים — מכאן השיחה חופשית ואינה נמדדת.'
@@ -421,6 +482,52 @@ export async function mountStudentChat(app, session, onLogout) {
   }
 
   // ---------------------------------------------------------------- אירועים
+  /**
+   * סגירת חלון המשימה, ו-Escape כמאזין *אחד* על document לכל חיי המסך.
+   *
+   * קודם הוא נרשם מחדש בכל ציור כל עוד החלון פתוח, והסיר את עצמו רק כשמישהו
+   * לחץ Escape. הצ׳קליסט מצייר מחדש אחרי כל סימון, כלומר עשרות פעמים בשיעור,
+   * וזו הצטברות של מאזינים על אותו אירוע.
+   */
+  function closeModal() {
+    const ta = document.getElementById('week-summary');
+    if (ta) state.summaryDraft = ta.value;   // לא לאבד טיוטה בסגירה
+    state.taskModalOpen = false;
+    render();
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && state.taskModalOpen) closeModal();
+  });
+
+  /**
+   * סימון או ביטול סימון של תת-משימה.
+   *
+   * ה-checklist שחוזר הוא זה של השרת ולא חישוב של הדף: blocked נקבע בשרת
+   * בלבד. מול שרת שעוד לא עודכן נופלים לכרטיס הקודם - ברירת המחדל הבטוחה
+   * היא תמיד *לא חסום*.
+   */
+  async function onTick(itemId, done, note) {
+    const ci = document.getElementById('chat-input');
+    if (ci) state.draft = ci.value;          // סימון לא מוחק הודעה שנכתבה
+    state.tickBusy = itemId;
+    render();
+    try {
+      const res = await setChecklistItem(itemId, done, note);
+      if (res && res.checklist) state.checklist = res.checklist;
+      if (state.noteDraft) delete state.noteDraft[itemId];
+    } catch (err) {
+      if (/פעולה לא מוכרת/.test(err.message)) {
+        state.checklist = null;              // אותו נסיגה מסודרת שעושה כרטיס המודל
+        toast('השרת עוד לא עודכן — אפשר להמשיך לעבוד. דווחו למורה.', true);
+      } else {
+        toast('לא הצלחתי לשמור את הסימון: ' + err.message, true);
+      }
+    } finally {
+      state.tickBusy = '';
+      render();
+    }
+  }
+
   function wire() {
     document.getElementById('logout-btn').addEventListener('click', onLogout);
 
@@ -459,19 +566,18 @@ export async function mountStudentChat(app, session, onLogout) {
 
     wireModelCard();
 
+    // אחרי wireModelCard ולפני המודל, ותמיד דרך querySelectorAll - שהוא
+    // no-op על רשימה ריקה. ארבעת ה-addEventListener הלא-מוגנים בפונקציה
+    // הזו (#logout-btn, #rail-toggle, #chat-form, #chat-input) נשארים
+    // כפי שהם: זריקה כאן הייתה מונעת את כולם, והמסך היה נראה תקין ומת.
+    try {
+      wireChecklist(document, ctx, state, onTick);
+    } catch (e) { /* הצ׳קליסט לא נקשר; שאר המסך חייב להמשיך לעבוד */ }
+
     const veil = document.getElementById('modal-veil');
     if (veil) {
-      const close = () => {
-        const ta = document.getElementById('week-summary');
-        if (ta) state.summaryDraft = ta.value; // לא לאבד טיוטה בסגירה
-        state.taskModalOpen = false;
-        render();
-      };
-      document.getElementById('modal-close').addEventListener('click', close);
-      veil.addEventListener('click', (e) => { if (e.target === veil) close(); });
-      document.addEventListener('keydown', function esc(e) {
-        if (e.key === 'Escape') { document.removeEventListener('keydown', esc); close(); }
-      });
+      document.getElementById('modal-close').addEventListener('click', closeModal);
+      veil.addEventListener('click', (e) => { if (e.target === veil) closeModal(); });
     }
 
     document.querySelectorAll('.slot-input').forEach(input => {
@@ -501,10 +607,12 @@ export async function mountStudentChat(app, session, onLogout) {
           const [meta, base64] = dataUrl.split(',');
           return { base64, mimeType: meta.match(/data:(.*);base64/)[1] };
         });
-        state.submittedTask = true;
+        // state.submittedTask עבר ל-send(): אחרת הכפתור מכריז "הוגשה ✓" גם
+        // כשהשרת סירב, והתלמיד/ה רואה מסך שאומר שסיים/ה לצד הודעת שגיאה
+        // שלא מתיישבת איתו.
         state.taskModalOpen = false;
         state.summaryDraft = '';
-        send(summary);
+        send(summary, true);
       });
     }
 
@@ -515,7 +623,13 @@ export async function mountStudentChat(app, session, onLogout) {
       const text = input.value.trim();
       if (!text || state.sending) return;
       input.value = '';
+      state.draft = '';
       send(text);
+    });
+
+    // המראה של הטיוטה מתעדכן בכל הקלדה, בלי ציור מחדש.
+    document.getElementById('chat-input').addEventListener('input', (e) => {
+      state.draft = e.target.value;
     });
 
     // Enter שולח, Shift+Enter יורד שורה
@@ -590,7 +704,8 @@ export async function mountStudentChat(app, session, onLogout) {
     }
   }
 
-  async function send(text) {
+  /** isTaskOpen: ההודעה הזו היא זו שפותחת את החלק המוערך (נושאת תמונות). */
+  async function send(text, isTaskOpen) {
     state.history.push({ role: 'user', text });
     state.sending = true;
     render();
@@ -598,12 +713,17 @@ export async function mountStudentChat(app, session, onLogout) {
       const elapsedSeconds = Math.round((Date.now() - state.sessionStart) / 1000);
       const result = await sendMentorMessage(session.studentId, state.history, state.images, elapsedSeconds);
       state.history.push({ role: 'model', text: result.reply });
+      if (isTaskOpen) state.submittedTask = true;
       if (result.graded) {
         ctx.gradedThisWeek = true;
         toast('הציון לשבוע זה נשמר: ' + result.score + '/10');
       }
     } catch (err) {
+      // השגיאה נכנסת לתמליל ולא לטוסט שנעלם: כשהשרת מסרב בגלל הצ׳קליסט,
+      // ההודעה מונה את תת-המשימות החסרות, והיא צריכה לשרוד רענון.
       state.history.push({ role: 'model', text: '⚠️ שגיאה: ' + err.message });
+      // ניסיון שנדחה משאיר את התמונות ואת הסיכום, כדי שאפשר יהיה לנסות שוב.
+      if (isTaskOpen) { state.images = null; state.summaryDraft = text; }
     } finally {
       state.sending = false;
       render();
