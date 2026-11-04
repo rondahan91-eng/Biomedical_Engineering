@@ -418,6 +418,19 @@ function claudeApiKey() {
     .getProperty('CLAUDE_API_KEY') || '').trim();
 }
 
+/**
+ * מזהה סביבת העבודה, אם הוגדר.
+ *
+ * מפתח שנוצר ברמת הארגון אינו משויך לסביבת עבודה, ואז Claude אינו יודע
+ * על איזו לחייב ומחזיר 400. אפשר לפתור זאת בשתי דרכים: מפתח שנוצר *בתוך*
+ * סביבת עבודה, או הכותרת הזו. התמיכה כאן קיימת כדי שלא יהיה צורך להנפיק
+ * מפתח מחדש.
+ */
+function claudeWorkspaceId() {
+  return String(PropertiesService.getScriptProperties()
+    .getProperty('CLAUDE_WORKSPACE_ID') || '').trim();
+}
+
 // -------------------------------------------------------------- כניסה ל-Web App
 function doPost(e) {
   let body;
@@ -2340,14 +2353,18 @@ function callClaude(systemPrompt, messages) {
     // ולכן השרת מנותב אוטומטית למודל גיבוי באותה קריאה.
     fallbacks: 'default',
   };
+  const headers = {
+    'x-api-key': key,
+    'anthropic-version': CLAUDE_API_VERSION,
+    'anthropic-beta': 'server-side-fallback-2026-07-01',
+  };
+  const ws = claudeWorkspaceId();
+  if (ws) headers['anthropic-workspace-id'] = ws;
+
   const res = UrlFetchApp.fetch(CLAUDE_API_URL, {
     method: 'post',
     contentType: 'application/json',
-    headers: {
-      'x-api-key': key,
-      'anthropic-version': CLAUDE_API_VERSION,
-      'anthropic-beta': 'server-side-fallback-2026-07-01',
-    },
+    headers: headers,
     payload: JSON.stringify(payload),
     muteHttpExceptions: true,
   });
@@ -2360,6 +2377,15 @@ function callClaude(systemPrompt, messages) {
 
   if (code !== 200 || data.type === 'error') {
     const msg = (data.error && data.error.message) || raw.slice(0, 300);
+    // התקלה הראשונה שפוגשים עם מפתח ברמת ארגון, ושמה של הכותרת החסרה
+    // אינו רומז מאיפה משיגים את הערך שלה.
+    if (/workspace/i.test(msg) && !ws) {
+      throw new Error('המפתח שייך לארגון ולא לסביבת עבודה, ולכן Claude אינו יודע ' +
+        'על איזו סביבה לחייב.\nפתרון א: הוסיפו Script Property בשם CLAUDE_WORKSPACE_ID ' +
+        'עם מזהה סביבת העבודה (Console ← Settings ← Workspaces, מזהה שמתחיל ב-wrkspc_).\n' +
+        'פתרון ב: צרו מפתח חדש מתוך סביבת העבודה עצמה והחליפו את CLAUDE_API_KEY.\n' +
+        'המקור: ' + msg);
+    }
     throw new Error('שגיאת Claude (HTTP ' + code + ', מודל: ' + claudeModel() + '): ' + msg +
       '\nהריצו testClaudeKey בעורך ה-Apps Script כדי לבדוק את המפתח ואת המודל.');
   }
@@ -2387,6 +2413,7 @@ function testClaudeKey() {
   if (!key) { Logger.log('לא הוגדר CLAUDE_API_KEY — המנטור עובד מול Gemini.'); return; }
   Logger.log('אורך המפתח: ' + key.length + ' תווים, מתחיל ב-"' + key.slice(0, 7) + '"');
   Logger.log('מודל: ' + claudeModel());
+  Logger.log('סביבת עבודה: ' + (claudeWorkspaceId() || '(לא הוגדרה — תקין אם המפתח עצמו משויך לסביבה)'));
   try {
     const reply = callClaude('ענה במילה אחת בעברית.',
       [{ role: 'user', content: [{ type: 'text', text: 'אמור רק: תקין' }] }]);
