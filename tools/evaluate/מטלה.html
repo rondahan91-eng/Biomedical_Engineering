@@ -579,7 +579,15 @@ async function flushQueue() {
         try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(fresh)); } catch (e) {}
         try { d = await postArtifact(fresh.token, item); } catch (e2) { break; }
       }
-      if (!d.ok) { item.lastError = d.error || 'שגיאה לא ידועה'; saveQueue(loadQueue()); break; }
+      // סירוב של השרת נשמר *על השורה שבתור*, לא על העותק שבזיכרון: קודם
+      // הוא נכתב על עותק ו-saveQueue כתב מיד מעליו את מה שקרא מחדש, ולכן
+      // הסיבה נעלמה והתלמיד/ה ראה/תה הגשה תקועה בלי לדעת למה.
+      if (!d.ok) {
+        const q2 = loadQueue();
+        const row = q2.filter(x => x.id === item.id)[0];
+        if (row) { row.lastError = d.error || 'שגיאה לא ידועה'; saveQueue(q2); }
+        break;
+      }
 
       // נקלט. מסירים מהתור ורושמים אישור שנשאר על המסך.
       const rest = loadQueue().filter(x => x.id !== item.id);
@@ -617,9 +625,14 @@ function renderFilingStatus() {
 
   if (q.length) {
     const needsLogin = !u;
+    const refused = q.filter(x => x.lastError)[0];
     box.className = 'verdict warn';
     box.innerHTML = '<b>⏳ ההגשה שלך שמורה וממתינה לשליחה.</b><br>' +
-      (needsLogin
+      (refused
+        // סירוב מנומק של השרת הוא דבר שאפשר לתקן. אומרים אותו במילים שלו.
+        ? 'השרת החזיר: <b>' + String(refused.lastError).replace(/[<>&]/g, '') + '</b><br>' +
+          'תקנו ונסו שוב, או פנו למורה.'
+        : needsLogin
         ? 'כדי לשלוח אותה צריך להיות מחוברים. היכנסו למערכת באותו דפדפן — ' +
           'היא תישלח לבד ברגע שתחזרו לכאן.<br>' +
           '<a href="../../" target="_blank" rel="opener" style="color:inherit;font-weight:700">' +
