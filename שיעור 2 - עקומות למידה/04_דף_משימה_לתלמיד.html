@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>משימת השבוע · עקומת הלמידה</title>
+<style>
+  :root{
+    --bg:#eef3f7; --surface:#fff; --line:#e0e9f0; --ink:#0d1f2b; --ink2:#4a6478;
+    --ink3:#8aa2b3; --brand:#0891b2; --brand2:#0e7490; --brand-soft:#e6fafd;
+    --ok:#059669; --ok-soft:#e9fbf3; --warn:#b45309; --warn-soft:#fff8ec;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);line-height:1.7;
+       font-family:'Segoe UI','Assistant',Arial,sans-serif;font-size:15.5px}
+  .wrap{max-width:820px;margin:0 auto;padding:28px 20px 70px}
+  h1{font-size:24px;margin:0 0 6px}
+  .lede{color:var(--ink2);margin:0 0 6px}
+  .goal{background:var(--brand-soft);border:1px solid #bae9f2;border-radius:12px;
+        padding:14px 18px;margin:18px 0 26px}
+  .goal b{color:var(--brand2)}
+
+  ol.steps{list-style:none;counter-reset:s;padding:0;margin:0}
+  ol.steps > li{counter-increment:s;background:var(--surface);border:1px solid var(--line);
+       border-radius:12px;padding:16px 18px 16px 18px;margin-bottom:14px;position:relative}
+  ol.steps > li::before{content:counter(s);position:absolute;inset-inline-start:-14px;top:16px;
+       width:30px;height:30px;border-radius:50%;background:var(--brand);color:#fff;
+       display:grid;place-items:center;font-weight:700;font-size:14px;
+       box-shadow:0 0 0 4px var(--bg)}
+  ol.steps > li > h2{font-size:16.5px;margin:0 0 8px;padding-inline-start:22px}
+  ol.steps p{margin:6px 0}
+  .where{font-size:13.5px;color:var(--ink2);background:#f6f9fb;border-radius:8px;
+         padding:8px 12px;margin:10px 0 0}
+  .where b{color:var(--ink)}
+  .out{font-size:13.5px;background:var(--ok-soft);border-radius:8px;padding:8px 12px;
+       margin:8px 0 0;color:#065f46}
+  .trap{font-size:13.5px;background:var(--warn-soft);border-radius:8px;padding:8px 12px;
+        margin:8px 0 0;color:var(--warn)}
+  a{color:var(--brand2);font-weight:600}
+  code{background:#eef3f7;border-radius:5px;padding:1px 6px;font-size:13.5px;
+       font-family:ui-monospace,Consolas,monospace;direction:ltr;display:inline-block}
+  .links{background:var(--surface);border:1px solid var(--line);border-radius:12px;
+         padding:16px 18px;margin:0 0 26px}
+  .links h2{font-size:13px;letter-spacing:.6px;text-transform:uppercase;color:var(--ink3);
+            margin:0 0 10px}
+  .links ul{margin:0;padding-inline-start:20px}
+  .links li{margin-bottom:5px}
+  table{border-collapse:collapse;width:100%;margin:10px 0 0;font-size:14px}
+  th,td{border:1px solid var(--line);padding:6px 10px;text-align:start}
+  th{background:#f6f9fb;font-weight:600}
+  .final{background:var(--surface);border:2px solid var(--brand);border-radius:12px;
+         padding:16px 18px;margin-top:26px}
+  @media print{body{background:#fff}.wrap{padding:0}ol.steps>li{break-inside:avoid}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>משימת השבוע · עקומת הלמידה</h1>
+<p class="lede">כמה תמונות באמת צריך כדי לאמן מודל אבחון — ואיפה הוספת תמונות מפסיקה לעזור.</p>
+
+<div class="goal">
+  <b>ההישג הנדרש:</b> לקבוע בין אילו שתי נקודות העקומה התיישרה, ולהראות
+  שההפרש שם <b>קטן מסרגל הרעש</b> — בעוד שההפרש לפניו גדול ממנו.<br>
+  מי שיאמר "העקומה התיישרה" בלי סרגל רעש — לא הוכיח כלום.
+</div>
+
+<div class="links">
+  <h2>הכלים שתצטרכו</h2>
+  <ul>
+    <li><a href="https://rondahan91-eng.github.io/Biomedical_Engineering/" target="_blank" rel="noopener">המערכת — מסך הכניסה</a>
+        · <b>התחילו תמיד מכאן.</b> כלי שנפתח מסימנייה לא מזהה אתכם, ושום דבר לא יישמר אצל המורה.</li>
+    <li><a href="https://teachablemachine.withgoogle.com/train/image" target="_blank" rel="noopener">Teachable Machine</a>
+        · כאן מאמנים את המודלים</li>
+    <li><a href="https://rondahan91-eng.github.io/Biomedical_Engineering/tools/evaluate/" target="_blank" rel="noopener">כלי הערכת מודל</a>
+        · כאן מודדים כל מודל ושומרים הרצה</li>
+    <li><a href="https://rondahan91-eng.github.io/Biomedical_Engineering/tools/notebook/" target="_blank" rel="noopener">מחברת ניסוי</a>
+        · כאן נועלים השערה וכותבים מסקנה</li>
+    <li><a href="https://rondahan91-eng.github.io/Biomedical_Engineering/tools/evaluate/%D7%9E%D7%93%D7%A8%D7%99%D7%9A.html" target="_blank" rel="noopener">המדריך לכלי ההערכה</a>
+        · אם לא ברור מה מספר אומר</li>
+    <li><b>ערכות האימון וערכת המבחן</b> — הקישורים אליהן נמצאים <b>במסילה בצד המסך</b>,
+        תחת "המחקר שלי". הן לא כאן בכוונה: לכל קבוצה הערכות שלה.</li>
+  </ul>
+</div>
+
+<ol class="steps">
+
+<li>
+  <h2>פתיחת רשומה במחברת הניסוי</h2>
+  <p>במסילה, תחת <b>סולם הניסויים</b>, לחצו על <b>עקומת למידה</b>. זה מה שהמנטור ישאל עליו.</p>
+  <p>פתחו רשומה חדשה במחברת: מאגר, שם מלא, תאריך.</p>
+  <p class="where"><b>איפה:</b> המסילה במסך המערכת ← מחברת ניסוי, שלב 1</p>
+  <p class="out"><b>מה צריך לצאת:</b> הרשומה מופיעה ב"רשומות שמורות".</p>
+</li>
+
+<li>
+  <h2>בדקו אילו גדלים באמת יש לכם</h2>
+  <p>במסילה, תחת <b>המחקר שלי</b>, ספרו כמה קישורי "ערכת אימון" חזרו:
+     25 / 50 / 100 / 200 / 400 לכל מחלקה.</p>
+  <p>רשמו את הרשימה בשדה <b>הערות על התנאים</b> במחברת.</p>
+  <p class="trap"><b>מלכודת:</b> אל תניחו שיש חמש. עקומה שנעצרה כי <i>הנתונים נגמרו</i>
+     היא לא עקומה שהתיישרה — ואלה שני דברים שונים לגמרי שחייבים להיכתב בנפרד.</p>
+</li>
+
+<li>
+  <h2>נעלו השערה — עם מספר, לפני המדידה</h2>
+  <p>ההשערה חייבת להיות כזו שאפשר להפריך:</p>
+  <table>
+    <tr><th>✅ טוב</th><td>"מ-200 ל-400 יתווספו פחות מ-3 נקודות דיוק"</td></tr>
+    <tr><th>❌ לא טוב</th><td>"הדיוק ימשיך להשתפר"</td></tr>
+  </table>
+  <p>ענו גם בכתב: אם העקומה מתיישרת בין 100 ל-200 — מה נגמר שם? התמונות, המודל, או המדד?
+     ואיזו בדיקה אחת תבדיל בין שלוש התשובות?</p>
+  <p class="where"><b>איפה:</b> מחברת ניסוי, שלב 2 ← "נעילת ההשערה ומעבר למדידה"</p>
+  <p class="trap"><b>מלכודת:</b> השערה שנכתבת אחרי שרואים את התוצאה תמיד מתאמתת —
+     וכך הניסוי מפסיק ללמד משהו. הנעילה חותמת שעה.</p>
+</li>
+
+<li>
+  <h2>אמנו מודל נפרד לכל גודל</h2>
+  <p>לכל תיקיית "גודל NNNN": <b>פרויקט Teachable Machine חדש</b>, אותם שמות קלאסים,
+     ו<b>בלי לגעת</b> ב-Epochs, ב-Learning rate או ב-Batch size.</p>
+  <p>ייצוא: <code>Export Model</code> ← לשונית <code>Tensorflow.js</code> ←
+     <code>Download my model</code>. שמרו כל מודל בתיקייה שנקראת בשם הגודל.</p>
+  <p class="trap"><b>מלכודת:</b> לשנות את מספר הסבבים "כי זה יותר תמונות" — ואז מדדתם
+     שני דברים בבת אחת. כל נקודה היא אימון נפרד מאפס, לא המשך של הקודם.</p>
+</li>
+
+<li>
+  <h2>הריצו הערכה לכל מודל — ושמרו עם תווית</h2>
+  <p>בכלי ההערכה, לכל מודל: שלב 1 תיקיית המודל ← שלב 2 <b>אותה ערכת מבחן בכל הנקודות</b>
+     ← הרצת ההערכה.</p>
+  <p>ודאו ש<b>הסף 0.50</b> לפני כל שמירה, הקלידו תווית, ולחצו <b>שמירה</b>:</p>
+  <table>
+    <tr><th>הגודל</th><th>התווית</th></tr>
+    <tr><td>25 לכל מחלקה</td><td><code>n=25</code></td></tr>
+    <tr><td>50</td><td><code>n=50</code></td></tr>
+    <tr><td>100</td><td><code>n=100</code></td></tr>
+    <tr><td>200</td><td><code>n=200</code></td></tr>
+    <tr><td>400</td><td><code>n=400</code></td></tr>
+  </table>
+  <p class="out"><b>מה צריך לצאת:</b> בראש הדף מופיע פס ירוק
+     "✓ נקלט אצל המורה". אם הוא כתום — אתם לא מחוברים, והשמירה ממתינה בתור.</p>
+  <p class="trap"><b>שתי מלכודות:</b> תווית ריקה הופכת ל"הרצה 1", ואז העקומה מאבדת את
+     ציר ה-X שלה לנצח. ושמירה בשני ספים שונים — הסף נצרב בתוך ההרצה בלי אזהרה,
+     ושתי נקודות ייראו כאילו ההפרש ביניהן נובע מכמות התמונות.</p>
+</li>
+
+<li>
+  <h2>סרגל הרעש — החלק שהופך את זה לניסוי</h2>
+  <p>אמנו <b>פעם שנייה</b> על אותה ערכה בדיוק, באותן הגדרות. העריכו גם אותה על
+     אותה ערכת מבחן, ושמרו בתווית <code>n=100 ב</code>.</p>
+  <p>שתי ההרצות האלה הן אותו ניסוי פעמיים. ההפרש ביניהן הוא <b>הרעש של המדידה</b>.</p>
+  <p class="where"><b>למה זה קריטי:</b> משקולות ההתחלה וסדר התמונות מוגרלים, ולכן
+     שתי הרצות זהות לא נותנות אותה תוצאה. בלי לדעת כמה גדול הרעש, כל הפרש קטן
+     בין נקודות הוא טענה בלי בסיס.</p>
+  <p class="out"><b>מה צריך לצאת:</b> שתי הרצות שמורות עם אותו מספר <code>n=</code>,
+     והפער ביניהן רשום במחברת.</p>
+</li>
+
+<li>
+  <h2>קראו את המספרים — לא את צורת הקו</h2>
+  <p>בכלי ההערכה: <b>ייצוא טבלת ההרצות ל-CSV</b>. עכשיו השוו <b>כל</b> הפרש בין
+     נקודות סמוכות לסרגל הרעש שמדדתם.</p>
+  <p>חשבו גם את הדיוק החיובי לכל הרצה בעצמכם: <code>TP/(TP+FP)</code> — הוא לא מצויר ולא נשמר.</p>
+  <p class="trap"><b>מלכודת:</b> בערכת מבחן של 200 תמונות, כל תמונה שווה חצי נקודת
+     דיוק — כלומר הפרש של נקודה אחת הוא שתי תמונות. זה רעש, לא שיפור.
+     ושימו לב: הדיוק יכול להישאר קפוא בזמן שהרגישות עולה והספציפיות יורדת.</p>
+</li>
+
+<li>
+  <h2>מפת קשב בנקודה הראשונה ובאחרונה</h2>
+  <p>בשתי הנקודות (הקטנה והגדולה): פתחו את 2–3 הטעויות הבטוחות ביותר,
+     הריצו מפת קשב ב-48px, ורשמו את האזור ואת <b>שינוי מרבי בתחזית</b>.</p>
+  <p>השאלה: <b>האם האזור שהמודל מסתכל עליו זז?</b></p>
+  <p class="where"><b>למה:</b> מודל שלמד קיצור דרך משתפר עם עוד נתונים בדיוק כמו
+     מודל שלמד את הממצא הרפואי — והעקומה תיראה כמעט אותו דבר. אם הדיוק עלה
+     והקשב נשאר על המסגרת, מה ששיפרתם הוא לא האבחון.</p>
+  <p class="trap"><b>מלכודת:</b> צבע חזק אינו "השפעה גדולה". המפה מנורמלת לכל תמונה
+     בנפרד, ולכן בכל מפה לא-ריקה יש אדום מלא. רק המספר ניתן להשוואה.</p>
+</li>
+
+<li>
+  <h2>מסקנה — ומה הניסוי לא יכול להוכיח</h2>
+  <p>במחברת, שלב 6. ארבע התשובות האפשריות להשערה:
+     <b>התאמתה / חלקית / הופרכה / המדידה לא הכריעה</b>.</p>
+  <p>וכתבו במפורש: <b>מה הניסוי הזה לא יכול להוכיח.</b></p>
+  <p class="trap"><b>המלכודת המרכזית של השיעור:</b> "העקומה התיישרה, אז הגעתי לתקרה".
+     לא בהכרח — אולי התמונות נגמרו, אולי המדד לא רגיש מספיק, ואולי המודל עצמו הוא הגבול.
+     "המדידה לא הכריעה" היא תשובה לגיטימית ומזכה.</p>
+</li>
+
+<li>
+  <h2>מומלץ — ייצוא</h2>
+  <p>מהמחברת: <b>הורדה כקובץ</b>. מכלי ההערכה: תרשים השוואת ההרצות ו-<b>ייצוא טבלת
+     ההרצות ל-CSV</b>.</p>
+  <p class="trap">ההרצות יושבות בזיכרון של הדפדפן במחשב הזה. "איפוס הרצות", או מחשב
+     אחר בשיעור הבא — והן איננו.</p>
+</li>
+
+</ol>
+
+<div class="final">
+  <b>לפני שאתם מגישים, ודאו שאתם יכולים לענות על זה בשורה אחת:</b><br>
+  בין איזו שתי נקודות העקומה התיישרה, בכמה נקודות דיוק, וכמה גדול סרגל הרעש שלכם?<br>
+  <span style="color:var(--ink2)">אם ההפרש קטן מהרעש — אתם לא יכולים לטעון שיש שם שיפור.
+  אם הוא גדול ממנו — יש לכם ממצא.</span>
+</div>
+
+</div>
+</body>
+</html>
