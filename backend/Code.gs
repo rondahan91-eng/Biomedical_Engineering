@@ -1625,6 +1625,138 @@ function weeklyChecklist(studentId, user, week, stage, gradedThisWeek,
   }
 }
 
+/**
+ * ------------------------------------------------------- עקומת הלמידה
+ * מה שאפשר לבדוק אוטומטית בשבוע עקומת הלמידה, מתוך שורות ההרצות בלבד.
+ *
+ * הדבר היחיד כאן שאינו ספירה הוא סרגל הרעש: שתי הרצות שנשמרו עם אותו n=
+ * הן אותו ניסוי פעמיים, וההפרש ביניהן הוא הרעש של המדידה. בלעדיו "העקומה
+ * התיישרה" היא אמירה חסרת משמעות - אי אפשר לדעת אם הפרש של נקודה וחצי
+ * הוא ממצא או רעש. *זה* מה שהופך את המטלה מטבלה לניסוי, וזה מה שהשרת
+ * יכול לבדוק במקום המורה.
+ *
+ * הפונקציה אינה קובעת ציון ואינה מנסחת מסקנה. היא מחזירה מספרים, והמנטור
+ * שואל עליהם.
+ */
+function curveReport(studentId, weekNumber, runRows) {
+  const mine = runRows.filter(function (r) {
+    return r.studentId === studentId && Number(r.weekNumber) === Number(weekNumber);
+  });
+  const byN = {};
+  mine.forEach(function (r) {
+    const n = runN(r.label);
+    if (n === null) return;
+    const acc = Number(r.acc);
+    if (isNaN(acc)) return;
+    (byN[n] = byN[n] || []).push({
+      acc: acc, sens: Number(r.sens), spec: Number(r.spec),
+      images: Number(r.images), threshold: Number(r.threshold), label: String(r.label || ''),
+    });
+  });
+
+  const ns = Object.keys(byN).map(Number).sort(function (a, b) { return a - b; });
+  if (!ns.length) {
+    return { points: [], unlabeled: mine.length, noiseBand: null, noiseAtN: null,
+             gaps: [], plateauFrom: null, mixedThreshold: false, mixedTestSet: false,
+             nDistinct: 0, nRepeated: 0 };
+  }
+
+  // סרגל הרעש: הפער הגדול ביותר בין שתי הרצות שנשמרו על אותו n.
+  // הגדול ולא הממוצע - סרגל צריך להיות שמרני, אחרת הוא מכשיר טענות.
+  let noiseBand = null, noiseAtN = null;
+  ns.forEach(function (n) {
+    const accs = byN[n].map(function (x) { return x.acc; });
+    if (accs.length < 2) return;
+    const spread = (Math.max.apply(null, accs) - Math.min.apply(null, accs)) * 100;
+    if (noiseBand === null || spread > noiseBand) { noiseBand = spread; noiseAtN = n; }
+  });
+
+  // נקודה אחת לכל n: הראשונה שנשמרה. שתי הרצות באותו n הן סרגל הרעש,
+  // לא שתי נקודות על הציר.
+  const points = ns.map(function (n) {
+    const p = byN[n][0];
+    return { n: n, acc: p.acc, sens: p.sens, spec: p.spec,
+             images: p.images, threshold: p.threshold, runs: byN[n].length };
+  });
+
+  const gaps = [];
+  for (let i = 1; i < points.length; i++) {
+    gaps.push({ from: points[i - 1].n, to: points[i].n,
+                delta: (points[i].acc - points[i - 1].acc) * 100 });
+  }
+
+  // "מאיפה העקומה שטוחה": ה-n הראשון שממנו והלאה *כל* הפערים קטנים
+  // מהרעש. פער בודד קטן אינו התיישרות - הוא יכול להיות גומה.
+  let plateauFrom = null;
+  if (noiseBand !== null && gaps.length) {
+    for (let i = 0; i < gaps.length; i++) {
+      let flat = true;
+      for (let j = i; j < gaps.length; j++) {
+        if (Math.abs(gaps[j].delta) > noiseBand) { flat = false; break; }
+      }
+      if (flat) { plateauFrom = gaps[i].from; break; }
+    }
+  }
+
+  const uniq = function (arr) {
+    const seen = {};
+    arr.forEach(function (v) { if (!isNaN(v)) seen[v] = true; });
+    return Object.keys(seen);
+  };
+  return {
+    points: points,
+    unlabeled: mine.length - ns.reduce(function (s, n) { return s + byN[n].length; }, 0),
+    noiseBand: noiseBand, noiseAtN: noiseAtN,
+    gaps: gaps, plateauFrom: plateauFrom,
+    // שני הדברים שהופכים את העקומה למדידה של שני דברים שונים בלי להודיע:
+    // סף שונה בין נקודות, וערכת מבחן בגודל שונה.
+    mixedThreshold: uniq(points.map(function (p) { return p.threshold; })).length > 1,
+    mixedTestSet: uniq(points.map(function (p) { return p.images; })).length > 1,
+    nDistinct: ns.length,
+    nRepeated: ns.filter(function (n) { return byN[n].length >= 2; }).length,
+  };
+}
+
+/** אותו דוח כטקסט קצר לפרומפט. מספרים בלבד - בלי מסקנה ובלי ציון. */
+function curveReportLines(cr) {
+  if (!cr || !cr.points.length) {
+    return 'טרם נשמרו הרצות עם תווית n= בשבוע הזה.' +
+      (cr && cr.unlabeled ? ' (' + cr.unlabeled + ' הרצות נשמרו בלי תווית n=.)' : '');
+  }
+  const pct = function (v) { return isNaN(v) ? '—' : (v * 100).toFixed(1) + '%'; };
+  const lines = ['נקודות שנמדדו (n = תמונות לכל מחלקה):'];
+  cr.points.forEach(function (p) {
+    lines.push('  n=' + p.n + ' · דיוק ' + pct(p.acc) + ' · רגישות ' + pct(p.sens) +
+      ' · ספציפיות ' + pct(p.spec) + ' · ערכת מבחן ' + p.images + ' · סף ' + p.threshold);
+  });
+  lines.push(cr.noiseBand === null
+    ? 'סרגל רעש: טרם נמדד. אין שתי הרצות שמורות על אותו n=, ולכן אי אפשר לדעת ' +
+      'אם הפרש כלשהו בין נקודות הוא ממצא או רעש.'
+    : 'סרגל רעש: ' + cr.noiseBand.toFixed(1) + ' נקודות דיוק (נמדד על n=' + cr.noiseAtN + ').');
+  if (cr.gaps.length) {
+    lines.push('פערים בין נקודות סמוכות: ' + cr.gaps.map(function (g) {
+      return g.from + '→' + g.to + ': ' + (g.delta >= 0 ? '+' : '') + g.delta.toFixed(1);
+    }).join(' · '));
+  }
+  if (cr.noiseBand !== null) {
+    lines.push(cr.plateauFrom === null
+      ? 'לפי המספרים: אין עדיין טווח שבו כל הפערים קטנים מהרעש — כלומר העקומה ' +
+        'טרם התיישרה בתוך מה שנמדד.'
+      : 'לפי המספרים: מ-n=' + cr.plateauFrom + ' והלאה כל הפערים קטנים מסרגל הרעש.');
+  }
+  if (cr.mixedThreshold) {
+    lines.push('⚠ ההרצות נשמרו בספים שונים. הסף נצרב בתוך כל הרצה, ולכן חלק ' +
+      'מההפרש בין הנקודות אינו נובע מכמות התמונות.');
+  }
+  if (cr.mixedTestSet) {
+    lines.push('⚠ ההרצות נשמרו על ערכות מבחן בגדלים שונים. הנקודות אינן על אותו ציר.');
+  }
+  if (cr.unlabeled) {
+    lines.push('⚠ ' + cr.unlabeled + ' הרצות נשמרו בלי תווית n= ואינן נספרות.');
+  }
+  return lines.join('\n');
+}
+
 /** כל הקריאות שצריך כדי לבנות צ׳קליסט אחד, במקום אחד. */
 function checklistBundle(studentId) {
   const user = sheetToObjects(getSheet(SHEET_USERS)).find(u => u.studentId === studentId);
@@ -1844,6 +1976,8 @@ function getStudentContext(studentId) {
           !!(thisWeekCheckIn && thisWeekCheckIn.status === 'graded'),
           artifactRows, runRows, progRows)
       : null,
+    // רק בשבוע עקומת הלמידה, ומתוך שורות שכבר נקראו - אפס קריאות נוספות.
+    curve: planKey === 'curve' ? curveReport(studentId, week.weekNumber, runRows) : null,
     trainerUrl: TRAINER_URL,
     priorSummary: lastGraded ? lastGraded.aiMemorySummary : '',
     gradedThisWeek: !!(thisWeekCheckIn && thisWeekCheckIn.status === 'graded'),
@@ -1924,6 +2058,24 @@ function buildSystemPrompt(ctx) {
       ].join('\n')
       : 'אין צ׳קליסט לשבוע הזה. המשימה היא בדיוק "נושא השיעור השבועי" למעלה.',
     '',
+    // רק בשבוע עקומת הלמידה. אלה המספרים של התלמיד/ה עצמו/ה, ישירות
+    // מההרצות ששמר/ה - ולכן אפשר לשאול עליהם בלי לבקש שידווח/תדווח אותם.
+    ...(ctx.curve ? [
+      '[עקומת הלמידה - המספרים ששמר/ה התלמיד/ה, נשלפים מהמערכת]',
+      curveReportLines(ctx.curve),
+      '',
+      'איך להשתמש בזה: שאל/י על המספרים האלה, אל תדווח/י אותם. **אסור לומר',
+      'לתלמיד/ה מה המסקנה** - לא "העקומה התיישרה", לא "הגעת לתקרה" ולא "זה רעש".',
+      'השורה "לפי המספרים" היא *לידיעתך בלבד*: היא קיימת כדי שתדע/י אם מה',
+      'שהוא/היא טוען/ת מתיישב עם המדידה שלו/ה, ולא כדי לצטט אותה.',
+      'אם הוא/היא טוען/ת שהעקומה התיישרה - בקש/י להשוות את הפער לסרגל הרעש.',
+      'אם אין עדיין סרגל רעש - זו השאלה החשובה ביותר שיש לשאול השבוע: בלי',
+      'שתי הרצות על אותו n אין דרך לדעת אם הפרש כלשהו הוא ממצא.',
+      'אם הפערים קטנים מהרעש - שאל/י מה *עוד* יכול להסביר את זה חוץ מ"הגעתי',
+      'לתקרה": אולי התמונות נגמרו, אולי המדד אינו רגיש, אולי המודל הוא הגבול.',
+      'אם סומן ⚠ - הפנה/י לזה כשאלה ("על איזה סף נשמרו הנקודות?"), לא כהאשמה.',
+      '',
+    ] : []),
     '[ידע מקצועי - קריאת התוצאות של כלי ההערכה]',
     'זה הידע שממנו את/ה מסביר/ה כששואלים אותך על המושגים האלה. הסבר/י בפשטות,',
     'עם דוגמה מספרית *משלך* - ולעולם אל תחשב/י עבור התלמיד/ה את המספרים שלו/ה.',

@@ -65,7 +65,7 @@ try {
   const api = new Function(...names, src + `
     ; return { assertChecklistTemplates, CHECKLIST_TEMPLATES, weeklyChecklist, runN,
                SHEET_SCHEMAS, SHEET_PLANS, SHEET_PROGRESS, SHEET_RUNS,
-               MODEL_FILES, ASSIGNMENT };`)(...names.map(n => stubs[n]));
+               MODEL_FILES, ASSIGNMENT, curveReport, curveReportLines };`)(...names.map(n => stubs[n]));
 
   [api.SHEET_PLANS, api.SHEET_PROGRESS, api.SHEET_RUNS]
     .forEach(n => { DB[n] = [api.SHEET_SCHEMAS[n].slice()]; });
@@ -157,6 +157,42 @@ try {
   eq('כבר קיבל/ה ציון השבוע', run(2, true, [], []).blocked, false);
   eq('אין תבנית לשבוע → null',
      (DB[api.SHEET_PLANS] = [api.SHEET_SCHEMAS[api.SHEET_PLANS].slice()], run(2, false, [], [])), null);
+
+  // ---- 11. דוח עקומת הלמידה ----------------------------------------------
+  const mk = (label, acc, extra) => Object.assign(
+    { studentId: 'S1', weekNumber: 7, label, acc, sens: 0.8, spec: 0.9,
+      images: 200, threshold: 0.5 }, extra || {});
+  // עקומה אופיינית: קפיצות גדולות בהתחלה, שטוח בסוף, סרגל רעש על n=100
+  const curve = api.curveReport('S1', 7, [
+    mk('n=25', 0.880), mk('n=50', 0.915), mk('n=100', 0.936),
+    mk('n=100 ב', 0.930), mk('n=200', 0.939), mk('n=400', 0.941)]);
+  eq('עקומה: חמש נקודות', curve.nDistinct, 5);
+  eq('עקומה: סרגל הרעש בנקודות דיוק', +curve.noiseBand.toFixed(2), 0.6);
+  eq('עקומה: הרעש נמדד על', curve.noiseAtN, 100);
+  eq('עקומה: הפערים', curve.gaps.map(g => g.from + '→' + g.to + ':' + g.delta.toFixed(1)),
+     ['25→50:3.5', '50→100:2.1', '100→200:0.3', '200→400:0.2']);
+  eq('עקומה: מאיפה שטוח (הפער הראשון שקטן מהרעש ונשאר קטן)', curve.plateauFrom, 100);
+
+  // בלי שתי הרצות על אותו n אין סרגל, ולכן אסור לטעון שהעקומה התיישרה
+  eq('בלי סרגל רעש אין טענת התיישרות',
+     api.curveReport('S1', 7, [mk('n=25', 0.88), mk('n=50', 0.91)]).plateauFrom, null);
+
+  // גומה בודדת אינה התיישרות: 25→50 הוא 0.3 נקודות ונראה שטוח, אבל 50→100
+  // הוא 4.7 — ולכן אין שום n שממנו והלאה *הכול* קטן מהרעש.
+  eq('גומה בודדת אינה התיישרות',
+     api.curveReport('S1', 7, [mk('n=25', 0.880), mk('n=50', 0.883), mk('n=100', 0.930),
+                               mk('n=100 ב', 0.926)]).plateauFrom, null);
+
+  // שלוש הדרכים שבהן עקומה מודדת שני דברים שונים בלי להודיע
+  const flagged = api.curveReport('S1', 7, [
+    mk('n=25', 0.88), mk('n=50', 0.91, { threshold: 0.4 }),
+    mk('n=100', 0.93, { images: 120 }), mk('הרצה 4', 0.94)]);
+  eq('דגל: ספים שונים', flagged.mixedThreshold, true);
+  eq('דגל: ערכות מבחן שונות', flagged.mixedTestSet, true);
+  eq('דגל: הרצה בלי תווית n=', flagged.unlabeled, 1);
+
+  eq('אין הרצות → טקסט ולא קריסה',
+     api.curveReportLines(api.curveReport('S1', 7, [])).slice(0, 9), 'טרם נשמרו');
 
 } catch (err) {
   R.push({ pass: false, text: 'FAIL החבילה לא נטענה כלל → ' + err.message });
