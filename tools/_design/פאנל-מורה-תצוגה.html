@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>תצוגת פאנל המורה - צ׳קליסט</title>
+<!-- הגיליון נטען ב-fetch ולא ב-link: דפדפן מגיש <link> מהמטמון גם אחרי
+     עריכה, ואז נראה כאילו הכללים החדשים לא נכתבו. המודולים עצמם נטענים בלי
+     מחרוזת גרסה בכוונה - ?v= היה יוצר עותק שני של config.js, ו-api.js היה
+     ממשיך לקרוא את הכתובת האמיתית. את המטמון של המודולים מנצחים בכך
+     שמגישים את התיקייה בפורט חדש. -->
+<style id="live-css"></style>
+<style>
+  body { margin: 0; }
+  #boot { font: 14px 'Segoe UI', Arial, sans-serif; padding: 24px; color: #4a6478; }
+  #boot b { color: #dc2626; }
+  #boot pre { white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<div id="app"><div id="boot">טוען…</div></div>
+
+<script type="module">
+try {
+  document.getElementById('live-css').textContent =
+    await fetch('../../css/style.css?v=' + Date.now()).then(r => r.text());
+
+  // מצב פיתוח מאולץ: API_URL ריק פירושו ש-dispatch פונה ל-callLocal, ולכן
+  // שום בקשה לא יוצאת מהדפדפן ושום דבר כאן לא נוגע בכיתה האמיתית.
+  const { CONFIG } = await import('../../js/config.js');
+  CONFIG.API_URL = '';
+
+  // מסד דמו עם שתי קבוצות ושישה תלמידים, בשני שלבים שונים - כך שהאזהרה
+  // על "צ׳קליסט שדורש שלב 2" ניתנת לבדיקה. נכתב לפני ש-api.js נטען, כך
+  // ש-ensureSeeded מוצא מסד קיים ולא זורע את ברירת המחדל.
+  const DB_KEY = CONFIG.SESSION_KEY + '-devdb';
+  const sha = async s => {
+    const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+    return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join('');
+  };
+  const names = [['דנה', 'אלון', 'י1'], ['רועי', 'בר', 'י1'], ['מאיה', 'גל', 'י1'],
+                 ['איתי', 'דגן', 'י2'], ['שירה', 'הר', 'י2'], ['עומר', 'ויס', 'י2']];
+  const users = [{ studentId: 'admin', username: 'admin', passHash: await sha('admin123'),
+                   mustChangePassword: false, role: 'admin', firstName: 'מורה', lastName: '' }];
+  names.forEach(([f, l, g], i) => users.push({
+    studentId: 'd' + i, username: f + (1000 + i), passHash: '', mustChangePassword: false,
+    role: 'student', firstName: f, lastName: l, group: g, note: '', currentExperiment: 'curve',
+  }));
+  localStorage.setItem(DB_KEY, JSON.stringify({
+    users,
+    weeks: { 'י1': { weekNumber: 4, topicText: 'עקומת למידה' },
+             'י2': { weekNumber: 3, topicText: 'תיק הערכת המודל' } },
+    stages: { 'י1': 2, 'י2': 1 },
+    checkIns: [], helpChats: [], artifacts: [],
+  }));
+
+  const api = await import('../../js/api.js');
+  const session = await api.authenticateUser('admin', 'admin123');
+  const { mountTeacherDashboard } = await import('../../js/teacherDashboard.js');
+  await mountTeacherDashboard(document.getElementById('app'), session, () => {});
+  window.__ready = true;
+} catch (e) {
+  window.__bootError = String((e && e.stack) || e);
+  document.getElementById('boot').innerHTML =
+    '<b>נפילה בטעינה:</b><pre>' + String((e && e.stack) || e) + '</pre>';
+}
+</script>
+</body>
+</html>

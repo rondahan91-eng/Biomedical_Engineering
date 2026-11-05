@@ -6,7 +6,8 @@ import { escapeHtml, toast, topbarHtml, wireLogout, passwordField, wirePasswordE
 import {
   getDashboard, getGroupWeeks, setGroupStage, startNewWeek, updateCurrentWeekTopic, deleteCheckIn,
   getStudentTranscripts, setManualGrade, exportWeeklyReport, importRoster, resetStudentPassword,
-  changePassword, deleteStudent,
+  changePassword, deleteStudent, setWeekChecklist, overrideChecklistItem, resetWeeklyUsage,
+  setChecklistGate,
 } from './api.js';
 import { parseStudentsExcel } from './excelImport.js';
 
@@ -16,13 +17,23 @@ import { parseStudentsExcel } from './excelImport.js';
 const STAGES = ['עקומת למידה', 'יחסי איזון', 'הכללה בין מקורות', 'התערבות'];
 const TOOL_AT = { 1: 'מחברת ניסוי', 2: 'הערכת מודל', 3: 'כלי הפרעות' };
 
+// מאיפה הגיע הסימון. ההבדל בין "המערכת ראתה את הקובץ" לבין "התלמיד/ה טוען/ת
+// שעשה/תה" הוא ההבדל היחיד שחשוב כאן, ולכן הוא צבוע ולא מוסתר בטקסט.
+const CL_SRC = {
+  auto:    { t: 'זוהה במערכת', c: 'ok' },
+  teacher: { t: 'אושר על ידי המורה', c: 'warn' },
+  waived:  { t: 'שוחרר', c: 'warn' },
+  self:    { t: 'הצהרה', c: 'neutral' },
+  claim:   { t: 'טענה שלא אומתה', c: 'warn' },
+};
+
 export async function mountTeacherDashboard(app, session, onLogout) {
   // כל קבוצה מתקדמת בקצב שלה, ולכן אין "השבוע" אחד לכיתה: groups מחזיק שורה
   // לכל קבוצה, ו-selectedGroup הוא זו שהפאנל עורך כרגע. filterGroup הוא סינון
   // תצוגה בלבד של טבלת התלמידים ואינו קשור לעריכה.
   const state = { students: [], groups: [], selectedGroup: null, filterGroup: null,
                   selectedStudentId: null, transcripts: null, importPreview: null,
-                  checked: new Set() };
+                  clStudentId: null, checked: new Set() };
   await refresh();
 
   async function refresh() {
@@ -34,6 +45,10 @@ export async function mountTeacherDashboard(app, session, onLogout) {
     }
     if (state.filterGroup !== null && !groups.some(g => g.group === state.filterGroup)) {
       state.filterGroup = null;
+    }
+    // תלמיד/ה שנמחק/ה בזמן שהצ׳קליסט שלו/ה פתוח היה משאיר פאנל ריק
+    if (state.clStudentId && !students.some(s => s.studentId === state.clStudentId)) {
+      state.clStudentId = null;
     }
     render();
   }
@@ -73,7 +88,7 @@ export async function mountTeacherDashboard(app, session, onLogout) {
                     <th class="check-cell" style="width:38px"><input type="checkbox" id="check-all"
                         title="סימון הכול" style="margin:0"></th>
                     <th>שם</th><th>קבוצה</th><th>ניסוי נוכחי</th><th>הערה</th>
-                    <th>שבועות</th><th>ציון Mentor</th><th>השבוע</th><th></th>
+                    <th style="min-width:190px">צ׳קליסט</th><th>שבועות</th><th>ציון Mentor</th><th>השבוע</th><th></th>
                   </tr></thead>
                   <tbody>
                     ${visibleStudents().map(s => `
@@ -87,6 +102,7 @@ export async function mountTeacherDashboard(app, session, onLogout) {
                           ? ` <span class="muted-week">· שבוע ${s.groupWeekNumber}</span>` : ''}</td>
                         <td>${escapeHtml(s.experimentName || '—')}</td>
                         <td>${escapeHtml(s.note || '—')}</td>
+                        <td>${checklistCell(s)}</td>
                         <td>${s.weeksCompleted}</td>
                         <td>${s.mentorGrade}${s.surplusPoints > 0 ? ` <span class="pill ok">+${s.surplusPoints.toFixed(1)} בונוס</span>` : ''}</td>
                         <td>${s.doneThisWeek ? '<span class="pill ok">בוצע</span>' : '<span class="pill bad">חסר</span>'}</td>
@@ -100,6 +116,7 @@ export async function mountTeacherDashboard(app, session, onLogout) {
                 </table>
               </div>
             </div>
+            ${state.clStudentId ? renderChecklistDetail() : ''}
             ${state.selectedStudentId ? renderStudentDetail() : ''}
           </div>
 
@@ -164,6 +181,7 @@ export async function mountTeacherDashboard(app, session, onLogout) {
         <p class="form-note">שבוע ${w.weekNumber}${w.topicText ? ' · ' + escapeHtml(w.topicText) : ' · טרם הוזן נושא'}${
           w.checkIn === false ? ' · <b>ללא צ׳ק-אין מוערך</b>' : ''}</p>
         ${renderStagePanel(w)}
+        ${renderChecklistPicker(w)}
         ${!w.isOwn ? `<p class="form-note warn-note">הקבוצה הזו עדיין על הנושא המשותף
           שנקבע לפני ההפרדה. שמירה כאן תיצור לה מסלול משלה, בלי לגעת בקבוצות האחרות.</p>` : ''}
         <div class="field"><textarea id="topic-input" rows="2"
@@ -216,6 +234,147 @@ export async function mountTeacherDashboard(app, session, onLogout) {
         </div>
       </div>`;
   }
+
+  /**
+   * בורר הצ׳קליסט לשבוע הנוכחי של הקבוצה הנבחרת.
+   *
+   * זה המקום היחיד שבו צ׳קליסט נדלק או נכבה. בלי בחירה כאן, מסך התלמיד
+   * מציג את שלושת השלבים הישנים וכלום לא נחסם - וזו ברירת המחדל של כל
+   * שבוע, בכוונה.
+   */
+  function renderChecklistPicker(w) {
+    const cat = w.checklistCatalog;
+    if (!Array.isArray(cat)) {
+      // שרת ישן. אומרים את זה במפורש במקום להציג בורר שלא יעשה דבר.
+      return `<p class="form-note warn-note">השרת הפרוס אינו מכיר צ׳קליסטים.
+        יש להדביק את <code>Code.gs</code> העדכני ולפרוס <b>גרסה חדשה</b>.</p>`;
+    }
+    const cur = w.templateKey || '';
+    const stage = w.unlockedStage || 1;
+    const picked = cat.find(c => c.key === cur) || null;
+    const inGroup = state.students.filter(s => (s.group || '') === (w.group || '') && s.checklist);
+    const ready = inGroup.filter(s => s.checklist.gateTotal > 0 && s.checklist.gateDone >= s.checklist.gateTotal).length;
+    const stuck = inGroup.filter(s => s.checklist.blocked).length;
+    const claims = inGroup.filter(s => s.checklist.claims > 0).length;
+
+    return `
+      <div class="stage-box">
+        <div class="mono-lbl">צ׳קליסט השבוע ל${escapeHtml(groupLabel(w.group))}</div>
+        <div class="group-filter" style="margin:9px 0 0;">
+          <button type="button" class="chip cl-pick${cur === '' ? ' active' : ''}" data-key="">ללא צ׳קליסט</button>
+          ${cat.map(c => `<button type="button" class="chip cl-pick${c.key === cur ? ' active' : ''}"
+              data-key="${escapeHtml(c.key)}">${escapeHtml(c.title)}<span class="muted-week"> · ${
+                c.itemCount} סעיפים · ${c.gateCount} חוסמים</span></button>`).join('')}
+        </div>
+        ${picked && picked.maxStage > stage ? `<p class="form-note warn-note" style="margin-bottom:0;">
+          סעיפים בצ׳קליסט הזה נפתחים ב<b>שלב ${picked.maxStage}</b>, והקבוצה בשלב ${stage}.
+          עד שייפתח שלב ${picked.maxStage} הם לא ייספרו, לא יחסמו — והמשימה אינה ניתנת לביצוע,
+          כי ערכות האימון של השלב הזה עדיין אינן משותפות.</p>` : ''}
+        ${cur ? `<p class="form-note" style="margin-bottom:0;">
+            ${inGroup.length} תלמידים · <b>${ready}</b> השלימו את הסעיפים החוסמים ·
+            ${stuck ? `<b style="color:var(--err);">${stuck} חסומים</b>` : 'אף אחד אינו חסום'}${
+              claims ? ` · ${claims} עם סעיף שהמערכת לא אימתה` : ''}</p>`
+          : `<p class="form-note" style="margin-bottom:0;">בלי צ׳קליסט, מסך התלמיד מציג את
+            שלושת השלבים הישנים ושום דבר אינו נחסם.</p>`}
+        ${renderGateSwitch(w)}
+      </div>`;
+  }
+
+  /**
+   * מתג החסימה. הוא של כל הפריסה ולא של קבוצה אחת, ולכן הוא אומר זאת
+   * במפורש: אין מצב שבו קבוצה אחת חסומה והשנייה לא.
+   */
+  function renderGateSwitch(w) {
+    if (typeof w.checklistGateOn !== 'boolean') return '';
+    const on = w.checklistGateOn;
+    return `
+      <div style="display:flex;gap:10px;align-items:flex-start;margin-top:10px;
+                  padding-top:10px;border-top:1px solid var(--line);">
+        <button type="button" id="gate-toggle" class="${on ? 'secondary' : ''}"
+          style="flex:none;">${on ? 'כיבוי החסימה' : 'הדלקת החסימה'}</button>
+        <p class="form-note" style="margin:0;">
+          ${on
+            ? '<b>החסימה דולקת.</b> תלמיד/ה שלא השלים/ה את הסעיפים החוסמים אינו/ה יכול/ה לפתוח את הצ׳ק-אין המוערך. יש שלושה פתחי מילוט: אישור סעיף, שחרור השבוע, וכיבוי המתג הזה.'
+            : '<b>החסימה כבויה.</b> הצ׳קליסט מוצג ומנחה, אך אינו מונע הגשה. זה המצב הנכון לשיעור הראשון עם צ׳קליסט.'}
+          המתג חל על <b>כל הקבוצות</b> יחד.</p>
+      </div>`;
+  }
+
+  /** התא בטבלה. גם כשאין צ׳קליסט הוא לחיץ - שם נמצא איפוס מונה ההודעות. */
+  function checklistCell(s) {
+    const cl = s.checklist;
+    if (!cl) return `<button type="button" class="cl-cell cl-open" data-id="${s.studentId}"
+        title="אין צ׳קליסט לשבוע הזה · לחיצה פותחת את פעולות המורה"><b>—</b></button>`;
+    const cls = cl.blocked ? ' bad' : (cl.gateDone >= cl.gateTotal ? ' ok' : '');
+    // הכותרת המלאה יושבת ב-title: בתא היא נחתכת לשתי שורות, אחרת שורת
+    // טבלה אחת מתנפחת לגובה של שבע שורות טקסט.
+    return `<button type="button" class="cl-cell cl-open${cls}" data-id="${s.studentId}"
+        title="${escapeHtml(cl.stuckOn || cl.title)}">
+        <b>${cl.gateDone}/${cl.gateTotal}</b>
+        ${cl.stuckOn ? `<span>${escapeHtml(cl.stuckOn)}</span>` : ''}
+        ${cl.claims ? `<i>${cl.claims} לא אומת</i>` : ''}
+      </button>`;
+  }
+
+  /** צ׳קליסט של תלמיד/ה אחד/אחת, עם פתחי המילוט של המורה. */
+  function renderChecklistDetail() {
+    const s = state.students.find(x => x.studentId === state.clStudentId);
+    if (!s) return '';
+    const name = `${s.firstName || ''} ${s.lastName || ''}`.trim() || s.username || '';
+    const foot = `
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+        ${s.checklist ? (clWaived(s.checklist)
+          ? `<button type="button" id="cl-unwaive" class="secondary">ביטול השחרור</button>`
+          : `<button type="button" id="cl-waive" class="secondary">שחרור השבוע כולו</button>`) : ''}
+        <button type="button" id="cl-reset-usage" class="secondary">איפוס מונה ההודעות</button>
+        <button type="button" id="cl-close" class="secondary">סגירה</button>
+      </div>`;
+
+    if (!s.checklist) {
+      return `<div class="panel glass">
+        <h3>☑️ ${escapeHtml(name)}</h3>
+        <p class="form-note" style="margin-top:0;">לשבוע הנוכחי של ${escapeHtml(groupLabel(s.group))}
+          לא נבחר צ׳קליסט, ולכן אין מה לאשר. איפוס מונה ההודעות עובד בכל מקרה.</p>
+        ${foot}</div>`;
+    }
+
+    const cl = s.checklist;
+    return `
+    <div class="panel glass">
+      <h3>☑️ ${escapeHtml(cl.title)} — ${escapeHtml(name)}</h3>
+      <p class="form-note" style="margin-top:0;">
+        ${cl.gateDone}/${cl.gateTotal} סעיפים חוסמים ·
+        ${cl.blocked ? '<b style="color:var(--err);">הצ׳ק-אין המוערך חסום</b>'
+                     : '<b style="color:var(--ok);">הצ׳ק-אין פתוח</b>'}${
+          clWaived(cl) ? ' · שוחרר על ידי המורה' : ''}</p>
+      <div class="cl-rows">
+        ${cl.cells.map(c => `
+          <div class="cl-row${c.done ? ' done' : ''}${c.available ? '' : ' off'}">
+            <span class="cl-mark">${c.done ? '✓' : (c.available ? '○' : '🔒')}</span>
+            <div class="cl-body">
+              <b>${escapeHtml(c.title)}</b>
+              ${c.gate ? '<span class="cl-tag bad">חוסם</span>' : '<span class="cl-tag">מומלץ</span>'}
+              ${CL_SRC[c.source] ? `<span class="cl-tag ${CL_SRC[c.source].c}">${CL_SRC[c.source].t}</span>` : ''}
+              ${c.available ? '' : '<span class="muted-week">· נפתח בשלב מתקדם יותר</span>'}
+              ${c.note ? `<div class="cl-note">״${escapeHtml(c.note)}״</div>` : ''}
+            </div>
+            <span class="cl-btns">
+              <button type="button" class="secondary cl-set" data-item="${escapeHtml(c.id)}" data-done="1"
+                ${c.done && c.source === 'teacher' ? 'disabled' : ''}>אישור</button>
+              <button type="button" class="secondary cl-set" data-item="${escapeHtml(c.id)}" data-done="0"
+                ${c.done ? '' : 'disabled'}>ביטול</button>
+            </span>
+          </div>`).join('')}
+      </div>
+      ${foot}
+      <p class="form-note" style="margin-bottom:0;">״אישור״ רושם את הסעיף על שמך וגובר על כל זיהוי
+        אוטומטי. ״שחרור השבוע כולו״ פותח את הצ׳ק-אין המוערך בלי לסמן דבר — למי שהכלי נכשל אצלו/ה,
+        והוא תקף לשבוע הזה בלבד. ״איפוס מונה ההודעות״ מחזיר את מכסת ההודעות השבועית, למי שהגיע/ה
+        לתקרה לפני שהספיק/ה להגיש.</p>
+    </div>`;
+  }
+
+  function clWaived(cl) { return cl.cells.some(c => c.source === 'waived'); }
 
   function renderImportPreview() {
     if (!state.importPreview) return '';
@@ -445,6 +604,98 @@ ${names}`;
 
     const closeBtn = document.getElementById('close-detail-btn');
     if (closeBtn) closeBtn.addEventListener('click', () => { state.selectedStudentId = null; render(); });
+
+    // --- צ׳קליסט ---
+    document.querySelectorAll('.cl-pick').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const key = btn.dataset.key || '';
+        if (key === (currentGroupWeek().templateKey || '')) return;
+        document.querySelectorAll('.cl-pick').forEach(b => { b.disabled = true; });
+        try {
+          const r = await setWeekChecklist(state.selectedGroup, key);
+          toast(key
+            ? `${groupLabel(state.selectedGroup)} · ${r.title || key}` +
+              (r.gateCount != null ? ` · ${r.gateCount} סעיפים חוסמים` : '')
+            : `${groupLabel(state.selectedGroup)} · הצ׳קליסט הוסר מהשבוע`);
+          await refresh();
+        } catch (err) {
+          document.querySelectorAll('.cl-pick').forEach(b => { b.disabled = false; });
+          toast('שגיאה: ' + err.message, true);
+        }
+      });
+    });
+
+    const gateBtn = document.getElementById('gate-toggle');
+    if (gateBtn) gateBtn.addEventListener('click', async () => {
+      const turningOn = !currentGroupWeek().checklistGateOn;
+      if (turningOn && !confirm('להדליק את חסימת הצ׳ק-אין לכל הכיתה?\n\n' +
+        'מרגע זה, תלמיד/ה שלא השלים/ה את הסעיפים החוסמים לא יוכל/תוכל לפתוח\n' +
+        'את החלק המוערך. אפשר לכבות שוב באותו כפתור, בכל רגע.')) return;
+      gateBtn.disabled = true;
+      try {
+        const r = await setChecklistGate(turningOn);
+        toast(r.gateOn ? 'החסימה דולקת לכל הכיתה' : 'החסימה כבויה — הצ׳קליסט מוצג בלבד');
+        await refresh();
+      } catch (err) { gateBtn.disabled = false; toast('שגיאה: ' + err.message, true); }
+    });
+
+    document.querySelectorAll('.cl-open').forEach(btn => {
+      btn.addEventListener('click', () => { state.clStudentId = btn.dataset.id; render(); });
+    });
+
+    const clClose = document.getElementById('cl-close');
+    if (clClose) clClose.addEventListener('click', () => { state.clStudentId = null; render(); });
+
+    document.querySelectorAll('.cl-set').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        try {
+          await overrideChecklistItem(state.clStudentId, btn.dataset.item, btn.dataset.done === '1');
+          await refresh();
+        } catch (err) {
+          btn.disabled = false;
+          toast('שגיאה: ' + err.message, true);
+        }
+      });
+    });
+
+    const clWaiveBtn = document.getElementById('cl-waive');
+    if (clWaiveBtn) clWaiveBtn.addEventListener('click', async () => {
+      const s = state.students.find(x => x.studentId === state.clStudentId);
+      const nm = s ? `${s.firstName || ''} ${s.lastName || ''}`.trim() : '';
+      if (!confirm(`לשחרר את ${nm} מהצ׳קליסט של השבוע?\n\n` +
+        'הצ׳ק-אין המוערך ייפתח מיד, בלי שאף סעיף יסומן. השחרור תקף לשבוע הזה בלבד,\n' +
+        'ואפשר לבטל אותו מיד אחר כך.')) return;
+      clWaiveBtn.disabled = true;
+      try {
+        await overrideChecklistItem(state.clStudentId, '*', true);
+        toast(nm + ' שוחרר/ה לשבוע הזה');
+        await refresh();
+      } catch (err) { clWaiveBtn.disabled = false; toast('שגיאה: ' + err.message, true); }
+    });
+
+    const clUnwaiveBtn = document.getElementById('cl-unwaive');
+    if (clUnwaiveBtn) clUnwaiveBtn.addEventListener('click', async () => {
+      clUnwaiveBtn.disabled = true;
+      try {
+        await overrideChecklistItem(state.clStudentId, '*', false);
+        toast('השחרור בוטל');
+        await refresh();
+      } catch (err) { clUnwaiveBtn.disabled = false; toast('שגיאה: ' + err.message, true); }
+    });
+
+    const clResetBtn = document.getElementById('cl-reset-usage');
+    if (clResetBtn) clResetBtn.addEventListener('click', async () => {
+      if (!confirm('לאפס את מונה ההודעות השבועי?\n\n' +
+        'מכסת ההודעות תתחיל מחדש. התמלול, הציון והצ׳קליסט לא ייפגעו.')) return;
+      clResetBtn.disabled = true;
+      try {
+        const r = await resetWeeklyUsage(state.clStudentId);
+        toast(r.deleted ? 'מונה ההודעות אופס לשבוע ' + r.weekNumber
+                        : 'לא היה מה לאפס — המונה כבר ריק');
+      } catch (err) { toast('שגיאה: ' + err.message, true); }
+      clResetBtn.disabled = false;
+    });
 
     document.querySelectorAll('.override-form').forEach(form => {
       form.addEventListener('submit', async (e) => {

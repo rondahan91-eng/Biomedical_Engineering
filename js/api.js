@@ -108,6 +108,71 @@ function devGroups(db) {
   return Object.keys(seen).sort().map(g => ({ group: g, studentCount: seen[g] }));
 }
 
+// ------------------------------------------------------ צ׳קליסט במצב פיתוח
+// עותק מצומצם של CHECKLIST_TEMPLATES שב-backend/Code.gs, בלי ההסברים
+// וההפניות: כאן צריך רק את מה שהפאנל מצייר - מזהה, כותרת, האם חוסם, ומאיזה
+// שלב. מקור האמת הוא השרת; זה קיים כדי שאפשר יהיה לבדוק את הפאנל בלי שרת.
+const DEV_CHECKLISTS = {
+  dossier: { title: 'תיק ההערכה של המודל שלי', items: [
+    { id: 'model',     gate: true,  stage: 1, title: 'ייצוא המודל מ-Teachable Machine ושמירתו במערכת' },
+    { id: 'run',       gate: true,  stage: 1, title: 'הרצת ההערכה על ערכת המבחן' },
+    { id: 'cells',     gate: true,  stage: 1, title: 'חלק א׳ ו-ב׳ — ארבעת התאים בסף 0.50, וארבעת המדדים מתוכם' },
+    { id: 'threshold', gate: true,  stage: 1, title: 'חלק ג׳ — שלוש שורות סף, ומה שילמתם כדי להרוויח רגישות' },
+    { id: 'heatmap',   gate: true,  stage: 1, title: 'חלק ד׳ — מפת קשב על הטעות שהמודל היה בטוח בה ביותר' },
+    { id: 'claim2',    gate: true,  stage: 1, title: 'חלק ה׳ — טענה אחת, שתי ראיות משני רכיבים, והבדיקה שתפריך אותה' },
+    { id: 'submit',    gate: true,  stage: 1, title: 'הגשת תיק ההערכה — והקובץ נקלט אצל המורה' },
+    { id: 'charts',    gate: false, stage: 1, title: 'מומלץ — תיוק ארבעת התרשימים וטבלת התוצאות' },
+  ] },
+  curve: { title: 'שבוע עקומת הלמידה', items: [
+    { id: 'exp_marked', gate: true,  stage: 1, title: 'סימון הניסוי "עקומת למידה" ופתיחת רשומה במחברת' },
+    { id: 'sizes',      gate: true,  stage: 2, title: 'ספירת הגדלים שנבנו בפועל — וכתיבת הרשימה' },
+    { id: 'hypothesis', gate: true,  stage: 1, title: 'נעילת השערה שנוקבת במספר — לפני המדידה' },
+    { id: 'noise',      gate: true,  stage: 1, title: 'סרגל הרעש — שתי הרצות על אותה ערכה בדיוק' },
+    { id: 'models',     gate: true,  stage: 2, title: 'אימון מודל נפרד לכל גודל — כל אחד מאפס, באותן הגדרות' },
+    { id: 'runs5',      gate: true,  stage: 2, title: 'חמש הרצות שמורות, כל אחת עם תווית n=, כולן באותו סף' },
+    { id: 'read3',      gate: true,  stage: 1, title: 'קריאת שלושת הקווים — וחישוב הדיוק החיובי מה-CSV' },
+    { id: 'maps',       gate: true,  stage: 1, title: 'מפת קשב בנקודה הראשונה ובאחרונה — האם האזור זז' },
+    { id: 'conclusion', gate: true,  stage: 1, title: 'מסקנה — ואם המדידה לא הכריעה, לכתוב זאת' },
+    { id: 'record',     gate: false, stage: 1, title: 'מומלץ — ייצוא רשומת המחברת ותרשים השוואת ההרצות' },
+  ] },
+};
+
+const devCatalog = () => Object.keys(DEV_CHECKLISTS).map(k => ({
+  key: k, title: DEV_CHECKLISTS[k].title,
+  itemCount: DEV_CHECKLISTS[k].items.length,
+  gateCount: DEV_CHECKLISTS[k].items.filter(i => i.gate).length,
+  maxStage: Math.max(...DEV_CHECKLISTS[k].items.map(i => i.stage)),
+}));
+
+/** מפתח התבנית של (קבוצה, שבוע). מפתח לא מוכר נחשב כאין - כמו בשרת. */
+function devPlanKey(db, group, weekNumber) {
+  const k = ((db.plans || {})[devNormGroup(group)] || {})[String(weekNumber)] || '';
+  return DEV_CHECKLISTS[k] ? k : '';
+}
+
+/** הצ׳קליסט של תלמיד/ה אחד/אחת, בדיוק בצורה ש-getDashboard מחזיר בשרת. */
+function devChecklist(db, u, week, stage) {
+  const key = devPlanKey(db, u.group, week.weekNumber);
+  if (!key) return null;
+  const tpl = DEV_CHECKLISTS[key];
+  const marks = ((db.progress || {})[u.studentId] || {})[String(week.weekNumber)] || {};
+  const waived = marks['*'] === 'done';
+  // במצב פיתוח אין זיהוי אוטומטי ואין סימון עצמי - כל מה שמסומן הגיע
+  // מהפאנל, ולכן המקור הוא תמיד המורה.
+  const cells = tpl.items.map(i => {
+    const done = waived || marks[i.id] === 'done';
+    return { id: i.id, title: i.title, gate: i.gate, available: i.stage <= stage,
+             done, source: done ? (waived ? 'waived' : 'teacher') : '', note: '' };
+  });
+  const gate = cells.filter(c => c.gate && c.available);
+  const gateDone = gate.filter(c => c.done).length;
+  // כמו בשרת: בלי הדגל אין חסימה, רק תצוגה.
+  return { title: tpl.title, gateDone, gateTotal: gate.length,
+           stuckOn: (gate.find(c => !c.done) || {}).title || '',
+           blocked: !!db.gateOn && !waived && gateDone < gate.length,
+           claims: 0, selfCount: 0, cells };
+}
+
 async function ensureSeeded() {
   let db = loadDB();
   if (db) {
@@ -275,8 +340,11 @@ async function callLocal(action, payload) {
   if (action === 'getGroupWeeks') {
     return devGroups(db).map(g => {
       const st = devGroupStage(db, g.group);
-      return { ...devWeek(db, g.group), studentCount: g.studentCount,
-               unlockedStage: st, stageName: (DEV_EXPERIMENTS[st - 1] || {}).name };
+      const w = devWeek(db, g.group);
+      return { ...w, studentCount: g.studentCount,
+               unlockedStage: st, stageName: (DEV_EXPERIMENTS[st - 1] || {}).name,
+               templateKey: devPlanKey(db, g.group, w.weekNumber),
+               checklistGateOn: !!db.gateOn, checklistCatalog: devCatalog() };
     });
   }
 
@@ -400,6 +468,7 @@ async function callLocal(action, payload) {
         experimentName: (DEV_EXPERIMENTS.find(e => e.key === (u.currentExperiment || 'curve')) || {}).name,
         weeksCompleted: mine.length, mentorGrade: grade, surplusPoints,
         doneThisWeek, lastScore: mine.length ? scores[scores.length - 1] : null,
+        checklist: devChecklist(db, u, week, devGroupStage(db, u.group)),
       };
     });
   }
@@ -451,14 +520,45 @@ async function callLocal(action, payload) {
   // פעולות הצ׳קליסט. חובה שיהיו כאן: במצב פיתוח כל פעולה שנופלת לזריקה
   // למטה שוברת את *כל* מסך התלמיד, לא רק את התכונה. checklist: null
   // מחזיר את המסך לכרטיס הקודם, שזו ההתנהגות הנכונה בלי שרת.
-  if (action === 'setChecklistItem' || action === 'overrideChecklistItem') {
+  if (action === 'setChecklistItem') return { ok: true, checklist: null };
+  if (action === 'saveRun') return { ok: true, runId: 'RUNDEV', weekNumber: 0 };
+
+  // דריסת המורה נשמרת גם בדמו: בלעדיה אי אפשר לבדוק שהעמודה, הפתיחה
+  // והשחרור אכן משנים מצב, וזו כל הנקודה של הפאנל.
+  if (action === 'overrideChecklistItem') {
+    const who = findStudent(db, payload.studentId);
+    const wk = String(devWeek(db, who.group).weekNumber);
+    db.progress = db.progress || {};
+    db.progress[who.studentId] = db.progress[who.studentId] || {};
+    db.progress[who.studentId][wk] = db.progress[who.studentId][wk] || {};
+    db.progress[who.studentId][wk][payload.itemId] = payload.done ? 'done' : 'open';
+    saveDB(db);
     return { ok: true, checklist: null };
   }
-  if (action === 'saveRun') return { ok: true, runId: 'RUNDEV', weekNumber: 0 };
+
   if (action === 'setWeekChecklist') {
-    return { ok: true, templateKey: payload.templateKey || '', rev: 1 };
+    const g = devNormGroup(payload.group);
+    const key = String(payload.templateKey || '').trim();
+    if (key && !DEV_CHECKLISTS[key]) throw new Error('צ׳קליסט לא מוכר: ' + key);
+    const wk = devWeek(db, g).weekNumber;
+    if (!wk) throw new Error('טרם נפתח שבוע לקבוצה הזו.');
+    db.plans = db.plans || {};
+    db.plans[g] = db.plans[g] || {};
+    db.plans[g][String(wk)] = key;
+    saveDB(db);
+    const t = key ? DEV_CHECKLISTS[key] : null;
+    return { ok: true, group: g, weekNumber: wk, templateKey: key, rev: 1,
+             title: t ? t.title : '', itemCount: t ? t.items.length : 0,
+             gateCount: t ? t.items.filter(i => i.gate).length : 0 };
   }
-  if (action === 'resetWeeklyUsage') return { ok: true, deleted: 0 };
+
+  if (action === 'resetWeeklyUsage') return { ok: true, deleted: 0, weekNumber: 0 };
+
+  if (action === 'setChecklistGate') {
+    db.gateOn = !!payload.on;
+    saveDB(db);
+    return { ok: true, gateOn: db.gateOn };
+  }
 
   throw new Error('פעולה לא מוכרת: ' + action);
 }
@@ -551,6 +651,9 @@ export async function overrideChecklistItem(studentId, itemId, done) {
 }
 export async function resetWeeklyUsage(studentId) {
   return dispatch('resetWeeklyUsage', { studentId });
+}
+export async function setChecklistGate(on) {
+  return dispatch('setChecklistGate', { on });
 }
 
 export async function getDashboard() {

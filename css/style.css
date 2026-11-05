@@ -608,3 +608,48 @@ details.chk > summary:hover .txt { color: var(--ink); }
 @media (max-width: 980px) {
   .rail .steps { grid-column: 1 / -1; }
 }
+/* ===================== פאנל המורה: צ׳קליסט =====================
+   התא בטבלה הוא כפתור ולא טקסט, כי הוא הדרך היחידה להגיע לפעולות המורה.
+   גם "—" לחיץ: שם נמצא איפוס מונה ההודעות, שנחוץ גם בשבוע בלי צ׳קליסט. */
+.cl-cell {
+  display: block; width: 100%; text-align: start;
+  background: var(--surface-2); color: var(--ink-2);
+  border: 1px solid var(--line-2); border-radius: var(--r-sm);
+  padding: 5px 9px; font-size: 12px; font-weight: 600; line-height: 1.35;
+  box-shadow: none;
+}
+.cl-cell:hover { background: var(--surface-3); color: var(--ink); border-color: var(--brand); }
+.cl-cell b { font-size: 13.5px; font-family: var(--num); }
+/* שתי שורות ודי: כותרת סעיף היא משפט שלם, ובלי החיתוך שורה אחת בטבלה
+   מתנפחת לגובה של שבע שורות טקסט. הכותרת המלאה יושבת ב-title של הכפתור. */
+.cl-cell span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; font-weight: 400; font-size: 11px; color: var(--ink-3);
+  white-space: normal; max-width: 180px; }
+.cl-cell i { display: block; font-style: normal; font-size: 11px; color: var(--warn); }
+.cl-cell.ok { background: var(--ok-soft); border-color: #a7f3d0; color: var(--ok); }
+.cl-cell.bad { background: var(--err-soft); border-color: #fecaca; color: var(--err); }
+.cl-cell.ok:hover, .cl-cell.bad:hover { color: inherit; }
+.group-filter .chip.active .muted-week { color: rgba(255,255,255,.78); }
+
+.cl-rows { border-top: 1px solid var(--line); }
+.cl-row { display: flex; gap: 10px; align-items: flex-start;
+  padding: 9px 0; border-bottom: 1px solid var(--line); }
+.cl-row.off { opacity: .55; }
+.cl-mark { flex: none; width: 20px; text-align: center; color: var(--ink-3);
+  font-size: 14px; line-height: 1.5; }
+.cl-row.done .cl-mark { color: var(--ok); font-weight: 700; }
+.cl-body { flex: 1; min-width: 0; font-size: 13px; color: var(--ink); line-height: 1.5; }
+.cl-note { font-size: 12px; color: var(--ink-2); margin-top: 3px; }
+.cl-tag { display: inline-block; margin-inline-start: 6px; padding: 1px 8px;
+  border-radius: 20px; font-size: 10.5px; font-weight: 700; vertical-align: 1px;
+  background: var(--surface-2); color: var(--ink-3); border: 1px solid var(--line-2); }
+.cl-tag.ok { background: var(--ok-soft); color: var(--ok); border-color: #a7f3d0; }
+.cl-tag.warn { background: var(--warn-soft); color: var(--warn); border-color: #fde68a; }
+.cl-tag.bad { background: var(--err-soft); color: var(--err); border-color: #fecaca; }
+.cl-btns { flex: none; display: flex; gap: 6px; }
+.cl-btns button { padding: 4px 10px; font-size: 12px; box-shadow: none; }
+
+@media (max-width: 720px) {
+  .cl-row { flex-wrap: wrap; }
+  .cl-btns { margin-inline-start: 30px; }
+}

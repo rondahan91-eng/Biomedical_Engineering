@@ -106,6 +106,15 @@ function checklistGateOn() {
   return PropertiesService.getScriptProperties().getProperty('CHECKLIST_GATE') === 'on';
 }
 
+/**
+ * הדלקה וכיבוי של החסימה מתוך הפאנל. המאפיין נשאר מקור האמת, כך שאפשר
+ * לכבות גם ידנית מעורך Apps Script אם הפאנל עצמו תקול.
+ */
+function setChecklistGate(on) {
+  PropertiesService.getScriptProperties().setProperty('CHECKLIST_GATE', on ? 'on' : 'off');
+  return { ok: true, gateOn: checklistGateOn() };
+}
+
 /** מחלץ את מספר ה-n מתווית הרצה. 'n=100 א' ו-'n=100' מחזירים שניהם 100. */
 function runN(label) {
   const m = String(label == null ? '' : label).match(/n\s*=\s*(\d+)/i);
@@ -556,6 +565,9 @@ function routeAction(action, payload) {
     case 'resetWeeklyUsage':
       requireAdmin(payload);
       return resetWeeklyUsage(payload.studentId);
+    case 'setChecklistGate':
+      requireAdmin(payload);
+      return setChecklistGate(payload.on);
     case 'exportWeeklyReport':
       requireAdmin(payload);
       return exportWeeklyReport();
@@ -1333,12 +1345,16 @@ function lockDriveToCurrentStages() {
 
 /** מצב כל הקבוצות במכה אחת - זה מה שהפאנל מצייר. */
 function getGroupWeeks() {
+  // מצב החסימה הוא תכונה של הפריסה, לא של הקבוצה. נקרא פעם אחת ונרכב על כל
+  // שורה, כדי שהפאנל יידע להבדיל בין "צ׳קליסט מוצג" לבין "צ׳קליסט חוסם".
+  const gateOn = checklistGateOn();
   return listGroups().map(g => {
     const week = getCurrentWeekInfo(g.group);
     week.studentCount = g.studentCount;
     week.unlockedStage = getGroupStage(g.group);
     week.stageName = EXPERIMENTS[EXPERIMENT_ORDER[week.unlockedStage - 1]];
     week.templateKey = currentPlanKey(g.group, week.weekNumber);
+    week.checklistGateOn = gateOn;
     // הקטלוג רוכב על השורות הקיימות בכוונה: refresh() בפאנל מצפה למערך,
     // ובקשה שלישית לרשימה שלא משתנה היא בזבוז של עוד נסיעה לשרת.
     week.checklistCatalog = Object.keys(CHECKLIST_TEMPLATES).map(function (k) {
