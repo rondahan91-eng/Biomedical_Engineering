@@ -3,1261 +3,827 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>מעבדת המדידה — דמו</title>
+<title>המעבדה — דמו</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
 <style>
 /* ==========================================================================
-   מעבדת המדידה — דמו
-   שפת העיצוב נמדדה מתוך "עקומות למידה - מצגת": רקע #f6f9fb, כרטיס לבן עם
-   קו 1px, רדיוס 10, *אפס צללים*, תווית לטינית במונו עם ריווח 0.22em, כותרת
-   Heebo 900, גוף Heebo 500 בצבע --ink-2, שורת מחץ Heebo 700 בצבע --ink.
+   המעבדה — מסך אחד, משימה אחת.
+   הכלל היחיד כאן: מה שלא צריך עכשיו אינו על המסך. ההסברים, המספרים
+   והמלכודות קיימים — אבל נפתחים, לא מוצגים.
+   שפת העיצוב נמדדה מתוך מצגת "עקומות למידה".
    ========================================================================== */
 :root{
-  --bg:#f6f9fb; --surface:#fff; --surface-2:#f6f9fb; --surface-3:#eaf1f6;
+  --bg:#f6f9fb; --surface:#fff; --surface-2:#f1f6f9; --surface-3:#e7eff4;
   --line:#e0e9f0; --line-2:#ccdae5;
   --ink:#0d1f2b; --ink-2:#4a6478; --ink-3:#8aa2b3;
   --brand:#0891b2; --brand-2:#0e7490; --accent:#14b8a6;
-  --ok:#059669; --ok-soft:#e9fbf3; --warn:#b45309; --warn-soft:#fff8ec;
-  --err:#dc2626; --err-soft:#fef2f2;
-  --r:10px;
+  --ok:#059669; --warn:#b45309; --err:#dc2626;
   --font:'Heebo','Assistant','Segoe UI',Arial,sans-serif;
   --mono:'JetBrains Mono','Consolas',monospace;
-  --bandA:46px; --bandC:214px; --rail:230px;
 }
 *{box-sizing:border-box}
 html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);
-  font-size:14px;overflow:hidden}
-button{font-family:inherit;cursor:pointer;border:1px solid var(--line-2);
-  background:var(--surface);color:var(--ink);border-radius:8px;
-  padding:6px 12px;font-size:13px;font-weight:700}
-button:hover{border-color:var(--brand);color:var(--brand-2)}
-button:disabled{opacity:.4;cursor:not-allowed}
-button.go{background:var(--ink);color:#fff;border-color:var(--ink)}
-button.go:hover{background:var(--brand-2);border-color:var(--brand-2);color:#fff}
-input,textarea,select{font-family:inherit;font-size:13px;color:var(--ink);
-  background:var(--surface);border:1px solid var(--line-2);border-radius:8px;
-  padding:7px 10px;width:100%;outline:none;resize:none}
-input:focus,textarea:focus,select:focus{border-color:var(--brand)}
-
-/* --- התווית הלטינית: הדבר שחוזר בכל שקופית במצגת --- */
-.eyebrow{font-family:var(--mono);font-size:10px;font-weight:500;
-  letter-spacing:.22em;color:var(--ink-3);text-transform:uppercase;
-  display:block;direction:ltr;text-align:right}
+  display:flex;flex-direction:column;overflow:hidden}
+.eyebrow{font-family:var(--mono);font-size:11px;font-weight:500;letter-spacing:.22em;
+  color:var(--ink-3);text-transform:uppercase;display:block;direction:ltr;text-align:right}
 .num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+button{font-family:inherit;cursor:pointer;border:1px solid var(--line-2);background:var(--surface);
+  color:var(--ink);border-radius:9px;padding:10px 18px;font-size:14px;font-weight:700;
+  transition:border-color .13s,background .13s,color .13s}
+button:hover:not(:disabled){border-color:var(--ink);}
+button:disabled{opacity:.35;cursor:not-allowed}
+button.go{background:var(--ink);color:#fff;border-color:var(--ink);padding:11px 26px}
+button.go:hover:not(:disabled){background:var(--brand-2);border-color:var(--brand-2)}
+button.quiet{border-color:transparent;color:var(--ink-3);font-weight:500}
+button.quiet:hover{color:var(--ink);border-color:transparent}
+input,textarea{font-family:inherit;font-size:16px;color:var(--ink);background:var(--surface);
+  border:1px solid var(--line-2);border-radius:9px;padding:12px 14px;width:100%;outline:none;resize:none}
+input:focus,textarea:focus{border-color:var(--ink)}
+input::placeholder,textarea::placeholder{color:var(--ink-3)}
 
-/* ======================= שלד: שלושה פסים ======================= */
-#app{height:100%;display:grid;grid-template-rows:var(--bandA) 1fr var(--bandC)}
+/* ---------------- כותרת: ניווט בלבד, אפס תוכן ---------------- */
+header{height:56px;flex:none;display:flex;align-items:center;gap:18px;
+  padding:0 26px;background:var(--surface);border-bottom:1px solid var(--line)}
+header .wk{font-weight:900;font-size:15px;letter-spacing:-.2px;white-space:nowrap}
+#steps{display:flex;gap:5px;margin-inline-start:auto;margin-inline-end:auto}
+#steps button{border:0;background:transparent;padding:6px 3px;border-radius:0}
+#steps b{display:block;width:30px;height:4px;border-radius:3px;background:var(--line-2)}
+#steps button.done b{background:var(--ok)}
+#steps button.on b{background:var(--ink)}
+#steps button.lock b{background:var(--surface-3)}
+#steps button:disabled{cursor:not-allowed}
+header .who{font-size:12.5px;color:var(--ink-3);white-space:nowrap}
 
-/* ---------- פס א׳: פס המכשיר ---------- */
-#bandA{display:flex;align-items:center;gap:14px;padding:0 16px;
-  background:var(--surface);border-bottom:1px solid var(--line)}
-#bandA .brandmark{font-weight:900;font-size:15px;letter-spacing:-.3px}
-#bandA .sep{width:1px;height:20px;background:var(--line)}
-.meta{font-size:12px;color:var(--ink-2)}
-.meta b{font-family:var(--mono);color:var(--ink)}
-.expswitch{display:flex;gap:0;border:1px solid var(--line-2);border-radius:8px;overflow:hidden}
-.expswitch button{border:0;border-radius:0;padding:5px 11px;font-size:12px;
-  font-weight:700;color:var(--ink-3);background:var(--surface)}
-.expswitch button+button{border-inline-start:1px solid var(--line)}
-.expswitch button.on{background:var(--ink);color:#fff}
-.expswitch button:disabled{color:var(--ink-3);opacity:.45}
-#filingChk{margin-inline-start:auto;display:flex;align-items:center;gap:8px;
-  font-size:11.5px;color:var(--ink-2)}
-#filingChk .dot{width:8px;height:8px;border-radius:50%;background:var(--ok)}
-#filingChk .dot.busy{background:var(--warn)}
-#filingChk .dot.bad{background:var(--err)}
-.demobadge{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;
-  color:var(--warn);border:1px solid #fde68a;background:var(--warn-soft);
-  border-radius:20px;padding:3px 9px}
+/* ---------------- במה ---------------- */
+main{flex:1;min-height:0;overflow-y:auto;display:flex;justify-content:center}
+.stage{width:100%;max-width:960px;padding:32px 30px 16px;animation:in .22s ease-out}
+/* רק אטימות. translateY בתוך מיכל גלילה מוסיף 6px של גלילה אמיתית, ומספיק
+   כדי שפס גלילה יופיע על מסך שאמור להיות מסך אחד. */
+@keyframes in{from{opacity:0}to{opacity:1}}
+.stage h1{margin:7px 0 0;font-size:40px;font-weight:900;line-height:1.14;letter-spacing:-.6px}
+.stage .lede{margin:12px 0 0;font-size:19px;font-weight:500;color:var(--ink-2);line-height:1.52;max-width:720px}
+.work{margin-top:24px}
 
-/* ---------- פס ב׳: גוף ---------- */
-#bandB{position:relative;display:grid;
-  grid-template-columns:var(--rail) 1fr;gap:12px;padding:12px 16px;min-height:0}
+/* ---------------- כפתורי בחירה גדולים ---------------- */
+.picks{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px}
+.pick{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px;
+  cursor:pointer;text-align:start}
+.pick:hover{border-color:var(--ink-3)}
+.pick.on{border-color:var(--ink);border-width:2px;padding:17px}
+.pick.off{opacity:.42;cursor:not-allowed}
+.pick .t{display:block;font-size:17px;font-weight:900;margin-top:6px;line-height:1.25}
+.pick .s{display:block;font-size:13px;color:var(--ink-3);margin-top:5px;line-height:1.4}
 
-/* מסילת הסלייסים */
-#rail{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
-  display:flex;flex-direction:column;min-height:0;overflow:hidden}
-#rail .railhead{padding:10px 12px 8px;border-bottom:1px solid var(--line)}
-#rail .railhead h2{margin:2px 0 0;font-size:16px;font-weight:900;line-height:1.2}
-#rail .railhead .cnt{font-family:var(--mono);font-size:11px;color:var(--ink-2);margin-top:4px}
-#rail .list{overflow-y:auto;padding:4px 0;flex:1;min-height:0}
-.sl{display:grid;grid-template-columns:20px 1fr;gap:8px;align-items:start;
-  padding:7px 12px;cursor:pointer;border-inline-start:3px solid transparent}
-.sl:hover{background:var(--surface-2)}
-.sl.on{background:var(--surface-3);border-inline-start-color:var(--ink)}
-.sl .mk{font-family:var(--mono);font-size:12px;color:var(--ink-3);line-height:1.5;text-align:center}
-.sl.done .mk{color:var(--ok)}
-.sl.lock{opacity:.45;cursor:not-allowed}
-.sl .ttl{font-size:12.5px;font-weight:700;line-height:1.35}
-.sl.done .ttl{color:var(--ink-2);font-weight:500}
-.sl .tag{font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:var(--ink-3)}
-.slbody{padding:0 12px 12px 12px;border-inline-start:3px solid var(--ink);
-  background:var(--surface-3)}
-.slbody p{margin:0 0 7px;font-size:12px;line-height:1.5;color:var(--ink-2)}
-.slbody p b{color:var(--ink)}
-.slbody .pit{color:var(--warn)}
-.slbody textarea{height:56px;font-size:12px;margin-bottom:6px}
-.slbody .row{display:flex;gap:6px;align-items:center}
-.slbody .cc{font-family:var(--mono);font-size:10px;color:var(--ink-3)}
+/* ---------------- משבצות המדידה ---------------- */
+.runs{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+.runs.two{grid-template-columns:repeat(2,1fr);max-width:430px}
+.run{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px 12px;
+  text-align:center;cursor:pointer}
+.run:hover:not(.off){border-color:var(--ink-3)}
+.run .n{font-family:var(--mono);font-size:19px;font-weight:700}
+.run .s{font-size:12px;color:var(--ink-3);margin-top:6px;min-height:17px}
+.run.on{border-color:var(--ink);border-width:2px;padding:15px 11px}
+.run.done{background:#f3fbf7;border-color:#bfe8d4}
+.run.done .n{color:var(--ok)}
+.run.off{opacity:.38;cursor:not-allowed}
+.runbar{display:flex;align-items:center;gap:12px;margin-top:18px;flex-wrap:wrap}
+.runbar .lbl{font-size:13px;color:var(--ink-3)}
 
-/* סיפון האריחים */
-#deck{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:1fr 1fr;
-  gap:12px;min-height:0}
-.tile{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);
-  display:flex;flex-direction:column;min-height:0;overflow:hidden;
-  transition:border-color .15s}
-/* האריח הדולק מסומן בקו ואינו משנה גודל. אריח שגדל דוחף את חמשת האחרים,
-   וזו בדיוק ההבטחה שהקונסולה נותנת: כלום לא זז. */
-.tile.active{border-color:var(--ink);border-width:2px}
-.tile.active .hd h3{color:var(--ink)}
-.tile .cap{height:46px;background:var(--surface-3);flex:none;overflow:hidden;position:relative}
-.tile .cap img{width:100%;height:100%;object-fit:cover;display:block;opacity:.92}
-.tile .hd{padding:8px 12px 6px;flex:none}
-.tile .hd h3{margin:1px 0 0;font-size:15px;font-weight:900;line-height:1.15}
-.tile .bd{padding:0 12px 10px;overflow:auto;flex:1;min-height:0;font-size:12px;
-  color:var(--ink-2);line-height:1.45}
-.tile .bd .punch{color:var(--ink);font-weight:700}
-
-/* משבצות המודלים */
-.slots{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:4px 0 8px}
-.slot{border:1px dashed var(--line-2);border-radius:8px;padding:6px 4px;text-align:center;
-  cursor:pointer;background:var(--surface-2)}
-.slot:hover{border-color:var(--brand)}
-.slot .n{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--ink-2)}
-.slot .st{font-size:9.5px;color:var(--ink-3);margin-top:2px}
-.slot.filled{border-style:solid;border-color:var(--ink-3);background:var(--surface)}
-.slot.filled .n{color:var(--ink)}
-.slot.cap{border-color:var(--ok);background:var(--ok-soft)}
-.slot.cap .n,.slot.cap .st{color:var(--ok)}
-.slot.sel{outline:2px solid var(--ink);outline-offset:1px}
-.slot.off{opacity:.4;cursor:not-allowed}
-
-/* מטריצת הבלבול */
-.cm{display:grid;grid-template-columns:repeat(2,1fr);gap:4px;margin:6px 0}
-.cm div{border:1px solid var(--line);border-radius:6px;padding:5px 7px;background:var(--surface-2)}
-.cm .k{font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:var(--ink-3);display:block}
-.cm .v{font-family:var(--mono);font-size:17px;font-weight:700}
-.mets{display:flex;gap:12px;flex-wrap:wrap;margin:4px 0 6px}
-.mets span{font-size:11px;color:var(--ink-3)}
-.mets b{font-family:var(--mono);font-size:14px;color:var(--ink);display:block}
-.thr{display:flex;align-items:center;gap:8px;margin:6px 0}
-.thr input[type=range]{flex:1;accent-color:var(--ink)}
-.thr .val{font-family:var(--mono);font-weight:700;min-width:38px}
-.lamp{font-family:var(--mono);font-size:10px;padding:2px 7px;border-radius:20px;
-  border:1px solid var(--line-2);color:var(--ink-3)}
-.lamp.amber{background:var(--warn-soft);border-color:#fde68a;color:var(--warn)}
-
-/* גבול החוץ */
-.fence{border:1px solid var(--warn);background:var(--warn-soft);border-radius:8px;
-  padding:8px 10px;margin:4px 0}
-.fence ol{margin:4px 0 0;padding-inline-start:16px;font-size:11.5px;line-height:1.6}
-.fence code{font-family:var(--mono);font-size:11px;background:#fff;padding:1px 5px;
-  border:1px solid #fde68a;border-radius:4px}
-
-/* טעויות ומפות */
-.errlist{display:flex;flex-wrap:wrap;gap:5px;margin-top:4px}
-.errlist figure{margin:0;width:52px;cursor:pointer}
-.errlist img{width:52px;height:52px;object-fit:cover;border-radius:5px;
-  border:1px solid var(--line-2);display:block}
-.errlist figcaption{font-family:var(--mono);font-size:8.5px;color:var(--ink-3);text-align:center}
-.errlist figure.pick img{border-color:var(--ink);border-width:2px}
-.maps{display:flex;gap:10px;margin-top:4px}
-.mapslot{flex:1;border:1px dashed var(--line-2);border-radius:8px;padding:6px;text-align:center}
-.mapslot canvas{width:100%;max-width:120px;border-radius:5px;display:block;margin:0 auto}
-.mapslot .lb{font-family:var(--mono);font-size:10px;color:var(--ink-2);margin-bottom:4px}
-.mapnote{font-family:var(--mono);font-size:9px;color:var(--warn);margin-top:3px}
-
-/* יומן */
-.logrow{margin-bottom:7px}
-.logrow label{display:block;font-size:11px;font-weight:700;color:var(--ink-2);margin-bottom:3px}
-.stamp{display:inline-block;font-family:var(--mono);font-size:10px;color:var(--ok);
-  border:1px solid #a7f3d0;background:var(--ok-soft);border-radius:20px;padding:2px 9px}
-.stamp.broken{color:var(--warn);border-color:#fde68a;background:var(--warn-soft)}
-
-/* ---------- פס ג׳: לוח המדידה ---------- */
-#bandC{background:var(--surface);border-top:1px solid var(--line);
-  display:grid;grid-template-columns:1fr 420px;gap:16px;padding:10px 16px;min-height:0}
-#board{min-width:0;overflow:hidden}
-/* הטבלה רצה שמאל→ימין עם n עולה, בדיוק ככיוון העקומה שלצדה. כל עקומת
-   למידה מודפסת שהתלמידים יפגשו היא כזאת, ושתי קריאות הפוכות באותו פס הן
-   בדיוק הבלבול שהמעבדה באה לבטל. תוויות השורות חוזרות ל-RTL בקצה ימין. */
-.bgrid{display:grid;direction:ltr;grid-template-columns:repeat(6,1fr) 82px;
-  gap:3px;margin-top:5px}
-.bgrid .h{font-family:var(--mono);font-size:10.5px;font-weight:700;text-align:center;
-  padding:3px 0;color:var(--ink-2);border-bottom:1px solid var(--line)}
-.bgrid .h.noise{color:var(--brand-2)}
-.bgrid .rl{direction:rtl;font-size:10.5px;color:var(--ink-3);padding:3px 6px;
-  text-align:right;align-self:center}
-.bgrid .c{font-family:var(--mono);font-size:12.5px;text-align:center;padding:2px 0;
-  border-radius:5px;background:var(--surface-2);color:var(--ink)}
-.bgrid .c.empty{background:repeating-linear-gradient(135deg,#fff,#fff 4px,#f1f6f9 4px,#f1f6f9 8px);
-  color:transparent;border:1px dashed var(--line-2)}
-.bgrid .c.hot{background:var(--surface-3);font-weight:700}
-.bgrid .c.pr{background:#fff;border:1px solid var(--line-2);padding:0}
-.bgrid .c.pr input{border:0;text-align:center;font-family:var(--mono);font-size:12px;padding:2px 0;background:transparent}
-.verdicts{margin-top:6px;display:flex;gap:14px;flex-wrap:wrap}
-.verdicts div{font-size:11.5px;color:var(--ink-2)}
-.verdicts b{font-family:var(--mono);color:var(--ink)}
-.verdicts .big{font-weight:700;color:var(--ink)}
-
-#curvewrap{position:relative;min-width:0}
-#curve{width:100%;height:132px;display:block}
-.cvlegend{display:flex;gap:10px;align-items:center;margin-top:2px}
-.cvlegend span{font-family:var(--mono);font-size:9.5px;color:var(--ink-3)}
-.cvlegend i{display:inline-block;width:12px;height:2px;margin-inline-end:4px;vertical-align:2px}
-.metsel{display:flex;gap:0;border:1px solid var(--line-2);border-radius:7px;overflow:hidden}
-.metsel button{border:0;border-radius:0;padding:3px 9px;font-size:11px;color:var(--ink-3)}
+/* ---------------- הגרף ---------------- */
+.chartwrap{position:relative;background:var(--surface);border:1px solid var(--line);
+  border-radius:12px;padding:16px 18px 10px}
+#chart{width:100%;height:204px;display:block}
+.chartfoot{display:flex;align-items:center;gap:16px;margin-top:4px;flex-wrap:wrap}
+.chartfoot .k{font-family:var(--mono);font-size:11px;color:var(--ink-3)}
+.chartfoot .k i{display:inline-block;width:14px;height:2px;margin-inline-end:5px;vertical-align:3px}
+.metsel{display:flex;border:1px solid var(--line-2);border-radius:8px;overflow:hidden;
+  margin-inline-start:auto}
+.metsel button{border:0;border-radius:0;padding:5px 13px;font-size:12.5px;color:var(--ink-3);font-weight:500}
 .metsel button+button{border-inline-start:1px solid var(--line)}
-.metsel button.on{background:var(--ink);color:#fff}
+.metsel button.on{background:var(--ink);color:#fff;font-weight:700}
 
 /* המַדָּה */
-#caliper{position:absolute;width:46px;height:52px;cursor:grab;z-index:5;
-  touch-action:none;user-select:none}
-#caliper.dragging{cursor:grabbing}
-#caliper .lbl{position:absolute;inset-inline-start:50%;transform:translateX(50%);
-  top:-13px;font-family:var(--mono);font-size:9px;color:var(--brand-2);white-space:nowrap}
-.gapzone{fill:transparent}
-.gapzone.hovv{fill:rgba(8,145,178,.09)}
-#calread{font-family:var(--mono);font-size:11px;margin-top:3px}
-#calread.over{color:var(--ok)}
-#calread.under{color:var(--err)}
-#calread.edge{color:var(--warn)}
+#cal{position:absolute;width:52px;cursor:grab;touch-action:none;user-select:none;z-index:3}
+#cal.drag{cursor:grabbing}
+#cal .tip{position:absolute;top:-16px;inset-inline-start:50%;transform:translateX(50%);
+  font-family:var(--mono);font-size:10px;color:var(--brand-2);white-space:nowrap}
+#calsay{margin-top:14px;font-size:17px;font-weight:700;min-height:26px}
+#calsay.over{color:var(--ok)} #calsay.under{color:var(--err)} #calsay.edge{color:var(--warn)}
 
-/* ---------- הזרוע ---------- */
-#armlayer{position:absolute;inset:0;pointer-events:none;z-index:40}
-#armsvg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}
-#armhead{position:absolute;width:272px;height:206px;pointer-events:auto;
-  background:var(--ink);border-radius:12px;padding:7px;
-  display:flex;flex-direction:column;transition:opacity .18s}
-#armhead.shy{opacity:.3;pointer-events:none}
-#armhead .grab{height:13px;flex:none;cursor:grab;display:flex;align-items:center;
-  justify-content:center;gap:3px}
-#armhead .grab i{width:16px;height:2px;background:#4a6478;display:block;border-radius:2px}
-#armhead.dragging .grab{cursor:grabbing}
-#armhead .crt{flex:1;background:#06202c;border-radius:7px;padding:8px 9px;overflow:auto;
-  color:#cfe7ee;font-size:11.5px;line-height:1.5;
-  box-shadow:inset 0 0 22px rgba(20,184,166,.13)}
-#armhead .crt .eyebrow{color:#5b8fa0;margin-bottom:3px}
-#armhead .crt b{color:#fff}
-#armhead .crt .pit{color:#f0b67a}
-#armhead .crt .ok{color:#5eead4}
-#armhead .modes{height:20px;flex:none;display:flex;gap:3px;margin-top:5px}
-#armhead .modes button{flex:1;border:0;border-radius:5px;background:#12303d;color:#7fa8b6;
-  font-size:10px;font-weight:700;padding:0}
-#armhead .modes button.on{background:var(--accent);color:#06202c}
-#armbase{position:absolute;width:38px;height:38px;border-radius:50%;
-  background:var(--surface);border:2px solid var(--ink);pointer-events:auto;
-  display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:41}
-#armbase .led{width:9px;height:9px;border-radius:50%;background:var(--ok)}
-#armhead.folded{display:none}
-.askrow{display:flex;gap:4px;margin-top:5px}
-.askrow input{background:#0d2a36;border-color:#1d4a5c;color:#dff3f8;font-size:11px;padding:5px 7px}
-.askrow button{background:var(--accent);color:#06202c;border:0;padding:4px 9px;font-size:11px}
+/* ---------------- טבלת המספרים — נפתחת, לא מוצגת ---------------- */
+.numsbtn{margin-top:14px}
+#nums{margin-top:12px;background:var(--surface);border:1px solid var(--line);border-radius:12px;
+  padding:14px 16px;display:none}
+#nums.open{display:block}
+#nums table{width:100%;border-collapse:collapse;direction:ltr}
+#nums th,#nums td{font-family:var(--mono);font-size:13px;padding:6px 8px;text-align:center}
+#nums th{color:var(--ink-3);font-weight:500;border-bottom:1px solid var(--line);font-size:11.5px}
+#nums td.rl{direction:rtl;text-align:right;color:var(--ink-3);font-family:var(--font);font-size:12.5px}
+#nums tr+tr td{border-top:1px solid var(--surface-2)}
+#nums input{width:62px;padding:3px 0;text-align:center;font-family:var(--mono);font-size:13px;
+  border-radius:5px}
 
-/* צר מדי */
-#toonarrow{display:none;position:fixed;inset:0;background:var(--bg);z-index:99;
-  align-items:center;justify-content:center;padding:30px;text-align:center}
-@media (max-width:980px){#toonarrow{display:flex}}
+/* ---------------- שונות ---------------- */
+.gate{display:flex;gap:20px;align-items:center;background:var(--surface);
+  border:1px solid var(--line);border-radius:12px;padding:0;overflow:hidden}
+.gate img{width:260px;height:190px;object-fit:cover;flex:none;display:block}
+.gate .in{padding:20px 22px}
+.gate ol{margin:10px 0 0;padding-inline-start:18px;font-size:14.5px;line-height:1.85;color:var(--ink-2)}
+.gate code{font-family:var(--mono);font-size:13px;background:var(--surface-2);
+  border:1px solid var(--line);border-radius:5px;padding:1px 6px;color:var(--ink)}
+.cells{display:flex;gap:16px;margin-top:4px}
+.cellbox{flex:1;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;text-align:center}
+.cellbox canvas{width:150px;height:150px;border-radius:9px;display:block;margin:0 auto 10px}
+.cellbox .t{font-family:var(--mono);font-size:13px;color:var(--ink-2)}
+.cellbox .d{font-size:12px;color:var(--ink-3);margin-top:3px}
+.fields{display:grid;gap:14px;max-width:720px}
+.fields label{display:block;font-size:13.5px;font-weight:700;color:var(--ink-2);margin-bottom:6px}
+.stamp{display:inline-block;font-family:var(--mono);font-size:12px;color:var(--ok);
+  border:1px solid #bfe8d4;background:#f3fbf7;border-radius:20px;padding:4px 12px}
+.stamp.broken{color:var(--warn);border-color:#f6ddb4;background:#fff8ec}
+.doneBig{text-align:center;padding:30px 0}
+.doneBig .big{font-size:52px;font-weight:900;font-family:var(--mono);color:var(--ok)}
+
+/* ---------------- כותרת תחתונה ---------------- */
+footer{height:70px;flex:none;display:flex;align-items:center;gap:16px;padding:0 26px;
+  background:var(--surface);border-top:1px solid var(--line)}
+footer .hint{font-size:13px;color:var(--ink-3);margin-inline-end:auto}
+footer .hint b{color:var(--warn);font-weight:700}
+
+/* ---------------- הזרוע ---------------- */
+#arm{position:fixed;z-index:60;left:26px;bottom:88px;width:52px;height:52px}
+#armbtn{width:52px;height:52px;border-radius:50%;background:var(--ink);border:0;padding:0;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;
+  box-shadow:0 2px 10px rgba(13,31,43,.18)}
+#armbtn svg{width:26px;height:26px}
+/* inset-inline-END ולא start: ב-RTL הצד ה"מתחיל" הוא הימני, ופאנל של 340px
+   שנתלה ממנו יוצא מהמסך שמאלה. כאן הוא נתלה מהקצה השמאלי ונפתח פנימה. */
+#armpanel{position:absolute;bottom:62px;inset-inline-end:0;inset-inline-start:auto;
+  width:min(340px,calc(100vw - 60px));background:var(--ink);
+  border-radius:14px;padding:8px;display:none}
+#armpanel.open{display:block}
+#armgrab{height:14px;display:flex;align-items:center;justify-content:center;gap:3px;cursor:grab}
+#armgrab i{width:18px;height:2px;background:#466;border-radius:2px;display:block}
+#armscreen{background:#062028;border-radius:10px;padding:13px 15px;color:#cfe7ee;
+  font-size:13.5px;line-height:1.6;max-height:260px;overflow-y:auto}
+#armscreen .eyebrow{color:#568798;margin-bottom:6px}
+#armscreen h4{margin:0 0 3px;font-size:13px;color:#8fd8cd;font-weight:700}
+#armscreen p{margin:0 0 11px}
+#armscreen .pit{color:#f0b67a}
+#armtabs{display:flex;gap:4px;margin-top:7px}
+#armtabs button{flex:1;border:0;background:#13323d;color:#7fa8b6;font-size:12px;padding:6px 0;
+  border-radius:7px;font-weight:700}
+#armtabs button.on{background:var(--accent);color:#062028}
+.askrow{display:flex;gap:5px;margin-top:9px}
+.askrow input{background:#0b2c37;border-color:#1d4a5c;color:#dff3f8;font-size:13px;padding:8px 10px}
+.askrow button{background:var(--accent);color:#062028;border:0;padding:7px 13px;font-size:13px}
+
+/* מסך נמוך — מחשב כיתה. הכול מתכווץ יחד כדי שהמסך יישאר מסך אחד. */
+@media (max-height:710px){
+  header{height:50px} footer{height:60px}
+  .stage{padding-top:22px}
+  .stage h1{font-size:31px} .stage .lede{font-size:16.5px;margin-top:9px}
+  .work{margin-top:18px}
+  #chart{height:152px}
+  .chartwrap{padding:12px 14px 8px}
+  #calsay{font-size:15.5px;margin-top:10px;min-height:22px}
+  .numsbtn{margin-top:8px}
+  .run{padding:12px 10px} .run .n{font-size:17px} .run .s{margin-top:4px}
+  .pick{padding:14px} .pick .t{font-size:15.5px}
+  .cellbox canvas{width:118px;height:118px}
+  #armscreen{max-height:190px}
+  input,textarea{padding:9px 12px;font-size:15px}
+}
+@media (max-width:860px){
+  .stage h1{font-size:30px} .stage .lede{font-size:17px}
+  .runs{grid-template-columns:repeat(3,1fr)}
+  .gate{flex-direction:column;align-items:stretch} .gate img{width:100%;height:120px}
+}
 </style>
 </head>
 <body>
 
-<div id="toonarrow">
-  <div>
-    <span class="eyebrow">CONSOLE · WIDTH</span>
-    <h2 style="font-weight:900;font-size:26px;margin:6px 0">המעבדה צריכה מסך רחב</h2>
-    <p style="color:var(--ink-2);max-width:380px;margin:0 auto">לוח המדידה מחזיק שש עמודות שלא זזות לעולם. מתחת ל-980px הן היו נערמות, וזה בדיוק מה שהעיצוב בא למנוע. פתחו במחשב הכיתה.</p>
-  </div>
-</div>
+<header>
+  <span class="wk">שבוע עקומת הלמידה</span>
+  <nav id="steps"></nav>
+  <span class="who">דנה · י1 · שלב <b id="stg">2</b>
+    <button class="quiet" id="stgBtn" style="padding:3px 7px;font-size:11px">החלף</button></span>
+</header>
 
-<div id="app">
+<main><div class="stage" id="stage"></div></main>
 
-  <!-- ============== פס א׳ ============== -->
-  <div id="bandA">
-    <span class="brandmark">מעבדת המדידה</span>
-    <span class="sep"></span>
-    <span class="meta">קבוצה <b>י1</b> · שבוע <b>4</b> · שלב
-      <b id="stageLbl">2</b></span>
-    <button id="stageTgl" style="padding:3px 9px;font-size:11px">החלף שלב</button>
-    <span class="sep"></span>
-    <div class="expswitch" id="expSwitch"></div>
-    <div id="filingChk"><span class="dot"></span><span id="filingTxt">התיוק פעיל · 0 תוצרים</span></div>
-    <span class="demobadge">דמו · ללא שרת</span>
-  </div>
+<footer>
+  <button class="quiet" id="prev">← הקודם</button>
+  <span class="hint" id="hint"></span>
+  <button class="go" id="next">הבא →</button>
+</footer>
 
-  <!-- ============== פס ב׳ ============== -->
-  <div id="bandB">
-
-    <div id="rail">
-      <div class="railhead">
-        <span class="eyebrow">WEEKLY TASK</span>
-        <h2>שבוע עקומת הלמידה</h2>
-        <div class="cnt" id="railCnt">0/9 סעיפים חוסמים</div>
-      </div>
-      <div class="list" id="railList"></div>
-    </div>
-
-    <div id="deck"></div>
-
-    <div id="armlayer">
-      <svg id="armsvg"></svg>
-      <div id="armbase" title="לחיצה מקפלת ופורשת את הזרוע"><span class="led"></span></div>
-      <div id="armhead">
-        <div class="grab"><i></i><i></i></div>
-        <div class="crt" id="crt"></div>
-        <div class="modes">
-          <button data-mode="read" class="on">קריאה</button>
-          <button data-mode="eye">עין</button>
-          <button data-mode="check">בדיקה</button>
-          <button data-mode="ask">שאלה</button>
-        </div>
-      </div>
+<div id="arm">
+  <div id="armpanel">
+    <div id="armgrab"><i></i><i></i></div>
+    <div id="armscreen"></div>
+    <div id="armtabs">
+      <button data-t="how" class="on">איך</button>
+      <button data-t="why">למה</button>
+      <button data-t="trap">מלכודת</button>
+      <button data-t="ask">שאלה</button>
     </div>
   </div>
-
-  <!-- ============== פס ג׳ ============== -->
-  <div id="bandC">
-    <div id="board">
-      <div style="display:flex;align-items:baseline;gap:12px">
-        <span class="eyebrow">MEASUREMENT BOARD</span>
-        <div class="metsel" id="metSel">
-          <button data-m="acc" class="on">דיוק</button>
-          <button data-m="sens">רגישות</button>
-          <button data-m="spec">ספציפיות</button>
-        </div>
-        <span class="num" id="stampSlot" style="font-size:10.5px;color:var(--ink-3)"></span>
-      </div>
-      <div class="bgrid" id="bgrid"></div>
-      <div class="verdicts" id="verdicts"></div>
-    </div>
-
-    <div id="curvewrap">
-      <span class="eyebrow">THE CURVE · n ↑</span>
-      <svg id="curve" viewBox="0 0 420 132" preserveAspectRatio="none"></svg>
-      <div class="cvlegend">
-        <span><i style="background:var(--ink)"></i>נמדד</span>
-        <span><i style="background:var(--brand);opacity:.6"></i>הניבוי שלכם</span>
-        <span><i style="background:#cbd9e2;height:8px"></i>רוחב הרעש</span>
-        <span id="calread"></span>
-      </div>
-      <div id="caliper"></div>
-    </div>
-  </div>
+  <button id="armbtn" title="העוזר — איך, למה, מלכודת">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#5eead4" stroke-width="1.8" stroke-linecap="round">
+      <rect x="4" y="7" width="16" height="11" rx="2.5"/><path d="M12 7V4M9 2.5h6"/>
+      <circle cx="9" cy="12.5" r="1.3" fill="#5eead4" stroke="none"/>
+      <circle cx="15" cy="12.5" r="1.3" fill="#5eead4" stroke="none"/>
+    </svg>
+  </button>
 </div>
 
 <script>
-/* ==========================================================================
-   DEMO_CTX — בדיוק הצורה ש-getStudentContext מחזיר מהשרת.
-   ההקשחה לגרסה אמיתית היא החלפת הקבוע הזה בקריאה אחת, לא כתיבה מחדש.
-   ========================================================================== */
-const DEMO_CTX = {
-  user:{firstName:'דנה',group:'י1'},
-  week:{weekNumber:4,checkIn:true},
-  stage:2,
-  checklist:{
-    key:'curve', title:'שבוע עקומת הלמידה',
-    note:'כמה תמונות באמת צריך, ואיפה העקומה מתיישרת. חמש נקודות, ערכת מבחן אחת, סף אחד.',
-    gateOn:true,
-    items:[
-      {id:'exp_marked',kind:'declare',gate:true,needsStage:1,tile:'LOG',
-       title:'סימון הניסוי "עקומת למידה" ופתיחת רשומה במחברת',
-       ask:'כתבו בשורה אחת: איזה מאגר, ובאיזה תאריך פתחתם את הרשומה.',
-       why:'הניסוי המסומן הוא מה שהמנטור שואל עליו, והמחברת היא המקום שבו ההשערה ננעלת לפני המדידה.',
-       how:'בפס העליון לחצו על "עקומת למידה". ביומן: מאגר, שם מלא, תאריך.',
-       proof:'הרשומה מופיעה ב"רשומות שמורות" בשם הניסוי.',
-       pitfall:'ניסוי שמעבר לשלב הפתוח יידחה על ידי השרת — כפתור מושבת הוא בקשה, לא מניעה.'},
-      {id:'sizes',kind:'declare',gate:true,needsStage:2,tile:'LOAD',
-       title:'ספירת הגדלים שנבנו בפועל — וכתיבת הרשימה',
-       ask:'כתבו בשורה אחת את הגדלים שחזרו לכם בפועל, למשל 25, 50, 100, 200.',
-       why:'עקומה שנעצרה כי הנתונים נגמרו אינה עקומה שהתיישרה. אלה שני דברים שונים לגמרי.',
-       how:'ספרו אילו משבצות ב-LOAD פתוחות באמת, ורשמו את הרשימה.',
-       proof:'רשימת הגדלים שבאמת קיימים אצלכם, ביומן.',
-       pitfall:'להניח חמש נקודות. בשלב 1 פתוחות רק "גודל 0025" ו"ערכת מבחן".'},
-      {id:'hypothesis',kind:'declare',gate:true,needsStage:1,tile:'LOG',
-       title:'נעילת השערה שנוקבת במספר — לפני המדידה',
-       ask:'כתבו בשורה אחת את ההשערה שנעלתם, עם מספר.',
-       why:'השערה שנכתבת אחרי שרואים את התוצאה תמיד מתאמתת, וכך הניסוי מפסיק ללמד משהו.',
-       how:'גררו את חמש הנקודות על העקומה לאן שאתם חושבים שהן ינחתו, ואז נעלו במילים — עם מספר.',
-       proof:'חותמת הנעילה מופיעה בלוח המדידה. פתיחה חוזרת מצוינת שם במפורש.',
-       pitfall:'השערה שאינה ניתנת להפרכה. ואין טעם "לנעול" אחרי שההרצה הראשונה כבר רצה.'},
-      {id:'noise',kind:'auto',verify:'runsNoisePair',gate:true,needsStage:1,tile:'RUN',
-       title:'סרגל הרעש — שתי הרצות על אותה ערכה בדיוק',
-       why:'שתי הרצות על אותה ערכה נותנות תוצאות שונות, כי משקולות ההתחלה וסדר התמונות מוגרלים. בלי הסרגל הזה כל הפרש קטן הוא טענה בלי בסיס.',
-       how:'אמנו פעמיים על אותה ערכה בדיוק, הריצו את שניהם על אותה ערכת מבחן, וקלטו את השני למשבצת "רעש".',
-       proof:'הסעיף נדלק לבד כששתי הרצות באותו שבוע נושאות אותו מספר n=.',
-       pitfall:'לדלג על זה ואז לקרוא ל-1.5 נקודות "שיפור". ולהניח שהרעש בגודל הקטן תקף גם לגדול.'},
-      {id:'models',kind:'declare',gate:true,needsStage:2,tile:'TRAIN',
-       title:'אימון מודל נפרד לכל גודל — כל אחד מאפס, באותן הגדרות',
-       ask:'כתבו בשורה אחת: כמה מודלים אימנתם, ומה השארתם זהה בכולם.',
-       why:'כל נקודה על הגרף היא אימון נפרד. המודל של 100 אינו המודל של 50 שהשתפר.',
-       how:'לכל גודל: פרויקט Teachable Machine חדש, אותם שמות קלאסים, בלי לגעת ב-Epochs / Learning rate / Batch size, וייצוא Tensorflow.js.',
-       proof:'תיקיית מודל לכל גודל, כל אחת עם שלושת הקבצים.',
-       pitfall:'לשנות גם את מספר הסבבים "כי זה יותר תמונות". ולהתאכזב מ-97% כבר ב-25 — TM בונה על רשת שאומנה מראש. זה ממצא, לא כישלון.'},
-      {id:'runs5',kind:'auto',verify:'runsDistinct5',min:5,gate:true,needsStage:2,tile:'RUN',
-       title:'חמש הרצות שמורות, כל אחת עם תווית n=, כולן באותו סף',
-       why:'ההרצה השמורה היא הדבר היחיד שמצמיד יחד תווית, סף, ארבעה תאים ושלושה מדדים. הכלי אינו יודע על כמה תמונות אימנתם — המשבצת היא ציר ה-X שלכם.',
-       how:'לכל מודל: משבצת ← הרצה ← "קליטה לציר". ודאו 0.50 לפני כל קליטה.',
-       proof:'הסעיף נדלק לבד כשיש חמש הרצות עם חמישה מספרי n= שונים.',
-       pitfall:'תווית ריקה הופכת ל"הרצה 1", והעקומה מאבדת את ציר ה-X לנצח. ושמירה בשני ספים שונים — הסף נצרב בתוך ההרצה בלי אזהרה.'},
-      {id:'read3',kind:'declare',gate:true,needsStage:1,tile:'RUN',
-       title:'קריאת שלושת הקווים — וחישוב הדיוק החיובי מה-CSV',
-       ask:'כתבו בשורה אחת: בין איזה שתי נקודות העקומה התיישרה, ובכמה נקודות.',
-       why:'הדיוק יכול להישאר קפוא בזמן שהרגישות עולה והספציפיות יורדת. ובעין, 3% הם כקוטר נקודה אחת.',
-       how:'גררו את המַדָּה מעמודת הרעש אל פער על העקומה. אם הלסתות רחבות מהפער — המדידה לא הכריעה.',
-       proof:'טבלה שבה המספרים נשלפו מההרצות ולא הוקלדו ביד.',
-       pitfall:'ציר ה-X הוא סדר השמירה ולא n: המרחק בין 25 ל-50 זהה למרחק בין 200 ל-400.'},
-      {id:'maps',kind:'declare',gate:true,needsStage:1,tile:'ATT',
-       title:'מפת קשב בנקודה הראשונה ובאחרונה — האם האזור זז',
-       ask:'כתבו בשורה אחת: על מה הסתכל המודל הקטן, על מה הגדול, ומה היה "שינוי מרבי בתחזית" בכל אחד.',
-       why:'מודל שלמד קיצור דרך משפר את עצמו עם עוד נתונים בדיוק כמו מודל שלמד את הטפיל. אם הדיוק עלה והקשב נשאר על המסגרת — מה ששיפרתם אינו האבחון.',
-       how:'בשתי הנקודות: פתחו את שתיים-שלוש הטעויות הבטוחות ביותר, והשוו את האזור.',
-       proof:'שני השדות מלאים: האזור, מספר האזורים, ואחוז השינוי המרבי.',
-       pitfall:'"מפת הקשב מראה שהמודל מבין" — היא רמז שמחייב בדיקה, לא הוכחה.'},
-      {id:'conclusion',kind:'declare',gate:true,needsStage:1,tile:'LOG',
-       title:'מסקנה — ואם המדידה לא הכריעה, לכתוב זאת',
-       ask:'כתבו בשורה אחת: האם ההשערה התאמתה, ומה הניסוי הזה לא יכול להוכיח.',
-       why:'"הכמות שיפרה את הלמידה" ו"הכמות שיפרה את ניצול קיצור הדרך" מתאימות לאותם נתונים בדיוק. "המדידה לא הכריעה" היא תשובה לגיטימית ומזכה.',
-       how:'התאמתה / חלקית / הופרכה / המדידה לא הכריעה — ואז מה הניסוי לא יכול להוכיח.',
-       proof:'השדה "מה הניסוי לא יכול להוכיח" מזכיר מגבלה אמיתית.',
-       pitfall:'"העקומה התיישרה אז הגעתי לתקרה" — הטעות המרכזית של השיעור.'},
-      {id:'record',kind:'soft',gate:false,needsStage:1,tile:'LOG',
-       title:'מומלץ — ייצוא רשומת המחברת ותרשים השוואת ההרצות',
-       why:'ההרצות יושבות ב-localStorage של המחשב הזה. "איפוס הרצות", או מחשב אחר, והן איננו.',
-       how:'כפתור אחד: "תיוק כל התוצרים".',
-       proof:'הקבצים מופיעים ברשימת התיוק בפס העליון.',
-       pitfall:'להסתמך על הדפדפן. הוא לא מחסן.'}
-    ]
-  },
-  /* המספרים בדיוק בצורה ש-curveReport מחזיר */
-  curve:{
-    points:[
-      {n:25, acc:.610,sens:.520,spec:.700,TP:52,FN:48,FP:30,TN:70,images:200,threshold:.50},
-      {n:50, acc:.745,sens:.710,spec:.780,TP:71,FN:29,FP:22,TN:78,images:200,threshold:.50},
-      {n:100,acc:.880,sens:.860,spec:.900,TP:86,FN:14,FP:10,TN:90,images:200,threshold:.50},
-      {n:200,acc:.915,sens:.910,spec:.920,TP:91,FN:9, FP:8, TN:92,images:200,threshold:.50},
-      {n:400,acc:.925,sens:.920,spec:.930,TP:92,FN:8, FP:7, TN:93,images:200,threshold:.50}
-    ],
-    noiseRun:{n:100,acc:.855,sens:.840,spec:.870,TP:84,FN:16,FP:13,TN:87,images:200,threshold:.50},
-    noiseAtN:100, unlabeled:0, mixedThreshold:false, mixedTestSet:false
-  }
-};
-
-/* מה שהשרת קורא לו noiseBand ו-gaps, מחושב כאן על אותם מספרים בדיוק. */
+/* ========== המספרים. צורת curveReport מהשרת, בלי שינוי. ========== */
+const PTS = [
+  {n:25, acc:.610,sens:.520,spec:.700,TP:52,FN:48,FP:30,TN:70},
+  {n:50, acc:.745,sens:.710,spec:.780,TP:71,FN:29,FP:22,TN:78},
+  {n:100,acc:.880,sens:.860,spec:.900,TP:86,FN:14,FP:10,TN:90},
+  {n:200,acc:.915,sens:.910,spec:.920,TP:91,FN:9, FP:8, TN:92},
+  {n:400,acc:.925,sens:.920,spec:.930,TP:92,FN:8, FP:7, TN:93}
+];
+const NOISE_RUN = {n:100,acc:.855,sens:.840,spec:.870,TP:84,FN:16,FP:13,TN:87};
 const MET = {acc:'דיוק', sens:'רגישות', spec:'ספציפיות'};
-function noiseBand(m){
-  const p100 = DEMO_CTX.curve.points.find(p=>p.n===DEMO_CTX.curve.noiseAtN);
-  return Math.abs(p100[m] - DEMO_CTX.curve.noiseRun[m]) * 100;
-}
-function gaps(m){
-  const P = DEMO_CTX.curve.points;
-  return P.slice(1).map((p,i)=>({from:P[i].n,to:p.n,delta:(p[m]-P[i][m])*100}));
-}
+const noiseBand = m => Math.abs(PTS.find(p=>p.n===100)[m] - NOISE_RUN[m])*100;
+const gaps = m => PTS.slice(1).map((p,i)=>({from:PTS[i].n,to:p.n,delta:(p[m]-PTS[i][m])*100}));
 function plateauFrom(m){
-  const g = gaps(m), nb = noiseBand(m);
-  for (let i=0;i<g.length;i++){
-    if (g.slice(i).every(x=>x.delta<=nb)) return g[i].from;
-  }
+  const g=gaps(m), nb=noiseBand(m);
+  for(let i=0;i<g.length;i++) if(g.slice(i).every(x=>x.delta<=nb)) return g[i].from;
   return null;
 }
 
-/* ========================= מצב ========================= */
-const S = {
-  stage:2, slice:'exp_marked', metric:'acc',
-  sel:25,                                  // המשבצת הנבחרת
-  slots:{25:{},50:{},100:{},200:{},400:{},noise:{}},
-  captured:[],                             // סדר הקליטה
-  noiseIn:false,
-  thr:0.50,
-  predict:{25:null,50:null,100:null,200:null,400:null},
-  locked:null, wasEdited:false,
-  notes:{}, done:{}, claim:{},
-  precision:{},
-  caliper:{gap:null, x:null, y:null},
-  arm:{x:0,y:0,mode:'read',folded:false,placed:false},
-  eye:'', filed:0, slowServer:false, errPick:[], maps:{first:false,last:false}
-};
-const CL = DEMO_CTX.checklist.items;
-const byId = id => CL.find(i=>i.id===id);
-const avail = it => (it.needsStage||1) <= S.stage;
-const isDone = it => !!S.done[it.id];
+/* ========== עשרת השלבים. הטקסטים הם אלה שבשרת. ========== */
+const STEPS = [
+  {id:'exp_marked', stage:1, kind:'declare',
+   eyebrow:'EXPERIMENT', h:'איזה ניסוי את/ה מריץ/ה השבוע?',
+   lede:'בחירה אחת. היא קובעת מה המנטור ישאל ומה המערכת תחפש.',
+   why:'הניסוי המסומן הוא מה שהמנטור שואל עליו, והמחברת היא המקום שבו ההשערה ננעלת לפני המדידה.',
+   how:'בחרו "עקומת למידה". אחר כך כתבו באיזה מאגר אתם עובדים.',
+   trap:'ניסוי שמעבר לשלב הפתוח יידחה על ידי השרת — כפתור מושבת הוא בקשה, לא מניעה.'},
 
-/* ========================= פס א׳ ========================= */
-const EXPS = [['curve','עקומת למידה'],['balance','יחסי איזון'],
-              ['source','הכללה בין מקורות'],['intervention','התערבות']];
-function renderBandA(){
-  document.getElementById('expSwitch').innerHTML = EXPS.map((e,i)=>
-    `<button data-exp="${e[0]}" class="${e[0]==='curve'?'on':''}" ${i>0?'disabled':''}
-      title="${i>0?'נפתח בשלב מתקדם יותר':''}">${e[1]}</button>`).join('');
-  document.getElementById('stageLbl').textContent = S.stage;
-  document.getElementById('filingTxt').textContent = 'התיוק פעיל · ' + S.filed + ' תוצרים';
-}
+  {id:'sizes', stage:2, kind:'declare',
+   eyebrow:'HOW MANY POINTS', h:'כמה גדלים באמת קיבלת?',
+   lede:'עקומה שנעצרה כי הנתונים נגמרו אינה עקומה שהתיישרה. ספרו לפני שמודדים.',
+   why:'אלה שני דברים שונים לגמרי, וחייבים להיכתב בנפרד.',
+   how:'סמנו רק את הגדלים שבאמת נפתחו לכם ב-Drive.',
+   trap:'להניח חמש נקודות. בשלב 1 פתוחות רק "גודל 0025" ו"ערכת מבחן".'},
 
-/* ========================= המסילה ========================= */
-function gateStats(){
-  const g = CL.filter(i=>i.gate && avail(i));
-  return {done:g.filter(isDone).length, total:g.length,
-          stuck:(g.find(i=>!isDone(i))||{}).title||''};
-}
-function renderRail(){
-  const st = gateStats();
-  document.getElementById('railCnt').textContent = st.done+'/'+st.total+' סעיפים חוסמים';
-  document.getElementById('railList').innerHTML = CL.map(it=>{
-    const ok = isDone(it), av = avail(it), on = it.id===S.slice;
-    const mk = ok ? '✓' : (!av ? '🔒' : (on ? '▶' : '•'));
-    const row = `<div class="sl ${ok?'done':''} ${on?'on':''} ${av?'':'lock'}" data-id="${it.id}">
-        <span class="mk">${mk}</span>
-        <span>
-          <span class="ttl">${it.title}</span>
-          <span class="tag">${it.gate?'GATE':'OPTIONAL'} · ${it.kind.toUpperCase()}${av?'':' · STAGE '+it.needsStage}</span>
-        </span>
-      </div>`;
-    return row + (on && av ? sliceBody(it) : '');
-  }).join('');
-}
-function sliceBody(it){
-  const noteVal = S.notes[it.id]||'';
-  const detected = it.kind!=='declare' && isDone(it) && !S.claim[it.id];
-  let act = '';
-  if (it.kind==='declare'){
-    act = `<textarea data-note="${it.id}" placeholder="${it.ask||''}">${noteVal}</textarea>
-      <div class="row">
-        <button class="go" data-tick="${it.id}" ${noteVal.trim().length>=12?'':'disabled'}>סימון כבוצע</button>
-        <span class="cc">${noteVal.trim().length}/12 תווים</span>
-      </div>`;
-  } else if (it.kind==='auto'){
-    act = detected
-      ? `<p><b style="color:var(--ok)">המערכת זיהתה את זה לבד.</b></p>`
-      : `<p class="cc">נדלק לבד כשהראיה מגיעה לשרת.</p>
-         <button data-claim="${it.id}">עשיתי, והמערכת לא רואה את זה</button>`;
-  } else {
-    act = `<button data-tick="${it.id}">סימון כבוצע</button>`;
-  }
-  return `<div class="slbody">
-    <p><b>למה:</b> ${it.why}</p>
-    <p><b>איך:</b> ${it.how}</p>
-    <p><b>מה סוגר:</b> ${it.proof}</p>
-    <p class="pit"><b>מלכודת:</b> ${it.pitfall}</p>
-    ${act}</div>`;
-}
+  {id:'hypothesis', stage:1, kind:'declare',
+   eyebrow:'PREDICT FIRST', h:'נחש/י את העקומה — לפני שמדדת',
+   lede:'גררו את חמש הנקודות לאן שאתם חושבים שהן ינחתו. הקו שלכם יישאר על הגרף כל השבוע.',
+   why:'השערה שנכתבת אחרי שרואים את התוצאה תמיד מתאמתת, וכך הניסוי מפסיק ללמד משהו.',
+   how:'גררו את חמש הנקודות, ואז כתבו משפט אחד עם מספר ונעלו אותו.',
+   trap:'השערה שאינה ניתנת להפרכה. "הדיוק ימשיך להשתפר" אינה השערה.'},
 
-/* ========================= הסיפון ========================= */
-const TILES = [
-  {k:'LOAD', t:'טעינת המודלים', img:'img/trays.jpg'},
-  {k:'RUN',  t:'הקורא',          img:''},
-  {k:'TRAIN',t:'אימון — מחוץ למעבדה', img:'img/curve-slides.jpg'},
-  {k:'ERR',  t:'הטעויות',        img:'img/parasite-pair.jpg'},
-  {k:'ATT',  t:'מפות קשב',       img:'img/lightbox.jpg'},
-  {k:'LOG',  t:'היומן',          img:'img/clipboard.jpg'}
+  {id:'noise', stage:1, kind:'auto',
+   eyebrow:'THE NOISE RULER', h:'אותה ערכה. פעמיים.',
+   lede:'שני אימונים על אותן תמונות בדיוק ייתנו תוצאות שונות. ההפרש ביניהם הוא הרעש של המדידה — והוא הסרגל של כל השבוע.',
+   why:'בלי הסרגל הזה כל הפרש קטן הוא טענה בלי בסיס.',
+   how:'אמנו פעמיים על אותה ערכה, הריצו את שניהם, וקלטו את שתי התוצאות.',
+   trap:'לדלג על זה ואז לקרוא ל-1.5 נקודות "שיפור".'},
+
+  {id:'models', stage:2, kind:'declare',
+   eyebrow:'OUTSIDE · THE ONLY EXIT', h:'מודל נפרד לכל גודל',
+   lede:'זה החלק היחיד שקורה מחוץ למעבדה. אותן הגדרות בדיוק בכל החמישה.',
+   why:'כל נקודה על הגרף היא אימון נפרד. המודל של 100 אינו המודל של 50 שהשתפר.',
+   how:'פרויקט חדש לכל גודל, אותם שמות קלאסים, וייצוא Tensorflow.js.',
+   trap:'לשנות גם את מספר הסבבים "כי זה יותר תמונות". ולהתאכזב מ-97% כבר ב-25 — זה ממצא, לא כישלון.'},
+
+  {id:'runs5', stage:2, kind:'auto',
+   eyebrow:'FIVE POINTS', h:'חמש מדידות, אותה ערכת מבחן',
+   lede:'לכל גודל: טענו את המודל, הריצו, וקלטו לגרף. הסף 0.50 בכולם.',
+   why:'ההרצה השמורה היא הדבר היחיד שמצמיד יחד תווית, סף וארבעה תאים.',
+   how:'לחצו על משבצת, "הרצה", ואז "קליטה לגרף".',
+   trap:'שמירה בשני ספים שונים — הסף נצרב בתוך ההרצה בלי אזהרה.'},
+
+  {id:'read3', stage:1, kind:'declare',
+   eyebrow:'BIGGER THAN NOISE?', h:'האם הפער גדול מהרעש?',
+   lede:'גררו את המַדָּה אל פער על העקומה. הלסתות שלה הן הרעש.',
+   why:'הדיוק יכול להישאר קפוא בזמן שהרגישות עולה. ובעין, 3% הם כקוטר נקודה.',
+   how:'גררו את המַדָּה אל כל אחד מארבעת הפערים, ואז החליפו מדד וראו מה קורה.',
+   trap:'ציר ה-X הוא סדר השמירה ולא n: המרחק בין 25 ל-50 זהה למרחק בין 200 ל-400.'},
+
+  {id:'maps', stage:1, kind:'declare',
+   eyebrow:'DID THE FOCUS MOVE', h:'על מה המודל הסתכל?',
+   lede:'אותה תמונה, שני מודלים. אם הדיוק עלה והקשב נשאר על המסגרת — מה ששיפרתם אינו האבחון.',
+   why:'מודל שלמד קיצור דרך משתפר עם עוד נתונים בדיוק כמו מודל שלמד את הטפיל.',
+   how:'השוו את שתי המפות: האם האזור זז, והאם הוא התכנס.',
+   trap:'"מפת הקשב מראה שהמודל מבין" — היא רמז שמחייב בדיקה, לא הוכחה.'},
+
+  {id:'conclusion', stage:1, kind:'declare',
+   eyebrow:'CONCLUSION', h:'מה למדת — ומה אי אפשר לדעת מכאן',
+   lede:'"המדידה לא הכריעה" היא תשובה לגיטימית, והיא מזכה.',
+   why:'שתי מסקנות הפוכות מתאימות לאותם נתונים בדיוק.',
+   how:'בחרו מסקנה, ואז כתבו מה הניסוי הזה לא יכול להוכיח.',
+   trap:'"העקומה התיישרה אז הגעתי לתקרה" — הטעות המרכזית של השיעור.'},
+
+  {id:'record', stage:1, kind:'soft',
+   eyebrow:'KEEP IT', h:'תיוק',
+   lede:'ההרצות יושבות בדפדפן הזה בלבד.',
+   why:'"איפוס הרצות", או מחשב אחר, והן איננו.',
+   how:'כפתור אחד.', trap:'להסתמך על הדפדפן. הוא לא מחסן.'}
 ];
-const SLOT_ORDER = [25,50,100,200,400,'noise'];
-function activeTile(){ const it = byId(S.slice); return it ? it.tile : 'RUN'; }
 
-function renderDeck(){
-  const at = activeTile();
-  document.getElementById('deck').innerHTML = TILES.map(T=>`
-    <section class="tile ${T.k===at?'active':''}" data-tile="${T.k}">
-      ${T.img?`<div class="cap"><img src="${T.img}" alt=""></div>`:''}
-      <div class="hd"><span class="eyebrow">${T.k}</span><h3>${T.t}</h3></div>
-      <div class="bd">${tileBody(T.k)}</div>
-    </section>`).join('');
-  wireDeck();
+/* ========== מצב ========== */
+const S = {
+  i:0, stage:2, metric:'acc',
+  exp:null, sizes:[], runs:{}, sel:null, noiseA:false, noiseB:false,
+  predict:{}, locked:null, broken:false,
+  notes:{}, done:{}, prec:{}, cal:null, calXY:null,
+  armOpen:false, armTab:'how', numsOpen:false, filed:0
+};
+const step = () => STEPS[S.i];
+const avail = s => s.stage <= S.stage;
+const captured = () => PTS.filter(p=>S.runs[p.n] && S.runs[p.n].cap).map(p=>p.n);
+const noiseIn = () => S.noiseA && S.noiseB;
+
+/* ========== כותרת ========== */
+function renderSteps(){
+  document.getElementById('steps').innerHTML = STEPS.map((s,i)=>
+    `<button data-i="${i}" title="${s.h}"
+      class="${S.done[s.id]?'done':''} ${i===S.i?'on':''} ${avail(s)?'':'lock'}"
+      ${avail(s)?'':'disabled'}><b></b></button>`).join('');
+  document.getElementById('stg').textContent = S.stage;
 }
 
-function tileBody(k){
-  if (k==='LOAD') return loadBody();
-  if (k==='RUN')  return runBody();
-  if (k==='TRAIN')return trainBody();
-  if (k==='ERR')  return errBody();
-  if (k==='ATT')  return attBody();
-  return logBody();
+/* ========== הבמה ========== */
+function render(){
+  const s = step();
+  renderSteps();
+  document.getElementById('stage').innerHTML = `
+    <span class="eyebrow">${('0'+(S.i+1)).slice(-2)} / 10 · ${s.eyebrow}</span>
+    <h1>${s.h}</h1>
+    <p class="lede">${s.lede}</p>
+    <div class="work">${work(s)}</div>`;
+  footer(s);
+  armScreen();
+  if (s.id==='maps') drawCells();
+  if (document.getElementById('chart')) { drawChart(); placeCal(); }
 }
 
-function loadBody(){
-  const slots = SLOT_ORDER.map(n=>{
-    const open = n==='noise' || n===25 || S.stage>=2;
-    const sl = S.slots[n]||{};
-    const cls = [ sl.captured?'cap':(sl.loaded?'filled':''), open?'':'off',
-                  S.sel===n?'sel':'' ].join(' ');
-    const label = n==='noise' ? 'רעש' : 'n='+n;
-    const st = sl.captured ? 'נקלט לציר' : (sl.loaded ? 'מודל טעון' : (open?'ריקה':'שלב 2'));
-    return `<div class="slot ${cls}" data-slot="${n}">
-      <span class="n">${label}</span><span class="st">${st}</span></div>`;
-  }).join('');
-  return `<div class="slots">${slots}</div>
-    <p>המשבצת <b>היא</b> התווית. אין שדה טקסט, ולכן "הרצה 1" לא יכולה להיווצר.</p>
-    <p class="punch">ערכת המבחן מוברגת פעם אחת לכל השבוע: 200 תמונות, 100 נגוע ו-100 תקין.</p>
-    <p style="color:var(--ink-3);font-size:11px">בדמו הבורר אמיתי ואינו עושה דבר.
-      <input type="file" webkitdirectory directory multiple style="font-size:11px;padding:4px"></p>`;
+function work(s){
+  switch(s.id){
+    case 'exp_marked': return wExp();
+    case 'sizes':      return wSizes();
+    case 'hypothesis': return wHyp();
+    case 'noise':      return wNoise();
+    case 'models':     return wModels();
+    case 'runs5':      return wRuns();
+    case 'read3':      return wRead();
+    case 'maps':       return wMaps();
+    case 'conclusion': return wConc();
+    case 'record':     return wRec();
+  }
 }
 
-function runBody(){
-  const sl = S.slots[S.sel]||{};
-  const r = sl.result;
-  const amber = Math.abs(S.thr-0.50)>0.001;
-  const cell = (k,v)=>`<div><span class="k">${k}</span><span class="v">${v}</span></div>`;
-  return `
-    <div class="thr">
-      <span style="font-size:11px;color:var(--ink-3)">סף</span>
-      <input type="range" id="thr" min="0.05" max="0.95" step="0.05" value="${S.thr}">
-      <span class="val num">${S.thr.toFixed(2)}</span>
-      <span class="lamp ${amber?'amber':''}">${amber?'זז מ-0.50':'נקישה 0.50'}</span>
+const EXPS=[['curve','עקומת למידה','כמה תמונות באמת צריך'],
+            ['balance','יחסי איזון','כשמחלקה אחת נדירה'],
+            ['source','הכללה בין מקורות','הממצא או המקור'],
+            ['intervention','התערבות','האם התיקון עובד']];
+function wExp(){
+  return `<div class="picks">${EXPS.map((e,i)=>`
+      <button class="pick ${S.exp===e[0]?'on':''} ${i>0?'off':''}" data-exp="${e[0]}" ${i>0?'disabled':''}>
+        <span class="eyebrow">${i===0?'OPEN':'LATER'}</span>
+        <span class="t">${e[1]}</span><span class="s">${e[2]}</span></button>`).join('')}</div>
+    ${S.exp?`<div style="margin-top:22px;max-width:620px">
+      <label style="display:block;font-size:13.5px;font-weight:700;color:var(--ink-2);margin-bottom:6px">באיזה מאגר?</label>
+      <input data-note="exp_marked" value="${S.notes.exp_marked||''}"
+        placeholder="מלריה — תאי דם · 5 בנובמבר"></div>`:''}`;
+}
+
+const SIZES=[25,50,100,200,400];
+function wSizes(){
+  return `<div class="picks" style="grid-template-columns:repeat(5,1fr)">
+    ${SIZES.map(n=>{
+      const open = n===25 || S.stage>=2;
+      return `<button class="pick ${S.sizes.includes(n)?'on':''} ${open?'':'off'}"
+        data-size="${n}" ${open?'':'disabled'} style="text-align:center">
+        <span class="t num">${n}</span>
+        <span class="s">${open?'נפתח':'שלב 2'}</span></button>`;}).join('')}</div>
+    <p style="margin-top:18px;font-size:15px;color:var(--ink-2)">
+      סימנת <b class="num">${S.sizes.length}</b> גדלים.
+      ${S.sizes.length&&S.sizes.length<5?'<b style="color:var(--warn)">פחות מחמש נקודות — זה בסדר, רק צריך לכתוב את זה במסקנה.</b>':''}</p>`;
+}
+
+function wHyp(){
+  return `${chart(true)}
+    <div style="margin-top:22px;max-width:680px">
+      <label style="display:block;font-size:13.5px;font-weight:700;color:var(--ink-2);margin-bottom:6px">
+        ועכשיו במילים — עם מספר</label>
+      <input data-note="hypothesis" value="${S.notes.hypothesis||''}"
+        ${S.locked?'disabled':''} placeholder="מ-200 ל-400 יתווספו פחות מ-3 נקודות דיוק">
+      <div style="margin-top:12px;display:flex;gap:10px;align-items:center">
+        ${S.locked
+          ? `<span class="stamp ${S.broken?'broken':''}">${S.broken?'נשבר · ':''}ננעל ${S.locked}</span>
+             <button class="quiet" id="unlock">פתיחה לעריכה</button>`
+          : `<button class="go" id="lock" ${/\d/.test(S.notes.hypothesis||'')&&(S.notes.hypothesis||'').length>=15?'':'disabled'}>נעילה</button>
+             <span style="font-size:12.5px;color:var(--ink-3)">צריך מספר, ולפחות 15 תווים</span>`}
+      </div></div>`;
+}
+
+function wNoise(){
+  const slot=(k,on,lbl)=>`<button class="run ${on?'done':''} ${S.sel===k?'on':''}" data-noise="${k}">
+      <span class="n">${lbl}</span><span class="s">${on?'נקלט':'ריק'}</span></button>`;
+  return `<div class="runs two">${slot('A',S.noiseA,'אימון א׳')}${slot('B',S.noiseB,'אימון ב׳')}</div>
+    ${S.sel&&!(S.sel==='A'?S.noiseA:S.noiseB)
+      ? `<div class="runbar"><button class="go" id="runOne">הרצה וקליטה</button>
+         <span class="lbl">אותה ערכת מבחן · סף 0.50</span></div>`:''}
+    ${noiseIn()?`<div style="margin-top:26px" class="chartwrap">
+        <div style="text-align:center;padding:14px 0">
+          <span class="eyebrow">NOISE BAND</span>
+          <div style="font-size:52px;font-weight:900;font-family:var(--mono);color:var(--brand-2);line-height:1.1">
+            ${noiseBand(S.metric).toFixed(1)}</div>
+          <div style="font-size:16px;color:var(--ink-2);margin-top:4px">
+            נקודות ${MET[S.metric]} — זה הרעש שלכם</div>
+          <div style="font-size:14px;color:var(--ink-3);margin-top:10px;max-width:520px;margin-inline:auto">
+            כל הפרש קטן מזה בין שתי נקודות על העקומה אינו ניתן להבחנה ממקריות.</div>
+        </div></div>`:''}`;
+}
+
+function wModels(){
+  return `<div class="gate">
+      <img src="img/curve-slides.jpg" alt="">
+      <div class="in">
+        <span class="eyebrow">TEACHABLE MACHINE</span>
+        <ol>
+          <li>פרויקט חדש · Image Project · Standard</li>
+          <li>שמות הקלאסים בדיוק כך: <code>נגוע</code> · <code>תקין</code></li>
+          <li>Export ← <code>Tensorflow.js</code> ← Download</li>
+        </ol>
+        <button class="go" id="openTM" style="margin-top:16px">פתיחת Teachable Machine</button>
+      </div></div>
+    <div style="margin-top:20px;max-width:680px">
+      <label style="display:block;font-size:13.5px;font-weight:700;color:var(--ink-2);margin-bottom:6px">
+        כמה מודלים אימנת, ומה נשאר זהה בכולם?</label>
+      <input data-note="models" value="${S.notes.models||''}"
+        placeholder="חמישה · אותם קלאסים, אותם Epochs, אותו Batch size"></div>`;
+}
+
+function wRuns(){
+  const sel = S.sel;
+  const r = sel && S.runs[sel] && S.runs[sel].res;
+  return `<div class="runs">${SIZES.map(n=>{
+      const open = n===25||S.stage>=2, st = S.runs[n]||{};
+      return `<button class="run ${st.cap?'done':''} ${sel===n?'on':''} ${open?'':'off'}"
+        data-run="${n}" ${open?'':'disabled'}>
+        <span class="n">n=${n}</span>
+        <span class="s">${st.cap?'על הגרף':(open?'ריק':'שלב 2')}</span></button>`;}).join('')}</div>
+    ${sel&&!(S.runs[sel]||{}).cap?`<div class="runbar">
+        ${r?`<button class="go" id="cap">קליטה לגרף ←</button>
+             <span class="lbl num">${MET[S.metric]} ${(r[S.metric]*100).toFixed(1)}%</span>`
+           :`<button class="go" id="runOne">הרצה על ערכת המבחן</button>
+             <span class="lbl">200 תמונות · סף 0.50</span>`}</div>`:''}
+    ${captured().length?`<div style="margin-top:26px">${chart(false)}</div>`:''}`;
+}
+
+function wRead(){
+  return `${chart(false)}
+    <div id="calsay" class="${S.cal==null?'':calState().cls}">${calSay()}</div>
+    <button class="quiet numsbtn" id="numsBtn">${S.numsOpen?'סגירת המספרים':'הצגת המספרים'}</button>
+    <div id="nums" class="${S.numsOpen?'open':''}">${numsTable()}</div>
+    <div style="margin-top:20px;max-width:680px">
+      <label style="display:block;font-size:13.5px;font-weight:700;color:var(--ink-2);margin-bottom:6px">
+        בין איזה שתי נקודות העקומה התיישרה, ובכמה?</label>
+      <input data-note="read3" value="${S.notes.read3||''}"
+        placeholder="בין 200 ל-400 — הפער 1.0 נקודות, קטן מהרעש 2.5"></div>`;
+}
+
+function wMaps(){
+  return `<div class="cells">
+      <div class="cellbox"><canvas id="m25" width="150" height="150"></canvas>
+        <div class="t">n=25</div><div class="d">קשב פרוס · גם על השוליים</div></div>
+      <div class="cellbox"><canvas id="m400" width="150" height="150"></canvas>
+        <div class="t">n=400</div><div class="d">מתכנס לכתם אחד</div></div>
     </div>
-    <div class="row" style="display:flex;gap:6px;align-items:center;margin:4px 0">
-      <button class="go" id="runBtn" ${sl.loaded?'':'disabled'}>הרצת ההערכה</button>
-      <button id="capBtn" ${r?'':'disabled'}>קליטה לציר ←</button>
-      <span class="cc num" style="font-size:11px;color:var(--ink-3)">${S.sel==='noise'?'רעש':'n='+S.sel}</span>
-    </div>
-    ${r?`<div class="cm">
-      ${cell('TP · זוהה נכון',r.TP)}${cell('FN · החמצה',r.FN)}
-      ${cell('FP · אזעקת שווא',r.FP)}${cell('TN · תקין נכון',r.TN)}</div>
-      <div class="mets">
-        <span>דיוק<b class="num" data-eye="acc">${(r.acc*100).toFixed(1)}%</b></span>
-        <span>רגישות<b class="num" data-eye="sens">${(r.sens*100).toFixed(1)}%</b></span>
-        <span>ספציפיות<b class="num" data-eye="spec">${(r.spec*100).toFixed(1)}%</b></span>
-        <span>דיוק חיובי<b class="num">${(100*r.TP/(r.TP+r.FP)).toFixed(1)}%</b></span>
-      </div>`
-    :`<p style="color:var(--ink-3)">בחרו משבצת ב-LOAD, ואז הריצו. המספרים ייכנסו לכאן ומשם לציר.</p>`}
-    <p class="punch">סף אחד לכל השבוע. אם הוא זז בין שתי נקודות, ההפרש ביניהן אינו כמות.</p>`;
+    <p style="font-size:12px;color:var(--warn);font-family:var(--mono);margin-top:8px">
+      דמו — המפות חושבו מראש</p>
+    <div style="margin-top:18px;max-width:680px">
+      <label style="display:block;font-size:13.5px;font-weight:700;color:var(--ink-2);margin-bottom:6px">
+        על מה הסתכל הקטן, על מה הגדול?</label>
+      <input data-note="maps" value="${S.notes.maps||''}"
+        placeholder="הקטן על כל התא, הגדול על הכתם — האזור התכנס"></div>`;
 }
 
-function trainBody(){
-  return `<div class="fence">
-      <span class="eyebrow">OUTSIDE · THE ONLY EXIT</span>
-      <p style="margin:3px 0 0;font-size:12px"><b>האימון באמת קורה אצל גוגל.</b>
-      זו היציאה היחידה מהמעבדה, והיא תמיד אותה יציאה.</p>
-      <ol>
-        <li>פרויקט חדש · Image Project · Standard</li>
-        <li>שמות הקלאסים בדיוק כך: <code>נגוע</code> · <code>תקין</code></li>
-        <li>Export Model ← לשונית <code>Tensorflow.js</code> (ולא Keras) ← Download</li>
-      </ol>
-      <p style="margin:6px 0 0;font-size:11.5px">אל תיגעו ב-Epochs, ב-Learning rate או ב-Batch size.
-        ארבעת התנאים האלה חייבים להישאר זהים בחמשת המודלים — אחרת לא מדדתם את גודל הקבוצה.</p>
-    </div>
-    <button class="go" onclick="window.open('https://teachablemachine.withgoogle.com/train/image','_blank','noopener,noreferrer')">פתיחת Teachable Machine</button>
-    <p class="punch" style="margin-top:7px">חוזרים עם תיקייה אחת לכל גודל, ושמה הוא הגודל.</p>`;
+const VERDICTS=['המדידה לא הכריעה','התאמתה','התאמתה חלקית','הופרכה'];
+function wConc(){
+  return `<div class="picks" style="grid-template-columns:repeat(4,1fr)">
+      ${VERDICTS.map(v=>`<button class="pick ${S.notes.verdict===v?'on':''}" data-verdict="${v}"
+        style="text-align:center"><span class="t" style="font-size:15px">${v}</span></button>`).join('')}</div>
+    <div class="fields" style="margin-top:20px">
+      <div><label>מה הניסוי הזה לא יכול להוכיח?</label>
+        <textarea data-note="conclusion" style="height:84px"
+          placeholder="גודל ערכת המבחן · מאגר יחיד · אותו מקור · רעש התיוג">${S.notes.conclusion||''}</textarea></div>
+    </div>`;
 }
 
-function errBody(){
-  const items = [['נגוע','07'],['נגוע','19'],['תקין','03'],['נגוע','31'],['תקין','22'],['נגוע','12']];
-  return `<p>שש הטעויות שהמודל היה <b>בטוח</b> בהן ביותר, ממוינות לפי מרחק מהסף.</p>
-    <div class="errlist">${items.map((e,i)=>`
-      <figure data-err="${i}" class="${S.errPick.includes(i)?'pick':''}">
-        <img src="../../features/samples/${e[0]}/${e[1]}.png" alt="">
-        <figcaption>${(0.5+0.41-i*0.05).toFixed(2)}</figcaption>
-      </figure>`).join('')}</div>
-    <p class="punch" style="margin-top:6px">טעות שהמודל היה בטוח בה היא הטעות שמלמדת. טעות על הגבול היא רק רעש.</p>`;
+function wRec(){
+  return S.filed
+    ? `<div class="doneBig"><div class="big">${S.filed}</div>
+        <div style="font-size:17px;color:var(--ink-2);margin-top:6px">תוצרים תויקו</div></div>`
+    : `<button class="go" id="fileAll" style="font-size:16px;padding:14px 30px">תיוק כל התוצרים</button>`;
 }
 
-function attBody(){
-  return `<div class="maps">
-      <div class="mapslot"><div class="lb">הנקודה הראשונה · n=25</div>
-        <canvas id="map25" width="112" height="112"></canvas>
-        <div class="mapnote">דמו — חושב מראש</div></div>
-      <div class="mapslot"><div class="lb">הנקודה האחרונה · n=400</div>
-        <canvas id="map400" width="112" height="112"></canvas>
-        <div class="mapnote">דמו — חושב מראש</div></div>
-    </div>
-    <p style="margin-top:6px"><b>האם האזור זז?</b> ב-25 הקשב פרוס על כל התא ועל השוליים.
-      ב-400 הוא מתכנס לכתם אחד.</p>
-    <p class="punch">אם הדיוק עלה והקשב נשאר על המסגרת — מה ששיפרתם אינו האבחון.</p>`;
+/* ========== הגרף ========== */
+function chart(editable){
+  return `<div class="chartwrap">
+      <svg id="chart" viewBox="0 0 640 230" preserveAspectRatio="none"
+        data-edit="${editable?1:0}"></svg>
+      <div class="chartfoot">
+        <span class="k"><i style="background:var(--ink)"></i>נמדד</span>
+        <span class="k"><i style="background:var(--brand);opacity:.6"></i>הניבוי שלך</span>
+        ${noiseIn()?`<span class="k"><i style="background:#cbd9e2;height:9px"></i>רעש ${noiseBand(S.metric).toFixed(1)}</span>`:''}
+        <div class="metsel">${Object.keys(MET).map(m=>
+          `<button data-met="${m}" class="${S.metric===m?'on':''}">${MET[m]}</button>`).join('')}</div>
+      </div>
+      ${step().id==='read3'&&noiseIn()?`<div id="cal"><span class="tip">מַדָּה</span></div>`:''}
+    </div>`;
 }
-
-function logBody(){
-  const h = S.notes.hypothesis||'';
-  const canLock = /\d/.test(h) && h.trim().length>=15;
-  // ההשערה נכתבת בסלייס שבמסילה ומוצגת כאן בקריאה בלבד: שני שדות על אותו
-  // מפתח היו נלחמים זה בזה, והקלדה באחד הייתה מאפסת את המיקוד בשני.
-  return `<div class="logrow"><label>ההשערה — חייבת מספר</label>
-      <div style="border:1px solid var(--line);border-radius:8px;padding:7px 9px;
-        min-height:34px;font-size:12px;background:var(--surface-2);
-        color:${h?'var(--ink)':'var(--ink-3)'}">${h || 'נכתבת בסלייס "נעילת השערה" שבמסילה'}</div></div>
-    <div class="row" style="display:flex;gap:7px;align-items:center">
-      ${S.locked
-        ? `<span class="stamp ${S.wasEdited?'broken':''}">${S.wasEdited?'החותם נשבר · ':''}ננעל ${S.locked}</span>
-           <button data-unlock="1" style="padding:3px 8px;font-size:11px">פתיחה לעריכה</button>`
-        : `<button class="go" id="lockBtn" ${canLock?'':'disabled'}>נעילת ההשערה</button>
-           <span class="cc" style="font-size:10px;color:var(--ink-3)">${canLock?'מוכן':'צריך מספר ו-15 תווים'}</span>`}
-    </div>
-    <div class="logrow" style="margin-top:8px"><label>מסקנה</label>
-      <select data-note="verdict">
-        <option>המדידה לא הכריעה</option><option>התאמתה</option>
-        <option>התאמתה חלקית</option><option>הופרכה</option>
-      </select></div>
-    <div class="logrow"><label>מה הניסוי הזה לא יכול להוכיח</label>
-      <textarea data-note="limits" style="height:40px"
-        placeholder="גודל ערכת המבחן · מאגר יחיד · אותו מקור · רעש התיוג">${S.notes.limits||''}</textarea></div>
-    <button id="fileAll">תיוק כל התוצרים</button>`;
-}
-
-/* ציור מפת קשב מזויפת אך עקבית */
-function drawMaps(){
-  [['map25',14,.55],['map400',4,.9]].forEach(([id,spread,focus])=>{
-    const c = document.getElementById(id); if(!c) return;
-    const g = c.getContext('2d');
-    const im = new Image();
-    im.onload = ()=>{
-      g.drawImage(im,0,0,112,112);
-      for(let i=0;i<spread*6;i++){
-        const a = Math.random()*Math.PI*2, r = (1-focus)*46*Math.random()+6;
-        const x = 56+Math.cos(a)*r, y = 56+Math.sin(a)*r;
-        const rg = g.createRadialGradient(x,y,0,x,y,16);
-        rg.addColorStop(0,'rgba(20,184,166,.5)'); rg.addColorStop(1,'rgba(20,184,166,0)');
-        g.fillStyle = rg; g.fillRect(x-16,y-16,32,32);
-      }
-    };
-    im.src = '../../features/samples/נגוע/0'+(id==='map25'?'7':'9')+'.png';
-  });
-}
-
-/* ========================= לוח המדידה ========================= */
-function colVal(n,m){
-  if (n==='noise') return S.noiseIn ? DEMO_CTX.curve.noiseRun[m] : null;
-  const sl = S.slots[n];
-  return (sl && sl.captured) ? sl.result[m] : null;
-}
-function renderBoard(){
-  const m = S.metric;
-  const rows = [['דיוק','acc'],['רגישות','sens'],['ספציפיות','spec']];
-  const row = (cells,label) => cells.join('') + `<div class="rl">${label}</div>`;
-  let h = '';
-  h += row(SLOT_ORDER.map(n=>
-      `<div class="h ${n==='noise'?'noise':''}" data-eye="col:${n}">${n==='noise'?'רעש':'n='+n}</div>`), '');
-  rows.forEach(([lbl,key])=>{
-    h += row(SLOT_ORDER.map(n=>{
-      const v = colVal(n,key);
-      return v==null ? `<div class="c empty">·</div>`
-        : `<div class="c ${key===m?'hot':''}" data-eye="cell:${n}:${key}">${(v*100).toFixed(1)}</div>`;
-    }), lbl);
-  });
-  h += row(SLOT_ORDER.map(n=>
-    colVal(n,'acc')==null?`<div class="c empty">·</div>`:`<div class="c">0.50</div>`), 'סף');
-  h += row(SLOT_ORDER.map(n=>{
-    if (colVal(n,'acc')==null) return `<div class="c empty">·</div>`;
-    const r = n==='noise'?DEMO_CTX.curve.noiseRun:S.slots[n].result;
-    const truth = 100*r.TP/(r.TP+r.FP);
-    const typed = S.precision[n];
-    const ok = typed!=null && Math.abs(typed-truth)<=0.1;
-    return `<div class="c pr" title="TP/(TP+FP)"><input class="num" data-prec="${n}"
-      value="${typed==null?'':typed}" placeholder="?"
-      style="color:${typed==null?'var(--ink-3)':(ok?'var(--ok)':'var(--err)')}"></div>`;
-  }), 'דיוק חיובי');
-  document.getElementById('bgrid').innerHTML = h;
-
-  const st = S.locked ? `חותמת ההשערה · ${S.locked}${S.wasEdited?' · נשבר':''}` : 'ההשערה טרם ננעלה';
-  document.getElementById('stampSlot').textContent = st;
-  renderVerdicts();
-  drawCurve();
-}
-
-function renderVerdicts(){
-  const m = S.metric, nIn = S.noiseIn, capped = S.captured.length;
-  const el = document.getElementById('verdicts');
-  if (capped<2){ el.innerHTML = `<div>קלטו שתי נקודות לפחות כדי שתהיה עקומה.</div>`; return; }
-  const nb = nIn ? noiseBand(m) : null;
-  const gs = gaps(m).filter(g=>S.captured.includes(g.from)&&S.captured.includes(g.to));
-  const pf = nIn ? plateauFrom(m) : null;
-  el.innerHTML = `
-    <div>סרגל הרעש (${MET[m]}): <b>${nb==null?'— טרם נמדד':nb.toFixed(1)+' נק׳'}</b></div>
-    <div>הפער הגדול: <b>${gs.length?Math.max(...gs.map(g=>g.delta)).toFixed(1)+' נק׳':'—'}</b></div>
-    <div class="big">${nb==null
-      ? 'בלי סרגל רעש אין טענת התיישרות — כל הפרש שתכתבו הוא טענה בלי בסיס.'
-      : (pf==null ? 'אף פער אינו קטן מהרעש: העקומה עוד לא התיישרה.'
-                  : 'מ-n='+pf+' כל פער קטן מהרעש.')}</div>`;
-}
-
-/* ציור העקומה: ציר X שמאל-לימין עם n עולה */
-const CV = {x0:38,x1:404,y0:12,y1:104};
-function cx(i){ return CV.x0 + i*(CV.x1-CV.x0)/4; }
-function cy(v){ const lo=.50,hi=1.0; return CV.y1-(v-lo)/(hi-lo)*(CV.y1-CV.y0); }
-function drawCurve(){
-  const m = S.metric, P = DEMO_CTX.curve.points;
-  let s = '';
+const CX={x0:52,x1:614,y0:16,y1:186};
+const px = i => CX.x0 + i*(CX.x1-CX.x0)/4;
+const py = v => CX.y1 - (v-.5)/.5*(CX.y1-CX.y0);
+function drawChart(){
+  const el = document.getElementById('chart'); if(!el) return;
+  const m = S.metric; let s='';
   for(let v=.5;v<=1.001;v+=.1){
-    s += `<line x1="${CV.x0}" y1="${cy(v)}" x2="${CV.x1}" y2="${cy(v)}" stroke="#eef3f7" stroke-width="1"/>
-          <text x="${CV.x0-4}" y="${cy(v)+3}" font-size="8" fill="#8aa2b3"
-            font-family="JetBrains Mono,monospace" text-anchor="end">${Math.round(v*100)}</text>`;
+    s+=`<line x1="${CX.x0}" y1="${py(v)}" x2="${CX.x1}" y2="${py(v)}" stroke="#eef3f7"/>
+        <text x="${CX.x0-10}" y="${py(v)+4}" font-size="11" fill="#8aa2b3" text-anchor="end"
+          font-family="JetBrains Mono,monospace">${Math.round(v*100)}</text>`;
   }
-  P.forEach((p,i)=> s += `<text x="${cx(i)}" y="${CV.y1+13}" font-size="8.5" fill="#8aa2b3"
-     font-family="JetBrains Mono,monospace" text-anchor="middle">${p.n}</text>`);
+  PTS.forEach((p,i)=> s+=`<text x="${px(i)}" y="${CX.y1+22}" font-size="12" fill="#8aa2b3"
+    text-anchor="middle" font-family="JetBrains Mono,monospace">${p.n}</text>`);
 
-  // קו הניבוי
-  const pr = P.map((p,i)=> S.predict[p.n]==null?null:[cx(i),cy(S.predict[p.n])]);
-  if (pr.every(Boolean)){
-    s += `<polyline points="${pr.map(q=>q.join(',')).join(' ')}" fill="none"
-      stroke="#0891b2" stroke-width="1.6" stroke-dasharray="4 3" opacity=".65"/>`;
+  const pr = PTS.map((p,i)=> S.predict[p.n]==null?null:[px(i),py(S.predict[p.n])]);
+  if (pr.every(Boolean))
+    s+=`<polyline points="${pr.map(q=>q.join(',')).join(' ')}" fill="none" stroke="#0891b2"
+        stroke-width="2" stroke-dasharray="6 4" opacity=".65"/>`;
+  pr.forEach(q=>{ if(q) s+=`<circle cx="${q[0]}" cy="${q[1]}" r="7" fill="#fff" stroke="#0891b2"
+      stroke-width="2.2" opacity=".85"/>`; });
+
+  const caps = captured();
+  if (noiseIn()){
+    const h=(CX.y1-CX.y0)*(noiseBand(m)/100)/.5;
+    caps.forEach(n=>{ const i=PTS.findIndex(p=>p.n===n);
+      s+=`<rect x="${px(i)-14}" y="${py(PTS[i][m])-h/2}" width="28" height="${h}"
+        fill="#cbd9e2" opacity=".6" rx="3"/>`; });
   }
-  pr.forEach((q,i)=>{ if(q) s += `<circle cx="${q[0]}" cy="${q[1]}" r="3.4" fill="#fff"
-      stroke="#0891b2" stroke-width="1.6" opacity=".8"/>`; });
+  const dots = PTS.map((p,i)=> caps.includes(p.n)?[px(i),py(p[m])]:null).filter(Boolean);
+  if (dots.length>1) s+=`<polyline points="${dots.map(q=>q.join(',')).join(' ')}" fill="none"
+      stroke="#0d1f2b" stroke-width="2.6"/>`;
+  dots.forEach(q=> s+=`<circle cx="${q[0]}" cy="${q[1]}" r="5.5" fill="#0d1f2b"/>`);
 
-  // פס הרעש
-  if (S.noiseIn){
-    const nb = noiseBand(m)/100, h = (CV.y1-CV.y0)*nb/0.5;
-    s += `<rect x="${CV.x0}" y="${CV.y0}" width="${CV.x1-CV.x0}" height="${CV.y1-CV.y0}"
-      fill="url(#nb)" opacity="0"/>`;
-    S.captured.forEach(n=>{
-      const i = P.findIndex(p=>p.n===n); if(i<0) return;
-      s += `<rect x="${cx(i)-9}" y="${cy(P[i][m])-h/2}" width="18" height="${h}"
-        fill="#cbd9e2" opacity=".55" rx="2"/>`;
-    });
+  if (step().id==='read3' && S.cal!=null){
+    const i=S.cal, g=gaps(m)[i], h=(CX.y1-CX.y0)*(noiseBand(m)/100)/.5;
+    const xm=(px(i)+px(i+1))/2, ym=(py(PTS[i][m])+py(PTS[i+1][m]))/2;
+    const dh=(CX.y1-CX.y0)*(g.delta/100)/.5;
+    s+=`<line x1="${xm}" y1="${ym-dh/2}" x2="${xm}" y2="${ym+dh/2}" stroke="#0d1f2b" stroke-width="2.6"/>
+        <line x1="${xm-17}" y1="${ym-h/2}" x2="${xm+17}" y2="${ym-h/2}" stroke="#0e7490" stroke-width="3"/>
+        <line x1="${xm-17}" y1="${ym+h/2}" x2="${xm+17}" y2="${ym+h/2}" stroke="#0e7490" stroke-width="3"/>
+        <line x1="${xm}" y1="${ym-h/2}" x2="${xm}" y2="${ym+h/2}" stroke="#0e7490" stroke-width="1.2"
+          stroke-dasharray="3 3"/>`;
   }
-
-  // הנקודות שנקלטו
-  const pts = P.map((p,i)=> S.slots[p.n]&&S.slots[p.n].captured ? [cx(i),cy(p[m]),i] : null).filter(Boolean);
-  if (pts.length>1) s += `<polyline points="${pts.map(q=>q[0]+','+q[1]).join(' ')}"
-      fill="none" stroke="#0d1f2b" stroke-width="2"/>`;
-  pts.forEach(q=> s += `<circle cx="${q[0]}" cy="${q[1]}" r="4" fill="#0d1f2b"/>`);
-
-  // אזורי הפערים — יעד למַדָּה
-  gaps(m).forEach((g,i)=>{
-    if(!(S.captured.includes(g.from)&&S.captured.includes(g.to))) return;
-    s += `<rect class="gapzone" data-gap="${i}" x="${cx(i)}" y="${CV.y0}"
-      width="${cx(i+1)-cx(i)}" height="${CV.y1-CV.y0}"/>`;
-  });
-
-  // המַדָּה כשהונחה
-  if (S.caliper.gap!=null){
-    const i = S.caliper.gap, g = gaps(m)[i], nb = noiseBand(m)/100;
-    const h = (CV.y1-CV.y0)*nb/0.5;
-    const xm = (cx(i)+cx(i+1))/2, ym = (cy(P[i][m])+cy(P[i+1][m]))/2;
-    const dh = (CV.y1-CV.y0)*(g.delta/100)/0.5;
-    s += `<line x1="${xm}" y1="${ym-dh/2}" x2="${xm}" y2="${ym+dh/2}" stroke="#0d1f2b" stroke-width="2"/>
-      <line x1="${xm-13}" y1="${ym-h/2}" x2="${xm+13}" y2="${ym-h/2}" stroke="#0e7490" stroke-width="2.4"/>
-      <line x1="${xm-13}" y1="${ym+h/2}" x2="${xm+13}" y2="${ym+h/2}" stroke="#0e7490" stroke-width="2.4"/>
-      <line x1="${xm}" y1="${ym-h/2}" x2="${xm}" y2="${ym+h/2}" stroke="#0e7490" stroke-width="1" stroke-dasharray="2 2"/>`;
+  if (step().id==='read3'){
+    gaps(m).forEach((g,i)=>{ if(!(caps.includes(g.from)&&caps.includes(g.to))) return;
+      s+=`<rect data-gap="${i}" x="${px(i)}" y="${CX.y0}" width="${px(i+1)-px(i)}"
+        height="${CX.y1-CX.y0}" fill="transparent"/>`; });
   }
-  document.getElementById('curve').innerHTML = s;
-  renderCaliperRead();
+  el.innerHTML = s;
 }
-
-function renderCaliperRead(){
-  const el = document.getElementById('calread');
-  if (!S.noiseIn){ el.className=''; el.textContent='המַדָּה נפתחת אחרי שנקלטה עמודת הרעש'; return; }
-  if (S.caliper.gap==null){ el.className=''; el.textContent='גררו את המַדָּה אל פער'; return; }
-  const m=S.metric, g=gaps(m)[S.caliper.gap], nb=noiseBand(m);
-  const ratio = g.delta/nb;
-  let cls='under', txt='';
-  if (ratio>1.2){ cls='over'; txt='מעל הרעש'; }
-  else if (ratio>=0.8){ cls='edge'; txt='על גבול הרעש'; }
-  else { cls='under'; txt='לא הוכרע'; }
-  el.className = cls;
-  el.textContent = `${g.from}→${g.to}: ${g.delta.toFixed(1)} נק׳ · רעש ${nb.toFixed(1)} · ${txt}`;
+function calState(){
+  const m=S.metric, g=gaps(m)[S.cal], r=g.delta/noiseBand(m);
+  if (r>1.2) return {cls:'over', t:'גדול מהרעש — הפער אמיתי'};
+  if (r>=.8) return {cls:'edge', t:'על גבול הרעש'};
+  return {cls:'under', t:'קטן מהרעש — המדידה לא הכריעה'};
 }
-
-/* ========================= הזרוע ========================= */
-const L1=210, L2=180;
-function armBase(){ const b=document.getElementById('armbase');
-  return {x:b.offsetLeft+19, y:b.offsetTop+19}; }
-function drawArm(){
-  const head = document.getElementById('armhead');
-  const svg = document.getElementById('armsvg');
-  if (S.arm.folded){ svg.innerHTML=''; return; }
-  const b = armBase();
-  const tx = S.arm.x+30, ty = S.arm.y+8;
-  let dx=tx-b.x, dy=ty-b.y, d=Math.hypot(dx,dy);
-  const dmax=L1+L2-2, dmin=Math.abs(L1-L2)+2;
-  d = Math.max(dmin, Math.min(dmax, d));
-  const a = Math.atan2(dy,dx);
-  const A = Math.acos(Math.max(-1,Math.min(1,(d*d+L1*L1-L2*L2)/(2*d*L1))));
-  const e = a + A;                         // מרפק כלפי מעלה, הרחק ממרכז הסיפון
-  const jx = b.x+L1*Math.cos(e), jy = b.y+L1*Math.sin(e);
-  svg.innerHTML = `
-    <line x1="${b.x}" y1="${b.y}" x2="${jx}" y2="${jy}" stroke="#0d1f2b" stroke-width="7"
-      stroke-linecap="round"/>
-    <line x1="${b.x}" y1="${b.y}" x2="${jx}" y2="${jy}" stroke="#cbd9e2" stroke-width="3"
-      stroke-linecap="round"/>
-    <line x1="${jx}" y1="${jy}" x2="${tx}" y2="${ty}" stroke="#0d1f2b" stroke-width="6"
-      stroke-linecap="round"/>
-    <line x1="${jx}" y1="${jy}" x2="${tx}" y2="${ty}" stroke="#cbd9e2" stroke-width="2.4"
-      stroke-linecap="round"/>
-    <circle cx="${jx}" cy="${jy}" r="6" fill="#fff" stroke="#0d1f2b" stroke-width="2.5"/>`;
-  head.style.left = S.arm.x+'px'; head.style.top = S.arm.y+'px';
+function calSay(){
+  if (!noiseIn()) return '';
+  if (S.cal==null) return '<span style="color:var(--ink-3);font-weight:500">גררו את המַדָּה אל פער בין שתי נקודות</span>';
+  const m=S.metric, g=gaps(m)[S.cal];
+  return `${g.from}→${g.to}: <span class="num">${g.delta.toFixed(1)}</span> נק׳ · רעש <span class="num">${noiseBand(m).toFixed(1)}</span> — ${calState().t}`;
 }
-/* הזרוע כלואה בסיפון: לא מעל פס ג׳ (שם יושבים המספרים) ולא מעל המסילה
-   (שם כתוב מה לעשות עכשיו). שני אלה חייבים להישאר קריאים תמיד. */
-function clampArm(x,y){
-  const bb = document.getElementById('bandB').getBoundingClientRect();
-  const railW = parseInt(getComputedStyle(document.documentElement)
-                  .getPropertyValue('--rail'),10) || 230;
-  const maxX = Math.max(6, bb.width - railW - 280);
-  return {x: Math.max(6, Math.min(maxX, x)),
-          y: Math.max(4, Math.min(bb.height-210, y))};
-}
-function docks(){
-  const bb = document.getElementById('bandB').getBoundingClientRect();
-  const out = [];
-  document.querySelectorAll('.tile').forEach(t=>{
-    const r = t.getBoundingClientRect();
-    out.push({k:t.dataset.tile, cx:r.left-bb.left+r.width/2, cy:r.top-bb.top+r.height/2,
-              x:r.left-bb.left+r.width/2-136,
-              y:r.top-bb.top+Math.max(4,(r.height-206)/2)});
-  });
-  return out;
-}
-/* הזרוע עוגנת על האריח הרחוק ביותר מזה שעובדים בו. היא overlay, ולכן היא
-   תמיד מכסה משהו; מה שאסור הוא שתכסה בדיוק את מה שמסתכלים עליו. */
-function travelTo(k){
-  const ds = docks();
-  const target = ds.find(x=>x.k===k);
-  if (!target) return;
-  let d = target, best = -1;
-  ds.forEach(x=>{
-    if (x.k===k) return;
-    const dd = Math.hypot(x.cx-target.cx, x.cy-target.cy);
-    if (dd>best){ best=dd; d=x; }
-  });
-  const {x,y} = clampArm(d.x, d.y);
-  const sx=S.arm.x, sy=S.arm.y, t0=performance.now();
-  (function step(t){
-    const p = Math.min(1,(t-t0)/280), e = p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2;
-    S.arm.x = sx+(x-sx)*e; S.arm.y = sy+(y-sy)*e; drawArm();
-    if (p<1) requestAnimationFrame(step);
-  })(t0);
-}
-function snap(){
-  const ds = docks();
-  let best=null, bd=1e9;
-  ds.forEach(d=>{ const dd=Math.hypot(d.x-S.arm.x,d.y-S.arm.y); if(dd<bd){bd=dd;best=d;} });
-  if (best && bd<=48){ const c=clampArm(best.x,best.y); S.arm.x=c.x; S.arm.y=c.y; }
-  drawArm();
-}
-function crt(){
-  const el = document.getElementById('crt'); if(!el) return;
-  const it = byId(S.slice);
-  if (S.arm.mode==='read'){
-    el.innerHTML = `<span class="eyebrow">SLICE ${CL.indexOf(it)+1}/10</span>
-      <b>${it.title}</b><br>${(it.how||'').split('.')[0]}.<br>
-      <span class="ok">הראיה שסוגרת:</span> ${it.proof}<br>
-      <span class="pit">${it.pitfall.split('.')[0]}.</span>`;
-  } else if (S.arm.mode==='eye'){
-    el.innerHTML = `<span class="eyebrow">EYE</span>` +
-      (S.eye ? S.eye : 'רחפו מעל עמודה בלוח, מעל תא במטריצה או מעל משבצת — והמסך יקרא את המספרים שלה.');
-  } else if (S.arm.mode==='check'){
-    const m=S.metric, nb=S.noiseIn?noiseBand(m):null;
-    const lines=[];
-    lines.push(`<span class="eyebrow">LOCAL CHECKS · ctx.curve</span>`);
-    lines.push(`נקודות: <b>${S.captured.length}</b> <span class="eyebrow">nDistinct</span>`);
-    if (nb==null) lines.push(`<span class="pit">אין סרגל רעש: כל הפרש שתכתבו הוא טענה בלי בסיס.</span> <span class="eyebrow">noiseBand</span>`);
-    else {
-      lines.push(`רעש: <b>${nb.toFixed(1)}</b> נק׳ ב-n=${DEMO_CTX.curve.noiseAtN} <span class="eyebrow">noiseBand</span>`);
-      const pf=plateauFrom(m);
-      lines.push(pf==null?`<span class="pit">אף פער אינו קטן מהרעש.</span> <span class="eyebrow">plateauFrom</span>`
-        :`התיישר מ-<b>n=${pf}</b> <span class="eyebrow">plateauFrom</span>`);
-      lines.push(`<span class="ok">החליפו מדד למעלה — הרעש משתנה, והתשובה עשויה להשתנות איתו.</span>`);
-    }
-    if (!S.locked) lines.push(`<span class="pit">ההשערה לא ננעלה לפני המדידה.</span> <span class="eyebrow">lockedAt</span>`);
-    el.innerHTML = lines.join('<br>');
-  } else {
-    el.innerHTML = `<span class="eyebrow">ASK THE MENTOR</span>
-      <div id="askOut">שאלה אחת, על מה שעל המסך.</div>
-      <div class="askrow"><input id="askIn" placeholder="למה הפער בין 200 ל-400 לא נחשב?">
-      <button id="askGo">שלח</button></div>`;
-  }
-}
-const CANNED = 'שאלה טובה. הפער בין 200 ל-400 הוא נקודה אחת, וסרגל הרעש שלכם הוא 2.5 נקודות — כלומר שתי הרצות של אותו מודל בדיוק נבדלות ביותר מזה. לכן ההפרש הזה אינו ניתן להבחנה מרעש, וזו בדיוק המשמעות של "העקומה התיישרה". שימו לב שזה נכון לדיוק; בדקו מה קורה כשמחליפים לספציפיות.';
-
-/* ========================= חיווט ========================= */
-function wireDeck(){ drawMaps(); }
-
-function eyeText(code){
-  const [kind,a,b] = code.split(':');
-  if (kind==='col'){
-    const n = a==='noise'?'noise':+a;
-    const r = n==='noise'?(S.noiseIn?DEMO_CTX.curve.noiseRun:null)
-                        :(S.slots[n]&&S.slots[n].captured?S.slots[n].result:null);
-    if (!r) return `<b>${a==='noise'?'עמודת הרעש':'n='+a}</b><br>עוד לא נקלטה. השקע ריק מהדקה הראשונה כדי שתדעו שהוא קיים.`;
-    return `<b>${a==='noise'?'רעש · אותו n':'n='+a}</b><br>
-      דיוק <b>${(r.acc*100).toFixed(1)}</b> · רגישות <b>${(r.sens*100).toFixed(1)}</b> · ספציפיות <b>${(r.spec*100).toFixed(1)}</b><br>
-      TP ${r.TP} · FN ${r.FN} · FP ${r.FP} · TN ${r.TN}<br>
-      <span class="eyebrow">threshold ${r.threshold.toFixed(2)} · images ${r.images}</span>`;
-  }
-  if (kind==='cell'){
-    const n=a==='noise'?'noise':+a, v=colVal(n,b);
-    return `<b>${MET[b]} ב-${a==='noise'?'רעש':'n='+a}</b><br>${(v*100).toFixed(1)}%<br>
-      <span class="eyebrow">points[].${b}</span>`;
-  }
-  return `<b>${MET[code]||code}</b>`;
-}
-
-function markAuto(id){
-  if (S.done[id]) return;
-  S.done[id] = true;
-}
-
-/* ------------------------------------------------------------------
-   חיווט אחד, בהאצלה, שנרשם פעם אחת ב-boot. הסיפון והמסילה מצוירים מחדש
-   עשרות פעמים, ורישום מאזינים אחרי כל ציור היה מכפיל אותם בשקט: כל הקלדה
-   בהשערה הייתה מוסיפה מאזין נוסף לאותו שדה.
-   ------------------------------------------------------------------ */
-function wireGlobal(){
-  const app = document.getElementById('app');
-
-  app.addEventListener('input', e=>{
-    const t = e.target;
-    if (t.id==='thr'){                       // בלי ציור מחדש: הוא הורס את הגרירה
-      S.thr = +t.value;
-      const wrap = t.closest('.thr');
-      wrap.querySelector('.val').textContent = S.thr.toFixed(2);
-      const amber = Math.abs(S.thr-0.50)>0.001;
-      const lamp = wrap.querySelector('.lamp');
-      lamp.classList.toggle('amber',amber);
-      lamp.textContent = amber?'זז מ-0.50':'נקישה 0.50';
-      return;
-    }
-    if (t.dataset.note!=null){
-      const key = t.dataset.note;
-      S.notes[key] = t.value;
-      const b = document.querySelector(`[data-tick="${key}"]`);
-      if (b) b.disabled = t.value.trim().length<12;
-      const cc = b && b.parentElement.querySelector('.cc');
-      if (cc) cc.textContent = t.value.trim().length+'/12 תווים';
-      if (key==='hypothesis') renderDeck();   // תצוגת קריאה בלבד — אין מיקוד לאבד
-      return;
-    }
-    if (t.dataset.prec!=null){
-      const n = t.dataset.prec==='noise'?'noise':+t.dataset.prec;
-      const truth = (()=>{ const r = n==='noise'?DEMO_CTX.curve.noiseRun:S.slots[n].result;
-        return 100*r.TP/(r.TP+r.FP); })();
-      S.precision[n] = t.value===''?null:parseFloat(t.value);
-      t.style.color = S.precision[n]==null ? 'var(--ink-3)'
-        : (Math.abs(S.precision[n]-truth)<=0.1 ? 'var(--ok)' : 'var(--err)');
-    }
-  });
-
-  app.addEventListener('click', e=>{
-    const T = sel => e.target.closest(sel);
-    let el;
-
-    if ((el = T('.sl'))){
-      const it = byId(el.dataset.id);
-      if (!avail(it)) return;
-      S.slice = it.id; render(); travelTo(it.tile); return;
-    }
-    if ((el = T('[data-slot]'))){
-      const raw = el.dataset.slot, n = raw==='noise'?'noise':+raw;
-      if (!(n==='noise'||n===25||S.stage>=2)) return;
-      S.sel = n; S.slots[n].loaded = true; render(); return;
-    }
-    if ((el = T('#runBtn'))){
-      const n = S.sel;
-      const src = n==='noise' ? DEMO_CTX.curve.noiseRun
-                              : DEMO_CTX.curve.points.find(p=>p.n===n);
-      el.disabled = true;
-      let i=0; const t=setInterval(()=>{
-        i+=20; el.textContent = 'מריץ… '+Math.min(200,i)+'/200';
-        if(i>=200){ clearInterval(t); S.slots[n].result = src; render(); }
-      },55);
-      return;
-    }
-    if (T('#capBtn')){
-      const n = S.sel;
-      if (!S.slots[n] || !S.slots[n].result) return;
-      S.slots[n].captured = true;
-      if (n==='noise'){ S.noiseIn = true; markAuto('noise'); }
-      else if (!S.captured.includes(n)){ S.captured.push(n); S.captured.sort((a,b)=>a-b); }
-      if (S.captured.length>=5) markAuto('runs5');
-      render(); return;
-    }
-    if ((el = T('[data-err]'))){
-      const i=+el.dataset.err;
-      S.errPick = S.errPick.includes(i)?S.errPick.filter(x=>x!==i):S.errPick.concat(i);
-      renderDeck(); return;
-    }
-    if (T('#lockBtn')){
-      const d=new Date();
-      S.locked = d.getHours()+':'+String(d.getMinutes()).padStart(2,'0');
-      render(); return;
-    }
-    if (T('[data-unlock]')){ S.wasEdited = true; S.locked = null; render(); return; }
-    if (T('#fileAll')){ S.filed += 4; markAuto('record'); render(); return; }
-
-    if ((el = T('[data-tick]'))){
-      const id = el.dataset.tick;
-      el.disabled = true; el.textContent = S.slowServer?'נשלח…':'…';
-      setTimeout(()=>{ S.done[id]=true; advance(id); render(); }, S.slowServer?1800:160);
-      return;
-    }
-    if ((el = T('[data-claim]'))){
-      const id = el.dataset.claim;
-      S.done[id]=true; S.claim[id]=true; advance(id); render(); return;
-    }
-  });
-
-  // mouseenter אינו מבעבע, ולכן mouseover עם closest
-  app.addEventListener('mouseover', e=>{
-    const el = e.target.closest('[data-eye]');
-    if (!el) return;
-    S.eye = eyeText(el.dataset.eye);
-    if (S.arm.mode==='eye') crt();
-  });
-}
-function advance(id){
-  const i = CL.findIndex(x=>x.id===id);
-  for (let j=i+1;j<CL.length;j++){
-    if (avail(CL[j]) && !isDone(CL[j])){ S.slice=CL[j].id; travelTo(CL[j].tile); return; }
-  }
-}
-
-/* גרירת המַדָּה */
-function placeCaliper(){
-  const c = document.getElementById('caliper');
-  const m = S.metric, nb = S.noiseIn?noiseBand(m)/100:0;
-  const wrap = document.getElementById('curvewrap').getBoundingClientRect();
-  const svg = document.getElementById('curve').getBoundingClientRect();
-  if (S.caliper.x==null){
-    S.caliper.x = svg.left-wrap.left + svg.width*0.04;
-    S.caliper.y = svg.top-wrap.top + 86;
-  }
-  const h = Math.max(10, (CV.y1-CV.y0)*nb/0.5 * (svg.height/132));
-  c.style.left = S.caliper.x+'px'; c.style.top = S.caliper.y+'px';
-  c.style.height = (h+16)+'px';
-  c.style.display = S.noiseIn ? 'block' : 'none';
-  c.innerHTML = `<span class="lbl">מַדָּה · ${S.noiseIn?noiseBand(m).toFixed(1):'—'}</span>
-    <svg width="46" height="${h+16}" style="overflow:visible">
-      <line x1="23" y1="8" x2="23" y2="${h+8}" stroke="#0e7490" stroke-width="1.2" stroke-dasharray="2 2"/>
-      <line x1="6" y1="8" x2="40" y2="8" stroke="#0e7490" stroke-width="3" stroke-linecap="round"/>
-      <line x1="6" y1="${h+8}" x2="40" y2="${h+8}" stroke="#0e7490" stroke-width="3" stroke-linecap="round"/>
+function placeCal(){
+  const c=document.getElementById('cal'); if(!c) return;
+  const svg=document.getElementById('chart').getBoundingClientRect();
+  const wrap=document.querySelector('.chartwrap').getBoundingClientRect();
+  const h=Math.max(14,(CX.y1-CX.y0)*(noiseBand(S.metric)/100)/.5*(svg.height/230));
+  if (!S.calXY) S.calXY={x:svg.left-wrap.left+14, y:svg.top-wrap.top+svg.height*0.52};
+  c.style.left=S.calXY.x+'px'; c.style.top=S.calXY.y+'px'; c.style.height=(h+18)+'px';
+  c.innerHTML=`<span class="tip">מַדָּה · ${noiseBand(S.metric).toFixed(1)}</span>
+    <svg width="52" height="${h+18}" style="overflow:visible">
+      <line x1="26" y1="9" x2="26" y2="${h+9}" stroke="#0e7490" stroke-width="1.4" stroke-dasharray="3 3"/>
+      <line x1="6" y1="9" x2="46" y2="9" stroke="#0e7490" stroke-width="3.4" stroke-linecap="round"/>
+      <line x1="6" y1="${h+9}" x2="46" y2="${h+9}" stroke="#0e7490" stroke-width="3.4" stroke-linecap="round"/>
     </svg>`;
 }
-function wireCaliper(){
-  const c = document.getElementById('caliper');
-  let drag=null;
-  c.addEventListener('pointerdown',e=>{
-    drag={dx:e.clientX-S.caliper.x, dy:e.clientY-S.caliper.y};
-    c.setPointerCapture(e.pointerId); c.classList.add('dragging');
-    document.getElementById('armhead').classList.add('shy');
-  });
-  c.addEventListener('pointermove',e=>{
-    if(!drag) return;
-    S.caliper.x = e.clientX-drag.dx; S.caliper.y = e.clientY-drag.dy;
-    c.style.left=S.caliper.x+'px'; c.style.top=S.caliper.y+'px';
-    const g = gapUnder(e.clientX);
-    document.querySelectorAll('.gapzone').forEach(z=>
-      z.classList.toggle('hovv', +z.dataset.gap===g));
-  });
-  c.addEventListener('pointerup',e=>{
-    if(!drag) return; drag=null; c.classList.remove('dragging');
-    document.getElementById('armhead').classList.remove('shy');
-    const g = gapUnder(e.clientX);
-    S.caliper.gap = g;
-    drawCurve();
+function numsTable(){
+  const caps=captured();
+  const head=`<tr><th></th>${caps.map(n=>`<th>n=${n}</th>`).join('')}${noiseIn()?'<th>רעש</th>':''}</tr>`;
+  const row=(lbl,f)=>`<tr><td class="rl">${lbl}</td>${caps.map(n=>
+      `<td>${f(PTS.find(p=>p.n===n))}</td>`).join('')}${noiseIn()?`<td>${f(NOISE_RUN)}</td>`:''}</tr>`;
+  return `<table>${head}
+    ${row('דיוק',p=>(p.acc*100).toFixed(1))}
+    ${row('רגישות',p=>(p.sens*100).toFixed(1))}
+    ${row('ספציפיות',p=>(p.spec*100).toFixed(1))}
+    ${row('TP / FP',p=>p.TP+' / '+p.FP)}
+    <tr><td class="rl">דיוק חיובי — חשבו</td>${caps.map(n=>
+      `<td><input data-prec="${n}" value="${S.prec[n]==null?'':S.prec[n]}" placeholder="?"></td>`).join('')}
+      ${noiseIn()?'<td>—</td>':''}</tr></table>`;
+}
+
+/* מפות קשב מזויפות אך עקביות */
+function drawCells(){
+  [['m25',.25,'07'],['m400',.9,'07']].forEach(([id,focus,n])=>{
+    const c=document.getElementById(id); if(!c) return;
+    const g=c.getContext('2d'); const im=new Image();
+    im.onload=()=>{ g.drawImage(im,0,0,150,150);
+      const k = focus>.5?9:34;
+      for(let i=0;i<k;i++){
+        const a=i*2.399, r=(1-focus)*62*Math.sqrt(i/k);
+        const x=75+Math.cos(a)*r, y=75+Math.sin(a)*r;
+        const rg=g.createRadialGradient(x,y,0,x,y,22);
+        rg.addColorStop(0,'rgba(20,184,166,.42)'); rg.addColorStop(1,'rgba(20,184,166,0)');
+        g.fillStyle=rg; g.fillRect(x-22,y-22,44,44);
+      }};
+    im.src='../../features/samples/נגוע/'+n+'.png';
   });
 }
-function gapUnder(clientX){
-  const svg = document.getElementById('curve').getBoundingClientRect();
-  const rel = (clientX - svg.left) / svg.width * 420;
-  for (let i=0;i<4;i++){
-    if (rel>=cx(i) && rel<=cx(i+1)){
-      const g = gaps(S.metric)[i];
-      if (S.captured.includes(g.from) && S.captured.includes(g.to)) return i;
-    }
+
+/* ========== כותרת תחתונה ========== */
+function canAdvance(){
+  const s=step();
+  if (s.kind==='auto') return s.id==='noise' ? noiseIn() : captured().length>=5;
+  if (s.id==='exp_marked') return S.exp && (S.notes.exp_marked||'').trim().length>=12;
+  if (s.id==='sizes')      return S.sizes.length>0;
+  if (s.id==='hypothesis') return !!S.locked;
+  if (s.id==='conclusion') return !!S.notes.verdict && (S.notes.conclusion||'').trim().length>=12;
+  if (s.id==='record')     return true;
+  return (S.notes[s.id]||'').trim().length>=12;
+}
+function footer(s){
+  const ok = canAdvance();
+  document.getElementById('prev').disabled = S.i===0;
+  const nx = document.getElementById('next');
+  nx.disabled = !ok && s.id!=='record';
+  nx.textContent = S.i===STEPS.length-1 ? 'סיום' : 'הבא →';
+  const hints = {
+    exp_marked:'בחרו ניסוי וכתבו באיזה מאגר',
+    sizes:'סמנו את הגדלים שבאמת נפתחו',
+    hypothesis:'גררו חמש נקודות, ואז נעלו משפט עם מספר',
+    noise:'שני אימונים על אותה ערכה',
+    models:'חמישה מודלים, אותן הגדרות',
+    runs5:'חמש קליטות לגרף',
+    read3:'גררו את המַדָּה אל פער',
+    maps:'השוו את שתי המפות',
+    conclusion:'בחרו מסקנה וכתבו מגבלה אחת',
+    record:'כפתור אחד'
+  };
+  document.getElementById('hint').innerHTML = ok
+    ? '<b style="color:var(--ok)">מוכן להמשיך</b>' : hints[s.id];
+}
+
+/* ========== הזרוע ========== */
+function armScreen(){
+  const s=step(), el=document.getElementById('armscreen');
+  const T={how:['איך עושים',s.how],why:['למה זה חשוב',s.why],trap:['המלכודת',s.trap]};
+  if (S.armTab==='ask'){
+    el.innerHTML = `<span class="eyebrow">ASK</span>
+      <p id="askOut">שאלה אחת, על מה שעל המסך.</p>
+      <div class="askrow"><input id="askIn" placeholder="למה 1.0 נקודות זה לא שיפור?">
+        <button id="askGo">שאל</button></div>`;
+  } else {
+    const [h,b]=T[S.armTab];
+    el.innerHTML = `<span class="eyebrow">STEP ${S.i+1}</span>
+      <h4>${h}</h4><p class="${S.armTab==='trap'?'pit':''}">${b}</p>`;
   }
-  return null;
+  document.querySelectorAll('#armtabs button').forEach(b=>
+    b.classList.toggle('on', b.dataset.t===S.armTab));
+  document.getElementById('armpanel').classList.toggle('open', S.armOpen);
 }
+const CANNED='כי סרגל הרעש שלכם הוא 2.5 נקודות — שני אימונים על אותן תמונות בדיוק נבדלים ביותר מזה. הפרש של 1.0 קטן מהרעש, ולכן אי אפשר להבחין בינו לבין מקריות. נסו להחליף את המדד לספציפיות ולראות מה קורה לתשובה.';
+
+/* ========== חיווט, בהאצלה אחת ========== */
+function go(d){
+  let j=S.i+d;
+  while (j>=0 && j<STEPS.length && !avail(STEPS[j])) j+=d;
+  if (j<0||j>=STEPS.length) return;
+  if (d>0 && canAdvance()) S.done[step().id]=true;
+  S.i=j; S.sel=null; render();
+}
+document.addEventListener('click', e=>{
+  const T=s=>e.target.closest(s); let el;
+  if ((el=T('#steps button'))){ S.i=+el.dataset.i; S.sel=null; render(); return; }
+  if (T('#next')){ go(1); return; }
+  if (T('#prev')){ go(-1); return; }
+  if (T('#stgBtn')){ S.stage=S.stage===2?1:2; if(!avail(step())) S.i=0; render(); return; }
+  if (T('#armbtn')){ S.armOpen=!S.armOpen; armScreen(); return; }
+  if ((el=T('#armtabs button'))){ S.armTab=el.dataset.t; armScreen();
+    if (S.armTab==='ask') setTimeout(()=>{
+      const g=document.getElementById('askGo'); if(!g) return;
+      g.onclick=()=>{ const o=document.getElementById('askOut'); o.textContent=''; let i=0;
+        const t=setInterval(()=>{o.textContent=CANNED.slice(0,i+=2); if(i>=CANNED.length)clearInterval(t);},11); };
+    },0); return; }
+  if ((el=T('[data-exp]'))){ S.exp=el.dataset.exp; render(); return; }
+  if ((el=T('[data-size]'))){ const n=+el.dataset.size;
+    S.sizes = S.sizes.includes(n)?S.sizes.filter(x=>x!==n):S.sizes.concat(n).sort((a,b)=>a-b);
+    render(); return; }
+  if ((el=T('[data-met]'))){ S.metric=el.dataset.met; render(); return; }
+  if ((el=T('[data-verdict]'))){ S.notes.verdict=el.dataset.verdict; render(); return; }
+  if ((el=T('[data-noise]'))){ S.sel=el.dataset.noise; render(); return; }
+  if ((el=T('[data-run]'))){ S.sel=+el.dataset.run; render(); return; }
+  if (T('#runOne')){
+    const s=step();
+    if (s.id==='noise'){ if(S.sel==='A') S.noiseA=true; else S.noiseB=true; S.sel=null;
+      if(noiseIn()) S.done.noise=true; }
+    else { S.runs[S.sel]=S.runs[S.sel]||{}; S.runs[S.sel].res=PTS.find(p=>p.n===S.sel); }
+    render(); return; }
+  if (T('#cap')){ S.runs[S.sel].cap=true; S.sel=null;
+    if(captured().length>=5) S.done.runs5=true; render(); return; }
+  if (T('#lock')){ const d=new Date();
+    S.locked=d.getHours()+':'+String(d.getMinutes()).padStart(2,'0'); render(); return; }
+  if (T('#unlock')){ S.broken=true; S.locked=null; render(); return; }
+  if (T('#numsBtn')){ S.numsOpen=!S.numsOpen; render(); return; }
+  if (T('#openTM')){ window.open('https://teachablemachine.withgoogle.com/train/image','_blank','noopener,noreferrer'); return; }
+  if (T('#fileAll')){ S.filed=4; S.done.record=true; render(); return; }
+});
+document.addEventListener('input', e=>{
+  const t=e.target;
+  if (t.dataset.note!=null){ S.notes[t.dataset.note]=t.value; footer(step());
+    if (t.dataset.note==='hypothesis'){
+      const b=document.getElementById('lock');
+      if (b) b.disabled = !(/\d/.test(t.value)&&t.value.length>=15); } return; }
+  if (t.dataset.prec!=null){ const n=+t.dataset.prec, p=PTS.find(x=>x.n===n);
+    const truth=100*p.TP/(p.TP+p.FP);
+    S.prec[n]=t.value===''?null:parseFloat(t.value);
+    t.style.color = S.prec[n]==null?'var(--ink-3)'
+      :(Math.abs(S.prec[n]-truth)<=0.1?'var(--ok)':'var(--err)'); }
+});
 
 /* גרירת נקודות הניבוי */
-function wirePredict(){
-  const svg = document.getElementById('curve');
-  svg.addEventListener('pointerdown',e=>{
-    if (S.slice!=='hypothesis' || S.locked) return;
-    const r = svg.getBoundingClientRect();
-    const rx = (e.clientX-r.left)/r.width*420, ry=(e.clientY-r.top)/r.height*132;
-    let best=0,bd=1e9;
-    for(let i=0;i<5;i++){ const d=Math.abs(cx(i)-rx); if(d<bd){bd=d;best=i;} }
-    if (bd>34) return;
-    const n = DEMO_CTX.curve.points[best].n;
-    const move = ev=>{
-      const yy=(ev.clientY-r.top)/r.height*132;
-      const v = .50 + (CV.y1-yy)/(CV.y1-CV.y0)*0.5;
-      S.predict[n] = Math.max(.5,Math.min(1,v)); drawCurve();
-    };
-    const up = ()=>{ window.removeEventListener('pointermove',move);
-      window.removeEventListener('pointerup',up); };
-    window.addEventListener('pointermove',move); window.addEventListener('pointerup',up);
-    move(e);
-  });
-}
+document.addEventListener('pointerdown', e=>{
+  const svg = e.target.closest('#chart');
+  if (!svg || svg.dataset.edit!=='1' || S.locked) return;
+  const r=svg.getBoundingClientRect();
+  const rx=(e.clientX-r.left)/r.width*640;
+  let best=0,bd=1e9;
+  for(let i=0;i<5;i++){ const d=Math.abs(px(i)-rx); if(d<bd){bd=d;best=i;} }
+  if (bd>54) return;
+  const n=PTS[best].n;
+  const mv=ev=>{ const yy=(ev.clientY-r.top)/r.height*230;
+    S.predict[n]=Math.max(.5,Math.min(1,.5+(CX.y1-yy)/(CX.y1-CX.y0)*.5)); drawChart(); };
+  const up=()=>{window.removeEventListener('pointermove',mv);window.removeEventListener('pointerup',up);
+    footer(step());};
+  window.addEventListener('pointermove',mv); window.addEventListener('pointerup',up); mv(e);
+});
 
-/* הזרוע: גרירה, הצמדה, ביישנות, קיפול */
-function wireArm(){
-  const head = document.getElementById('armhead');
-  const grab = head.querySelector('.grab');
-  let d=null;
-  grab.addEventListener('pointerdown',e=>{
-    d={dx:e.clientX-S.arm.x, dy:e.clientY-S.arm.y};
-    head.classList.add('dragging'); grab.setPointerCapture(e.pointerId);
-  });
-  grab.addEventListener('pointermove',e=>{
-    if(!d) return;
-    const c = clampArm(e.clientX-d.dx, e.clientY-d.dy);
-    S.arm.x = c.x; S.arm.y = c.y;
-    drawArm();
-  });
-  grab.addEventListener('pointerup',()=>{ d=null; head.classList.remove('dragging'); snap(); });
+/* גרירת המַדָּה */
+document.addEventListener('pointerdown', e=>{
+  const c=e.target.closest('#cal'); if(!c) return;
+  const d={dx:e.clientX-S.calXY.x, dy:e.clientY-S.calXY.y};
+  c.classList.add('drag'); c.setPointerCapture(e.pointerId);
+  const mv=ev=>{ S.calXY={x:ev.clientX-d.dx, y:ev.clientY-d.dy};
+    c.style.left=S.calXY.x+'px'; c.style.top=S.calXY.y+'px'; };
+  const up=ev=>{ c.classList.remove('drag');
+    window.removeEventListener('pointermove',mv); window.removeEventListener('pointerup',up);
+    const svg=document.getElementById('chart').getBoundingClientRect();
+    const rel=(ev.clientX-svg.left)/svg.width*640; const caps=captured();
+    S.cal=null;
+    for(let i=0;i<4;i++){ const g=gaps(S.metric)[i];
+      if (rel>=px(i)&&rel<=px(i+1)&&caps.includes(g.from)&&caps.includes(g.to)){ S.cal=i; break; } }
+    drawChart();
+    const say=document.getElementById('calsay');
+    say.className=S.cal==null?'':calState().cls; say.innerHTML=calSay();
+    footer(step()); };
+  window.addEventListener('pointermove',mv); window.addEventListener('pointerup',up);
+});
 
-  head.querySelectorAll('.modes button').forEach(b=>b.addEventListener('click',()=>{
-    S.arm.mode = b.dataset.mode;
-    head.querySelectorAll('.modes button').forEach(x=>x.classList.toggle('on',x===b));
-    crt();
-    if (S.arm.mode==='ask'){
-      setTimeout(()=>{
-        const go=document.getElementById('askGo'), out=document.getElementById('askOut');
-        if(!go) return;
-        go.addEventListener('click',()=>{
-          out.textContent=''; let i=0;
-          const t=setInterval(()=>{ out.textContent=CANNED.slice(0,i+=2);
-            if(i>=CANNED.length) clearInterval(t); },12);
-        });
-      },0);
-    }
-  }));
-  document.getElementById('armbase').addEventListener('click',()=>{
-    S.arm.folded = !S.arm.folded;
-    head.classList.toggle('folded',S.arm.folded); drawArm();
+/* גרירת הזרוע */
+(function(){
+  const arm=document.getElementById('arm');
+  document.addEventListener('pointerdown', e=>{
+    if (!e.target.closest('#armgrab')) return;
+    const r=arm.getBoundingClientRect(); const d={dx:e.clientX-r.left, dy:e.clientY-r.top};
+    const mv=ev=>{ arm.style.left=Math.max(8,Math.min(innerWidth-70,ev.clientX-d.dx))+'px';
+      arm.style.top=Math.max(70,Math.min(innerHeight-70,ev.clientY-d.dy))+'px';
+      arm.style.bottom='auto'; };
+    const up=()=>{window.removeEventListener('pointermove',mv);window.removeEventListener('pointerup',up);};
+    window.addEventListener('pointermove',mv); window.addEventListener('pointerup',up);
   });
-  window.addEventListener('keydown',e=>{
-    if(e.key==='Escape'){ S.arm.folded=true; head.classList.add('folded'); drawArm(); }
-  });
-  document.getElementById('bandB').addEventListener('pointermove',e=>{
-    if (S.arm.folded) return;
-    const r = head.getBoundingClientRect();
-    const inside = e.clientX>r.left-6 && e.clientX<r.right+6 &&
-                   e.clientY>r.top-6 && e.clientY<r.bottom+6;
-    const onHead = e.target.closest('#armhead');
-    head.classList.toggle('shy', inside && !onHead);
-  });
-}
-
-/* ========================= הרכבה ========================= */
-function render(){
-  renderBandA(); renderRail(); renderDeck(); renderBoard();
-  placeCaliper(); crt(); drawArm();
-}
-function boot(){
-  renderBandA();
-  document.getElementById('stageTgl').addEventListener('click',()=>{
-    S.stage = S.stage===2?1:2;
-    const it = byId(S.slice);
-    if (!avail(it)) S.slice = CL.find(x=>avail(x)).id;
-    render();
-  });
-  document.getElementById('metSel').querySelectorAll('button').forEach(b=>
-    b.addEventListener('click',()=>{
-      S.metric=b.dataset.m;
-      document.getElementById('metSel').querySelectorAll('button')
-        .forEach(x=>x.classList.toggle('on',x===b));
-      placeCaliper(); renderBoard();
-    }));
-  wireGlobal();
-  render();
-  wireCaliper(); wirePredict(); wireArm();
-  S.arm.x = 80; S.arm.y = 70; drawArm();
-  travelTo(byId(S.slice).tile);
-  window.addEventListener('resize',()=>{ placeCaliper(); drawArm(); });
-}
-boot();
+})();
+window.addEventListener('keydown', e=>{
+  if (e.key==='Escape'){ S.armOpen=false; armScreen(); }
+  if (e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA') return;
+  if (e.key==='ArrowLeft') go(1);
+  if (e.key==='ArrowRight') go(-1);
+});
+window.addEventListener('resize',()=>{ if(document.getElementById('chart')){drawChart();} });
+render();
 </script>
 </body>
 </html>
