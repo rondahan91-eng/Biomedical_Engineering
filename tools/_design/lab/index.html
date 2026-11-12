@@ -49,11 +49,15 @@ header{height:56px;flex:none;display:flex;align-items:center;gap:18px;
   padding:0 26px;background:var(--surface);border-bottom:1px solid var(--line)}
 header .wk{font-weight:900;font-size:15px;letter-spacing:-.2px;white-space:nowrap}
 #steps{display:flex;gap:5px;margin-inline-start:auto;margin-inline-end:auto}
-#steps button{border:0;background:transparent;padding:6px 3px;border-radius:0}
-#steps b{display:block;width:30px;height:4px;border-radius:3px;background:var(--line-2)}
-#steps button.done b{background:var(--ok)}
-#steps button.on b{background:var(--ink)}
-#steps button.lock b{background:var(--surface-3)}
+#steps button{border:0;background:transparent;padding:4px 2px;border-radius:0}
+/* עיגול ממוספר, ו-וי ירוק כשהשלב הושלם. קו בלי מספר לא אמר לאן הגענו. */
+#steps b{display:flex;align-items:center;justify-content:center;width:22px;height:22px;
+  border-radius:50%;border:1.5px solid var(--line-2);background:var(--surface);
+  font-family:var(--mono);font-size:11px;font-weight:700;color:var(--ink-3);font-style:normal}
+#steps button.done b{background:var(--ok);border-color:var(--ok);color:#fff}
+#steps button.on b{background:var(--ink);border-color:var(--ink);color:#fff}
+#steps button.on.done b{background:var(--ok);border-color:var(--ok)}
+#steps button.lock b{background:var(--surface-2);border-color:var(--line);color:var(--surface-3)}
 #steps button:disabled{cursor:not-allowed}
 header .who{font-size:12.5px;color:var(--ink-3);white-space:nowrap}
 
@@ -95,7 +99,10 @@ main{flex:1;min-height:0;overflow-y:auto;display:flex;justify-content:center}
 /* ---------------- הגרף ---------------- */
 .chartwrap{position:relative;background:var(--surface);border:1px solid var(--line);
   border-radius:12px;padding:16px 18px 10px}
-#chart{width:100%;height:204px;display:block}
+/* direction:ltr בתוך ה-SVG: text-anchor נמדד לפי כיוון הבסיס, ובדף RTL
+   "end" הוא הקצה השמאלי. בלי זה מספרי ציר ה-Y נעגנים הפוך ונכנסים לשטח
+   הגרף. מערכת הצירים של SVG היא שמאל-לימין ממילא, אז עדיף שהעיגון יתאים לה. */
+#chart{width:100%;height:204px;display:block;direction:ltr}
 .chartfoot{display:flex;align-items:center;gap:16px;margin-top:4px;flex-wrap:wrap}
 .chartfoot .k{font-family:var(--mono);font-size:11px;color:var(--ink-3)}
 .chartfoot .k i{display:inline-block;width:14px;height:2px;margin-inline-end:5px;vertical-align:3px}
@@ -105,16 +112,26 @@ main{flex:1;min-height:0;overflow-y:auto;display:flex;justify-content:center}
 .metsel button+button{border-inline-start:1px solid var(--line)}
 .metsel button.on{background:var(--ink);color:#fff;font-weight:700}
 
-/* המַדָּה */
+/* סרגל הרעש */
 #cal{position:absolute;width:52px;cursor:grab;touch-action:none;user-select:none;z-index:3}
 #cal.drag{cursor:grabbing}
 #cal .tip{position:absolute;top:-16px;inset-inline-start:50%;transform:translateX(50%);
   font-family:var(--mono);font-size:10px;color:var(--brand-2);white-space:nowrap}
-#calsay{margin-top:14px;font-size:17px;font-weight:700;min-height:26px}
+#calsay{margin-top:10px;font-size:17px;font-weight:700;min-height:26px}
 #calsay.over{color:var(--ok)} #calsay.under{color:var(--err)} #calsay.edge{color:var(--warn)}
+/* מצב חסר: הלוח הזה לא יכול לעבוד בלי רעש ובלי שתי נקודות אמיתיות סמוכות.
+   עדיף לומר מה חסר ואיפה משיגים אותו מאשר להשאיר שורה ריקה. */
+#calsay .calneed{display:block;font-size:13.5px;font-weight:500;color:var(--ink-2);
+  line-height:1.6;max-width:640px}
+#calsay .calneed b{color:var(--ink)}
+/* אזהרת שמירה. position:fixed, ולכן היא מחוץ לזרימה ולא משנה גובה של שום לוח. */
+#savewarn{position:fixed;left:14px;top:60px;z-index:40;max-width:300px;
+  background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:9px;
+  padding:8px 11px;font-size:12px;line-height:1.55;font-weight:500}
+#savewarn[hidden]{display:none}
 
 /* ---------------- טבלת המספרים — נפתחת, לא מוצגת ---------------- */
-.numsbtn{margin-top:14px}
+.numsbtn{margin-top:8px}
 #nums{margin-top:12px;background:var(--surface);border:1px solid var(--line);border-radius:12px;
   padding:14px 16px;display:none}
 #nums.open{display:block}
@@ -136,9 +153,31 @@ main{flex:1;min-height:0;overflow-y:auto;display:flex;justify-content:center}
   border:1px solid var(--line);border-radius:5px;padding:1px 6px;color:var(--ink)}
 .cells{display:flex;gap:16px;margin-top:4px}
 .cellbox{flex:1;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;text-align:center}
-.cellbox canvas{width:150px;height:150px;border-radius:9px;display:block;margin:0 auto 10px}
+.cellbox canvas{width:132px;height:132px;border-radius:9px;display:block;margin:0 auto 9px}
 .cellbox .t{font-family:var(--mono);font-size:13px;color:var(--ink-2)}
 .cellbox .d{font-size:12px;color:var(--ink-3);margin-top:3px}
+/* המשוב על הטענה שנבחרה. ירוק/כתום כמו בשאר הלוח, בלי "נכון/לא נכון". */
+.mapsay{margin-top:11px;font-size:13.5px;line-height:1.62;color:var(--ink-2);max-width:780px;
+  background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+.mapsay.ok{border-color:#bfe8d4;background:#f3fbf7}
+.mapsay.no{border-color:#f6ddb4;background:#fff8ec}
+.mapsay b{color:var(--ink);font-weight:700}
+
+/* ---------------- לוח 9: סגירת הניסוי ---------------- */
+.recap{background:var(--surface-2);border:1px solid var(--line);border-radius:11px;
+  padding:11px 16px;font-size:12.8px;line-height:1.58;color:var(--ink-2);max-width:900px}
+.recap .rg{font-size:13.5px;color:var(--ink);margin-bottom:5px}
+.recap b{color:var(--ink);font-weight:700}
+.recap ol{margin:0;padding-inline-start:17px}
+.claims{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;max-width:900px}
+.claim{display:flex;gap:9px;align-items:flex-start;text-align:start;cursor:pointer;
+  background:var(--surface);border:1px solid var(--line);border-radius:10px;
+  padding:9px 12px;font-size:12.8px;line-height:1.48;color:var(--ink-2)}
+.claim:hover{border-color:var(--ink-3)}
+.claim .bx{flex:none;width:15px;height:15px;border:1.5px solid var(--line-2);border-radius:4px;
+  margin-top:1px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff}
+.claim.on{background:#eefbf5;border-color:var(--ok);color:var(--ink)}
+.claim.on .bx{background:var(--ok);border-color:var(--ok)}
 .fields{display:grid;gap:14px;max-width:720px}
 .fields label{display:block;font-size:13.5px;font-weight:700;color:var(--ink-2);margin-bottom:6px}
 .stamp{display:inline-block;font-family:var(--mono);font-size:12px;color:var(--ok);
@@ -181,6 +220,143 @@ footer .hint b{color:var(--warn);font-weight:700}
 .askrow input{background:#0b2c37;border-color:#1d4a5c;color:#dff3f8;font-size:13px;padding:8px 10px}
 .askrow button{background:var(--accent);color:#062028;border:0;padding:7px 13px;font-size:13px}
 
+/* ---------------- לוח 1: תדריך. הצגה, לא בחירה. ---------------- */
+.brief{display:grid;grid-template-columns:1.4fr 1fr;gap:14px}
+.bmain,.bside{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:18px 20px}
+.brow{display:flex;gap:12px;align-items:flex-start}
+.brow+.brow{margin-top:13px;padding-top:13px;border-top:1px solid var(--surface-2)}
+.bn{flex:none;width:23px;height:23px;border-radius:50%;background:var(--ink);color:#fff;
+  font-family:var(--mono);font-size:12px;font-weight:700;display:flex;align-items:center;
+  justify-content:center;margin-top:1px}
+.brow b{display:block;font-size:15px;font-weight:900;line-height:1.3}
+/* "div span" ולא "span": .bn הוא span ישיר של .brow, וכלל רחב יותר היה
+   צובע את המספר ב-ink-2 על רקע ink — בלתי נראה. */
+.brow div span{display:block;font-size:13.5px;color:var(--ink-2);margin-top:4px;line-height:1.5}
+.bq{margin:7px 0 0;font-size:20px;font-weight:900;line-height:1.3}
+.ba{margin:7px 0 0;font-size:13.5px;color:var(--ink-2);line-height:1.55}
+.bfact{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+  margin-top:11px;padding-top:9px;border-top:1px solid var(--surface-2)}
+.bfact span{font-size:12px;color:var(--ink-3)}
+.bfact b{font-size:13.5px;font-weight:700}
+.bwarn{margin:13px 0 0;font-size:14px;color:var(--ink-2);line-height:1.6;
+  border-inline-start:3px solid var(--accent);padding-inline-start:12px}
+
+/* ---------------- לוח 2: הורדות ---------------- */
+.dls{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+.dl{display:block;background:var(--surface);border:1px solid var(--line);border-radius:12px;
+  padding:13px 10px;text-align:center;color:inherit;cursor:pointer;
+  font-family:inherit;font-size:inherit;font-weight:400}
+.dl:hover:not(.got){border-color:var(--ink-3)}
+.dl.got{background:#f3fbf7;border-color:#bfe8d4}
+.dl .n{font-family:var(--mono);font-size:19px;font-weight:700;display:block}
+.dl.got .n{color:var(--ok)}
+.dl .c{font-size:11.5px;color:var(--ink-3);margin-top:4px;display:block;line-height:1.45}
+.dl .mb{font-family:var(--mono);font-size:10.5px;color:var(--ink-3);margin-top:3px;display:block}
+/* העיגול: הורדה, ואחרי שהבייטים הגיעו — וי. */
+.dlb{width:26px;height:26px;border-radius:50%;border:1.5px solid var(--line-2);
+  background:var(--surface);color:var(--ink-2);display:flex;align-items:center;
+  justify-content:center;margin:0 auto 7px}
+.dl:hover .dlb{border-color:var(--ink);color:var(--ink)}
+.dl.got .dlb,.dlbench.got .dlb{background:var(--ok);border-color:var(--ok);color:#fff}
+.busy .dlb{border-color:var(--line-2);border-top-color:var(--accent);
+  animation:spin .75s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.dlbench{display:flex;align-items:center;gap:14px;margin-top:11px;background:var(--surface);
+  border:1px solid var(--line-2);border-radius:12px;padding:12px 18px;color:inherit;
+  width:100%;text-align:start;cursor:pointer;font-family:inherit;font-size:inherit;font-weight:400}
+.dlbench:hover:not(.got){border-color:var(--ink-3)}
+.dlbench.got{background:#f3fbf7;border-color:#bfe8d4}
+.dlbench .dlb{margin:0;flex:none}
+.dlbench .t{font-weight:900;font-size:15px}
+.dlbench .s{font-size:12.5px;color:var(--ink-2);margin-top:2px}
+.inzip{font-family:var(--mono);font-size:11.5px;color:var(--ink-3);margin-top:12px;line-height:1.8}
+.inzip b{color:var(--ink-2);font-weight:500}
+
+/* ---------------- לוח 3: הסברי המדדים ---------------- */
+.metqrow{display:flex;align-items:center;gap:12px;margin-top:9px;flex-wrap:wrap}
+.metq{display:flex;gap:7px;flex-wrap:wrap;margin-inline-start:auto}
+.metq button{border:1px solid var(--line-2);background:var(--surface);border-radius:20px;
+  padding:3px 11px;font-size:11.5px;font-weight:500;color:var(--ink-3)}
+.metq button.on{background:var(--ink);color:#fff;border-color:var(--ink);font-weight:700}
+/* שתי עמודות: ההסבר והמשפט זה לצד זה. אחרת הלוח גולש, והמסך מפסיק להיות מסך אחד. */
+.hyprow{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:10px;align-items:start}
+.metbox{background:var(--surface-2);border:1px solid var(--line);
+  border-radius:10px;padding:13px 16px;font-size:13.5px;line-height:1.6;color:var(--ink-2)}
+.metbox b{color:var(--ink);font-weight:700}
+.metbox .hd{font-size:14.5px;font-weight:900;color:var(--ink);margin-bottom:4px}
+.ptsay{margin-top:10px;background:var(--surface);border:1px solid var(--line);border-radius:10px;
+  padding:12px 16px;font-size:13.5px;color:var(--ink-2);line-height:1.65;display:flex;
+  gap:14px;align-items:center}
+.ptsay b{color:var(--ink);font-weight:700}
+.predcount{font-family:var(--mono);font-size:11.5px;color:var(--ink-3)}
+.predcount b{color:var(--ok)}
+
+/* ---------------- לוח 4: תרשים זרימה ---------------- */
+.flow{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.fstep{background:var(--surface);border:1px solid var(--line);border-radius:12px;
+  padding:14px 15px;display:flex;flex-direction:column;position:relative}
+.fstep.done{background:#f3fbf7;border-color:#bfe8d4}
+.fstep.now{border-color:var(--ink);border-width:2px;padding:13px 14px}
+.fhd{display:flex;align-items:center;gap:8px}
+.fn{flex:none;width:21px;height:21px;border-radius:50%;background:var(--surface-3);color:var(--ink-2);
+  font-family:var(--mono);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.fstep.done .fn{background:var(--ok);color:#fff}
+.fstep.now .fn{background:var(--ink);color:#fff}
+.fstep .ft{font-size:14px;font-weight:900;line-height:1.25}
+.fstep .fd{font-size:12px;color:var(--ink-3);margin-top:6px;line-height:1.5;flex:1}
+.fstep .fa{margin-top:10px}
+.fstep .fa button,.fstep .fa label,.fstep .fa a{width:100%;font-size:12.5px;padding:8px 10px;
+  display:block;text-align:center}
+.fstep .fa label,.fstep .fa a{border:1px solid var(--line-2);background:var(--surface);border-radius:9px;
+  font-weight:700;cursor:pointer;color:var(--ink);text-decoration:none}
+.fstep .fa label:hover,.fstep .fa a:hover{border-color:var(--ink)}
+.fstep .fa a.hasdl,.fstep .fa button.hasdl{background:#f3fbf7;border-color:#bfe8d4;color:var(--ok)}
+.fstep .fa label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fstep .fa input[type=file]{display:none}
+/* אחרי ההרצה התרשים כבר מילא את תפקידו — נשארת רק שורת הסימון. */
+.flow.mini .fd,.flow.mini .fa{display:none}
+.flow.mini .fstep{padding:9px 12px}
+.fslot+.fslot{margin-top:6px}
+.fslot.has label{background:#f3fbf7;border-color:#bfe8d4;color:var(--ok)}
+.noiseout{margin-top:12px;background:var(--surface);border:1px solid var(--line);
+  border-radius:12px;padding:14px 20px}
+.notab{width:100%;border-collapse:collapse;direction:ltr}
+.notab th,.notab td{font-family:var(--mono);font-size:14px;padding:5px 8px;text-align:center}
+.notab th{color:var(--ink-3);font-weight:500;font-size:11.5px;border-bottom:1px solid var(--line)}
+.notab td.rl{direction:rtl;text-align:right;color:var(--ink-2);font-family:var(--font);
+  font-size:12.5px;font-weight:700}
+.notab tr.dif td{border-top:1px solid var(--line);color:var(--brand-2);font-weight:700}
+.nobig{text-align:center;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}
+.nobig .v{font-size:40px;font-weight:900;font-family:var(--mono);color:var(--brand-2);line-height:1.08}
+.prog{height:4px;background:var(--surface-3);border-radius:3px;overflow:hidden;margin-top:10px}
+.prog i{display:block;height:100%;background:var(--accent);width:0;transition:width .2s}
+
+/* ---------------- לוח 5: רשימה אחת + קופסאות מודל ---------------- */
+.sharedchk{background:var(--surface);border:1px solid var(--line);border-radius:12px;
+  padding:14px 18px;display:flex;gap:18px;align-items:center}
+.sharedchk ol{margin:0;padding-inline-start:20px;font-size:12.5px;line-height:1.72;
+  color:var(--ink-2);flex:1}
+.sharedchk li::marker{font-family:var(--mono);font-weight:700;color:var(--ink-3)}
+.sharedchk button{flex:none}
+.sharedchk code{font-family:var(--mono);font-size:11px;background:var(--surface-2);
+  border:1px solid var(--line);border-radius:4px;padding:0 4px;color:var(--ink)}
+.mboxes{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:12px}
+.mbox{background:var(--surface);border:1.5px dashed var(--line-2);border-radius:12px}
+.mbox .mpad{display:block;padding:13px 8px;text-align:center;cursor:pointer}
+.mbox input{display:none}
+.mbox:hover:not(.off):not(.full){border-color:var(--ink-3)}
+.mbox.full{border-style:solid;background:#f3fbf7;border-color:#bfe8d4}
+.mbox.off{opacity:.38}
+.mbox.off .mpad{cursor:not-allowed}
+.mic{display:flex;width:26px;height:26px;border-radius:50%;border:1.5px solid var(--line-2);
+  align-items:center;justify-content:center;margin:0 auto 7px;color:var(--ink-3);
+  font-size:16px;font-weight:700;line-height:1}
+.mbox.full .mic{background:var(--ok);border-color:var(--ok);color:#fff}
+.mn{display:block;font-family:var(--mono);font-size:19px;font-weight:700}
+.mbox.full .mn{color:var(--ok)}
+.ms{display:block;font-size:10.5px;color:var(--ink-3);margin-top:4px;line-height:1.4;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
 /* מסך נמוך — מחשב כיתה. הכול מתכווץ יחד כדי שהמסך יישאר מסך אחד. */
 @media (max-height:710px){
   header{height:50px} footer{height:60px}
@@ -189,18 +365,33 @@ footer .hint b{color:var(--warn);font-weight:700}
   .work{margin-top:18px}
   #chart{height:152px}
   .chartwrap{padding:12px 14px 8px}
-  #calsay{font-size:15.5px;margin-top:10px;min-height:22px}
-  .numsbtn{margin-top:8px}
+  #calsay{font-size:15.5px;margin-top:8px;min-height:18px}
+  .numsbtn{margin-top:6px}
   .run{padding:12px 10px} .run .n{font-size:17px} .run .s{margin-top:4px}
   .pick{padding:14px} .pick .t{font-size:15.5px}
-  .cellbox canvas{width:118px;height:118px}
+  .cellbox canvas{width:106px;height:106px}
   #armscreen{max-height:190px}
   input,textarea{padding:9px 12px;font-size:15px}
+  .bmain,.bside{padding:13px 15px} .brow+.brow{margin-top:10px;padding-top:10px}
+  .brow b{font-size:14px} .brow span{font-size:12.5px} .bq{font-size:17px}
+  .bwarn{margin-top:10px;font-size:13px}
+  .dl{padding:11px 8px} .dl .n{font-size:17px}
+  .fstep{padding:11px 12px} .fstep .fd{font-size:11.5px;margin-top:4px}
+  .noiseout{padding:13px 16px} .nobig .v{font-size:36px}
+  .chk{padding:9px 8px} .chk li{font-size:10.5px;line-height:1.38;padding:2px 0}
+  .chk .h{font-size:13px;padding-bottom:6px;margin-bottom:6px}
+  .chk li .bx{width:13px;height:13px}
 }
 @media (max-width:860px){
   .stage h1{font-size:30px} .stage .lede{font-size:17px}
   .runs{grid-template-columns:repeat(3,1fr)}
   .gate{flex-direction:column;align-items:stretch} .gate img{width:100%;height:120px}
+  .brief{grid-template-columns:1fr}
+  .dls{grid-template-columns:repeat(3,1fr)}
+  .flow{grid-template-columns:repeat(2,1fr)}
+  .chks{grid-template-columns:repeat(2,1fr)}
+  .norow{grid-template-columns:repeat(2,1fr)}
+  .hyprow{grid-template-columns:1fr}
 }
 </style>
 </head>
@@ -213,12 +404,14 @@ footer .hint b{color:var(--warn);font-weight:700}
     <button class="quiet" id="stgBtn" style="padding:3px 7px;font-size:11px">החלף</button></span>
 </header>
 
+<div id="savewarn" hidden></div>
+
 <main><div class="stage" id="stage"></div></main>
 
 <footer>
-  <button class="quiet" id="prev">← הקודם</button>
+  <button class="quiet" id="prev">הקודם →</button>
   <span class="hint" id="hint"></span>
-  <button class="go" id="next">הבא →</button>
+  <button class="go" id="next">← הבא</button>
 </footer>
 
 <div id="arm">
@@ -252,8 +445,21 @@ const PTS = [
 ];
 const NOISE_RUN = {n:100,acc:.855,sens:.840,spec:.870,TP:84,FN:16,FP:13,TN:87};
 const MET = {acc:'דיוק', sens:'רגישות', spec:'ספציפיות'};
-const noiseBand = m => Math.abs(PTS.find(p=>p.n===100)[m] - NOISE_RUN[m])*100;
-const gaps = m => PTS.slice(1).map((p,i)=>({from:PTS[i].n,to:p.n,delta:(p[m]-PTS[i][m])*100}));
+/* הניחוש מתחיל כקו ישר ב-70, והתלמיד מעצב אותו. קו ישר הוא כבר השערה -
+   "לא ישתנה כלום" - ולכן עדיף להתחיל ממנו מאשר ממסך ריק. */
+const FLAT = 0.70;
+const flatLine = () => ({25:FLAT,50:FLAT,100:FLAT,200:FLAT,400:FLAT});
+const moved = m => PTS.some(p=>Math.abs(S.predict[m][p.n]-FLAT)>0.005);
+/* הרעש הוא ההפרש בין שני האימונים של התלמיד. אם עוד לא רצו — הנתון המובנה,
+   כדי שאפשר יהיה לעבור על הדמו בלי לאמן. */
+const noiseBand = m => (S.nres && S.nres.A && S.nres.B)
+  ? Math.abs(S.nres.A[m] - S.nres.B[m])*100
+  : Math.abs(PTS.find(p=>p.n===100)[m] - NOISE_RUN[m])*100;
+/* הערך של נקודה: התוצאה האמיתית של התלמיד אם הוא כבר הריץ, ואחרת הנתון
+   המובנה — כדי שאפשר יהיה לעבור על הדמו בלי לאמן חמישה מודלים. */
+const val = (n,m) => (S.runs[n] && S.runs[n].res) ? S.runs[n].res[m] : PTS.find(p=>p.n===n)[m];
+const gaps = m => PTS.slice(1).map((p,i)=>(
+  {from:PTS[i].n, to:p.n, delta:(val(p.n,m)-val(PTS[i].n,m))*100}));
 function plateauFrom(m){
   const g=gaps(m), nb=noiseBand(m);
   for(let i=0;i<g.length;i++) if(g.slice(i).every(x=>x.delta<=nb)) return g[i].from;
@@ -262,19 +468,19 @@ function plateauFrom(m){
 
 /* ========== עשרת השלבים. הטקסטים הם אלה שבשרת. ========== */
 const STEPS = [
-  {id:'exp_marked', stage:1, kind:'declare',
-   eyebrow:'EXPERIMENT', h:'איזה ניסוי את/ה מריץ/ה השבוע?',
-   lede:'בחירה אחת. היא קובעת מה המנטור ישאל ומה המערכת תחפש.',
-   why:'הניסוי המסומן הוא מה שהמנטור שואל עליו, והמחברת היא המקום שבו ההשערה ננעלת לפני המדידה.',
-   how:'בחרו "עקומת למידה". אחר כך כתבו באיזה מאגר אתם עובדים.',
-   trap:'ניסוי שמעבר לשלב הפתוח יידחה על ידי השרת — כפתור מושבת הוא בקשה, לא מניעה.'},
+  {id:'exp_marked', stage:1, kind:'brief',
+   eyebrow:'THIS WEEK · THE EXPERIMENT', h:'הניסוי של השבוע: עקומת למידה',
+   lede:'אין כאן מה לבחור. יש כאן מה להבין — לפני שמתחילים למדוד.',
+   why:'כל שאר השבוע נשען על ההבחנה שבתחתית המסך הזה.',
+   how:'קראו את שלושת השלבים, ואז המשיכו.',
+   trap:'להתחיל לאמן לפני שברור מה בדיוק מודדים.'},
 
   {id:'sizes', stage:2, kind:'declare',
-   eyebrow:'HOW MANY POINTS', h:'כמה גדלים באמת קיבלת?',
-   lede:'עקומה שנעצרה כי הנתונים נגמרו אינה עקומה שהתיישרה. ספרו לפני שמודדים.',
-   why:'אלה שני דברים שונים לגמרי, וחייבים להיכתב בנפרד.',
-   how:'סמנו רק את הגדלים שבאמת נפתחו לכם ב-Drive.',
-   trap:'להניח חמש נקודות. בשלב 1 פתוחות רק "גודל 0025" ו"ערכת מבחן".'},
+   eyebrow:'THE SETS', h:'הורדת הערכות',
+   lede:'חמש ערכות אימון בגדלים עולים, ועוד ערכת מבחן אחת שמשרתת את כל חמש הנקודות.',
+   why:'כל ערכה גדולה מכילה את כל התמונות של הקטנה ממנה. הקינון הזה הוא מה שמבטיח שהפרש בין שתי נקודות נובע מ"כמה תמונות" ולא מ"אילו תמונות".',
+   how:'לחצו על כל ערכה שנפתחה לכם, ועל ערכת המבחן. כל קובץ נפתח לתיקייה אחת ובתוכה שתי תיקיות מחלקה.',
+   trap:'לאמן על ערכת המבחן. אף תמונה ממנה אינה נמצאת באף ערכת אימון — וזה בדיוק מה שהופך את המדידה לתקפה.'},
 
   {id:'hypothesis', stage:1, kind:'declare',
    eyebrow:'PREDICT FIRST', h:'נחש/י את העקומה — לפני שמדדת',
@@ -299,30 +505,30 @@ const STEPS = [
 
   {id:'runs5', stage:2, kind:'auto',
    eyebrow:'FIVE POINTS', h:'חמש מדידות, אותה ערכת מבחן',
-   lede:'לכל גודל: טענו את המודל, הריצו, וקלטו לגרף. הסף 0.50 בכולם.',
-   why:'ההרצה השמורה היא הדבר היחיד שמצמיד יחד תווית, סף וארבעה תאים.',
-   how:'לחצו על משבצת, "הרצה", ואז "קליטה לגרף".',
-   trap:'שמירה בשני ספים שונים — הסף נצרב בתוך ההרצה בלי אזהרה.'},
+   lede:'על הגרף יש כרגע רק את הניחוש שלכם. כל הרצה מוסיפה נקודה אחת אמיתית — אותן 200 תמונות, אותו סף 0.50.',
+   why:'הקו האמיתי נבנה מול הניחוש שלכם, ולכן אפשר לראות בדיוק איפה טעיתם ובכמה.',
+   how:'לחצו על גודל שיש לו מודל, ואז "הרצה". הנקודה נוספת לגרף לבד.',
+   trap:'להריץ רק את הגדלים שנוח להם. חור באמצע העקומה הופך כל טענה על "מאיפה היא מתיישרת" לניחוש.'},
 
   {id:'read3', stage:1, kind:'declare',
    eyebrow:'BIGGER THAN NOISE?', h:'האם הפער גדול מהרעש?',
-   lede:'גררו את המַדָּה אל פער על העקומה. הלסתות שלה הן הרעש.',
+   lede:'סרגל הרעש הוא זוג קווים שהמרחק ביניהם הוא בדיוק הרעש שמדדתם בלוח 4. גררו אותו אל קפיצה בגרף: קפיצה שנכנסת כולה בין שני הקווים קטנה מהרעש — ואי אפשר לטעון שקרה בה משהו.',
    why:'הדיוק יכול להישאר קפוא בזמן שהרגישות עולה. ובעין, 3% הם כקוטר נקודה.',
-   how:'גררו את המַדָּה אל כל אחד מארבעת הפערים, ואז החליפו מדד וראו מה קורה.',
+   how:'גררו את הסרגל אל כל אחד מארבעת הפערים, ואז החליפו מדד וראו מה קורה.',
    trap:'ציר ה-X הוא סדר השמירה ולא n: המרחק בין 25 ל-50 זהה למרחק בין 200 ל-400.'},
 
   {id:'maps', stage:1, kind:'declare',
    eyebrow:'DID THE FOCUS MOVE', h:'על מה המודל הסתכל?',
-   lede:'אותה תמונה, שני מודלים. אם הדיוק עלה והקשב נשאר על המסגרת — מה ששיפרתם אינו האבחון.',
+   lede:'אותה תמונה, שני מודלים, שתי מפות קשב. עכשיו תחליטו מה מותר להסיק מהן.',
    why:'מודל שלמד קיצור דרך משתפר עם עוד נתונים בדיוק כמו מודל שלמד את הטפיל.',
-   how:'השוו את שתי המפות: האם האזור זז, והאם הוא התכנס.',
+   how:'בחרו איזו טענה המפות מחזקות, ואז הציעו דרך לבדוק מה גורם למיקוד.',
    trap:'"מפת הקשב מראה שהמודל מבין" — היא רמז שמחייב בדיקה, לא הוכחה.'},
 
   {id:'conclusion', stage:1, kind:'declare',
    eyebrow:'CONCLUSION', h:'מה למדת — ומה אי אפשר לדעת מכאן',
-   lede:'"המדידה לא הכריעה" היא תשובה לגיטימית, והיא מזכה.',
+   lede:'זה מה שעשיתם, במספרים שלכם. עכשיו תחליטו מה מותר להגיד על זה — "המדידה לא הכריעה" היא תשובה לגיטימית, והיא מזכה.',
    why:'שתי מסקנות הפוכות מתאימות לאותם נתונים בדיוק.',
-   how:'בחרו מסקנה, ואז כתבו מה הניסוי הזה לא יכול להוכיח.',
+   how:'קראו את הסיכום, בחרו מה קרה להשערה, סמנו טענות שאתם מסכימים איתן, וכתבו מגבלה אחת.',
    trap:'"העקומה התיישרה אז הגעתי לתקרה" — הטעות המרכזית של השיעור.'},
 
   {id:'record', stage:1, kind:'soft',
@@ -332,25 +538,67 @@ const STEPS = [
    how:'כפתור אחד.', trap:'להסתמך על הדפדפן. הוא לא מחסן.'}
 ];
 
+/* ========== נתוני השבוע. הכול נגזר מכאן — התלמיד לא בוחר מאגר. ========== */
+const WEEK = {
+  pool:'מלריה — תאי דם', classes:['נגוע','תקין'],
+  benchN:200, ruler:100   /* הגודל שעליו מאמנים פעמיים בשביל סרגל הרעש */
+};
+const DATA = '../../../data/';
+const SETS = [
+  {n:25, file:'curve-0025.zip', mb:'0.55'},
+  {n:50, file:'curve-0050.zip', mb:'1.13'},
+  {n:100,file:'curve-0100.zip', mb:'2.31'},
+  {n:200,file:'curve-0200.zip', mb:'4.62'},
+  {n:400,file:'curve-0400.zip', mb:'9.31'}
+];
+const BENCH_SET = {file:'benchmark.zip', mb:'2.42'};
+
+/* הסברי המדדים. כל אחד נפתח בנפרד, מתחת לבורר. */
+const MET_Q = {
+  acc:{t:'דיוק', d:'מתוך <b>כל 200</b> תמונות המבחן — בכמה המודל צדק.',
+       w:'מסתיר חוסר איזון: מודל שעונה "תקין" על הכול יקבל כאן 50%, בלי לזהות ולו נגוע אחד.'},
+  sens:{t:'רגישות', d:'מתוך <b>100 התמונות הנגועות בלבד</b> — בכמה זיהה נכון.',
+        w:'זה "כמה חולים לא פספסתי". בבדיקת סינון רפואית זה בדרך כלל המדד שקובע.'},
+  spec:{t:'ספציפיות', d:'מתוך <b>100 התמונות התקינות בלבד</b> — בכמה צדק.',
+        w:'זה "כמה אזעקות שווא לא עשיתי". כל אזעקת שווא היא בדיקה מיותרת לאדם בריא.'}
+};
+
+/* רשימה אחת, משותפת לכל הגדלים. אותם צעדים בדיוק בכל אימון — זו כל הנקודה,
+   ולכן אין טעם לחזור עליה חמש פעמים. הסימון עובר לקופסאות המודלים. */
+const CHK = [
+  'ב-Teachable Machine (הכפתור משמאל): <code>Get Started</code> ← <code>Image Project</code> ← <code>Standard image model</code>',
+  'גררו את התיקייה <code>נגוע</code> אל הקלאס הראשון, ואת <code>תקין</code> אל השני',
+  'שנו את שמות הקלאסים בדיוק ל-<code>נגוע</code> ול-<code>תקין</code>',
+  '<code>Train Model</code> — בלי לגעת ב-Epochs, ב-Batch size או ב-Learning rate',
+  '<code>Export Model</code> ← לשונית <code>Tensorflow.js</code> ← <code>Download my model</code>',
+  'פתחו את ה-ZIP שירד, וגררו את התיקייה לקופסה של הגודל שאימנתם'
+];
+
 /* ========== מצב ========== */
 const S = {
   i:0, stage:2, metric:'acc',
-  exp:null, sizes:[], runs:{}, sel:null, noiseA:false, noiseB:false,
-  predict:{}, locked:null, broken:false,
+  runs:{}, sel:null,
+  predict:{acc:flatLine(),sens:flatLine(),spec:flatLine()}, locked:null, broken:false,
   notes:{}, done:{}, prec:{}, cal:null, calXY:null,
+  gotMB:{}, dling:{}, dlerr:'', claims:{}, metQ:null,
+  models:{}, touched:{},
+  nmod:{A:null,B:null}, nfiles:{A:null,B:null}, nres:{A:null,B:null},
+  nbusy:'', nprog:0, nerr:'',
+  rbusy:false, rprog:0, rerr:'', mdlerr:'',
   armOpen:false, armTab:'how', numsOpen:false, filed:0
 };
+const pred = () => S.predict[S.metric];
 const step = () => STEPS[S.i];
 const avail = s => s.stage <= S.stage;
 const captured = () => PTS.filter(p=>S.runs[p.n] && S.runs[p.n].cap).map(p=>p.n);
-const noiseIn = () => S.noiseA && S.noiseB;
+const noiseIn = () => !!(S.nres.A && S.nres.B);
 
 /* ========== כותרת ========== */
 function renderSteps(){
   document.getElementById('steps').innerHTML = STEPS.map((s,i)=>
     `<button data-i="${i}" title="${s.h}"
       class="${S.done[s.id]?'done':''} ${i===S.i?'on':''} ${avail(s)?'':'lock'}"
-      ${avail(s)?'':'disabled'}><b></b></button>`).join('');
+      ${avail(s)?'':'disabled'}><b>${S.done[s.id]?'✓':(i+1)}</b></button>`).join('');
   document.getElementById('stg').textContent = S.stage;
 }
 
@@ -364,14 +612,18 @@ function render(){
     <p class="lede">${s.lede}</p>
     <div class="work">${work(s)}</div>`;
   footer(s);
+  /* בלוח התדריך אין מה לשאול עליו — הזרוע מוסתרת שם. */
+  document.getElementById('arm').style.display = s.kind==='brief' ? 'none' : '';
+  if (s.kind==='brief') S.armOpen = false;
   armScreen();
   if (s.id==='maps') drawCells();
   if (document.getElementById('chart')) { drawChart(); placeCal(); }
+  save();   /* כל ציור מחדש הוא שינוי מצב — ראו "שמירה מקומית" בסוף הקובץ */
 }
 
 function work(s){
   switch(s.id){
-    case 'exp_marked': return wExp();
+    case 'exp_marked': return wBrief();
     case 'sizes':      return wSizes();
     case 'hypothesis': return wHyp();
     case 'noise':      return wNoise();
@@ -384,104 +636,309 @@ function work(s){
   }
 }
 
-const EXPS=[['curve','עקומת למידה','כמה תמונות באמת צריך'],
-            ['balance','יחסי איזון','כשמחלקה אחת נדירה'],
-            ['source','הכללה בין מקורות','הממצא או המקור'],
-            ['intervention','התערבות','האם התיקון עובד']];
-function wExp(){
-  return `<div class="picks">${EXPS.map((e,i)=>`
-      <button class="pick ${S.exp===e[0]?'on':''} ${i>0?'off':''}" data-exp="${e[0]}" ${i>0?'disabled':''}>
-        <span class="eyebrow">${i===0?'OPEN':'LATER'}</span>
-        <span class="t">${e[1]}</span><span class="s">${e[2]}</span></button>`).join('')}</div>
-    ${S.exp?`<div style="margin-top:22px;max-width:620px">
-      <label style="display:block;font-size:13.5px;font-weight:700;color:var(--ink-2);margin-bottom:6px">באיזה מאגר?</label>
-      <input data-note="exp_marked" value="${S.notes.exp_marked||''}"
-        placeholder="מלריה — תאי דם · 5 בנובמבר"></div>`:''}`;
+/* לוח 1 — תדריך. אין בחירה: הניסוי והמאגר נגזרים מהשבוע. */
+function wBrief(){
+  return `<div class="brief">
+      <div class="bmain">
+        <div class="brow"><span class="bn">1</span><div>
+          <b>מאמנים חמישה מודלים נפרדים</b>
+          <span>אותו מאגר, אותן הגדרות בדיוק — רק מספר תמונות האימון משתנה:
+            <b class="num">25 · 50 · 100 · 200 · 400</b> לכל מחלקה.
+            המודל של 100 אינו המודל של 50 שהשתפר; הוא אימון חדש מאפס.</span></div></div>
+        <div class="brow"><span class="bn">2</span><div>
+          <b>מודדים את כל החמישה על אותה ערכת מבחן</b>
+          <span>${WEEK.benchN} תמונות שאף מודל לא ראה באימון, ואותו סף החלטה 0.50 בכולם.
+            ערכה אחת לכל הנקודות — אחרת אתם משווים בין דברים שונים.</span></div></div>
+        <div class="brow"><span class="bn">3</span><div>
+          <b>מציירים את חמש התוצאות על גרף אחד</b>
+          <span>זו עקומת הלמידה: הדיוק כפונקציה של כמות תמונות האימון.</span></div></div>
+      </div>
+      <div class="bside">
+        <span class="eyebrow">THE QUESTION</span>
+        <p class="bq">כמה תמונות באמת צריך?</p>
+        <p class="ba">ומאיזו נקודה ואילך עוד תמונות <b>מאותו סוג</b> כבר לא מוסיפות דיוק.</p>
+        <div class="bfact"><span>המאגר השבוע</span><b>${WEEK.pool}</b></div>
+        <div class="bfact"><span>המחלקות</span><b>${WEEK.classes.join(' · ')}</b></div>
+        <div class="bfact"><span>ערכת מבחן</span><b class="num">${WEEK.benchN} תמונות</b></div>
+      </div>
+    </div>
+    <p class="bwarn">המשפט שצריך לצאת איתו בסוף השבוע: עקומה שהתיישרה אומרת
+      <b>"עוד מאותן תמונות לא מוסיף"</b>. היא <b>לא</b> אומרת "הגעתי לתקרה".</p>`;
+}
+
+/* לוח 2 — הורדות.
+   ההורדה עוברת דרך fetch ולא דרך קישור ישיר, כי רק כך אפשר לדעת שהבייטים
+   באמת הגיעו ולסמן וי באמת. קישור <a download> רגיל לא מדווח דבר. */
+const ICON_DL = '<svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3.5v8M6.6 8.6 10 12l3.4-3.4M4.2 15.4h11.6"/></svg>';
+const ICON_OK = '<svg viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m4.6 10.4 3.4 3.4 7.4-7.8"/></svg>';
+/* "ירד" נגזר מהגודל שנמדד ולא מדגל נפרד, כי שני דגלים מקבילים יכולים להיפרד:
+   כך וי ירוק לא יכול להופיע בלי בייטים שבאמת הגיעו, וגם לא "undefined MB". */
+const got = key => S.gotMB[key] !== undefined;
+const badge = key => `<span class="dlb">${S.dling[key]?'':(got(key)?ICON_OK:ICON_DL)}</span>`;
+
+async function grab(key, file, filename){
+  if (S.dling[key]) return;
+  S.dling[key]=true; S.dlerr=''; render();
+  try{
+    const r = await fetch(DATA+file);
+    if (!r.ok) throw new Error('הקובץ לא נמצא בשרת (' + r.status + ')');
+    const b = await r.blob();
+    const u = URL.createObjectURL(b), a = document.createElement('a');
+    a.href=u; a.download=filename; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(u), 10000);
+    S.gotMB[key]=(b.size/1048576).toFixed(2);
+  }catch(e){ S.dlerr='ההורדה נכשלה — '+e.message; }
+  S.dling[key]=false; render();
 }
 
 const SIZES=[25,50,100,200,400];
+const setName = n => `ערכת אימון - ${n} לכל מחלקה.zip`;
+const benchName = () => `ערכת מבחן - ${WEEK.benchN} תמונות.zip`;
+
 function wSizes(){
-  return `<div class="picks" style="grid-template-columns:repeat(5,1fr)">
-    ${SIZES.map(n=>{
-      const open = n===25 || S.stage>=2;
-      return `<button class="pick ${S.sizes.includes(n)?'on':''} ${open?'':'off'}"
-        data-size="${n}" ${open?'':'disabled'} style="text-align:center">
-        <span class="t num">${n}</span>
-        <span class="s">${open?'נפתח':'שלב 2'}</span></button>`;}).join('')}</div>
-    <p style="margin-top:18px;font-size:15px;color:var(--ink-2)">
-      סימנת <b class="num">${S.sizes.length}</b> גדלים.
-      ${S.sizes.length&&S.sizes.length<5?'<b style="color:var(--warn)">פחות מחמש נקודות — זה בסדר, רק צריך לכתוב את זה במסקנה.</b>':''}</p>`;
+  const tiles = SETS.map(s=>{
+    const open = s.n===25 || S.stage>=2;
+    if (!open) return `<span class="dl" style="opacity:.38;cursor:not-allowed">
+        ${badge('x')}<span class="n">${s.n}</span><span class="c">נפתח בשלב 2</span></span>`;
+    return `<button class="dl ${got(s.n)?'got':''} ${S.dling[s.n]?'busy':''}" data-dl="${s.n}">
+        ${badge(s.n)}<span class="n">${s.n}</span>
+        <span class="c">לכל מחלקה<br>${s.n} נגוע · ${s.n} תקין</span>
+        <span class="mb">${got(s.n)?S.gotMB[s.n]+' MB ירד':s.mb+' MB'}</span></button>`;
+  }).join('');
+  return `<div class="dls">${tiles}</div>
+    <button class="dlbench ${got('bench')?'got':''} ${S.dling.bench?'busy':''}" data-dl="bench">
+      ${badge('bench')}
+      <div><div class="t">ערכת המבחן — אותה ערכה לכל חמש הנקודות</div>
+        <div class="s">${WEEK.benchN} תמונות · ${got('bench')?S.gotMB.bench+' MB ירד':BENCH_SET.mb+' MB'} ·
+          אף אחת מהן אינה נמצאת באף ערכת אימון</div></div></button>
+    ${S.dlerr?`<p style="margin-top:10px;color:var(--err);font-size:13px">${S.dlerr}</p>`:''}
+    <p class="inzip">מה יש בכל קובץ: תיקייה אחת, ובתוכה שתי תיקיות —
+      <b>נגוע · תקין</b>. זה בדיוק המבנה ש-Teachable Machine מצפה לו,
+      אז גוררים לשם את שתי התיקיות הפנימיות.</p>`;
+}
+
+/* "?" לכל מדד. ההסבר מחליף את תיבת "נקודת הדיוק" במקום להתווסף מתחתיה,
+   כך שגובה הלוח אינו משתנה כשפותחים אותו. */
+function metQuestions(counts){
+  const btns = Object.keys(MET).map(m=>
+    `<button data-metq="${m}" class="${S.metQ===m?'on':''}">${MET[m]} ?</button>`).join('');
+  return `<div class="metqrow">
+      <span class="predcount">גרף נפרד לכל מדד: ${counts}</span>
+      <div class="metq">${btns}</div></div>`;
+}
+
+/* "נקודה" היא יחידת המדידה של כל השבוע, ולכן היא מוסברת כאן בדוגמה מספרית
+   ולא בהגדרה: שני אחוזים קונקרטיים, ההפרש ביניהם, וכמה תמונות זה. */
+function ptsExplain(){
+  const perImg = 100/WEEK.benchN;            /* 0.5 נקודות לתמונה */
+  const HI = 88.0, LO = 85.5;                /* מקור אחד לדוגמה: גם האיור וגם הטקסט */
+  const gap = +(HI-LO).toFixed(1);           /* 2.5 נקודות */
+  const imgs = Math.round(gap/perImg);       /* 5 תמונות */
+  /* האיור ltr מבפנים: שני המספרים משמאל, הסוגר לידם, והתווית בצדו החיצוני.
+     קודם הכל היה מעוגן לפי כיוון הדף, ולכן התווית חצתה את הסוגר
+     והאחוזים נחתכו מחוץ ל-viewport. */
+  return `<div class="ptsay">
+      <svg width="88" height="62" viewBox="0 0 88 62"
+        style="flex:none;direction:ltr" aria-hidden="true">
+        <text x="48" y="12" font-size="11" fill="#0d1f2b" text-anchor="end"
+          font-family="JetBrains Mono,monospace">${HI.toFixed(1)}%</text>
+        <text x="48" y="58" font-size="11" fill="#0d1f2b" text-anchor="end"
+          font-family="JetBrains Mono,monospace">${LO.toFixed(1)}%</text>
+        <line x1="58" y1="9"  x2="58" y2="55" stroke="#0e7490" stroke-width="1.6"/>
+        <line x1="54" y1="9"  x2="62" y2="9"  stroke="#0e7490" stroke-width="1.6"/>
+        <line x1="54" y1="55" x2="62" y2="55" stroke="#0e7490" stroke-width="1.6"/>
+        <text x="66" y="36" font-size="11" fill="#0e7490" font-weight="700"
+          text-anchor="start" font-family="JetBrains Mono,monospace">${gap}</text>
+      </svg>
+      <div><b>"נקודה" היא אחוז אחד.</b>
+        מודל שקיבל ${HI.toFixed(1)}% ומודל שקיבל ${LO.toFixed(1)}% נבדלים
+        ב-<b>${gap} נקודות</b> — זה כל החישוב, חיסור. ובערכת מבחן של
+        ${WEEK.benchN} תמונות כל תמונה שווה
+        <b class="num">${perImg.toFixed(1)}</b> נקודות, אז ${gap} נקודות הן בדיוק
+        <b>${imgs} תמונות</b> שהאחד צדק בהן והשני טעה.</div></div>`;
 }
 
 function wHyp(){
+  const counts = Object.keys(MET).map(m=>
+    `${MET[m]} <b${moved(m)?'':' style="color:var(--ink-3)"'}>${moved(m)?'עוצב':'ישר'}</b>`
+  ).join(' · ');
+  const q = S.metQ ? MET_Q[S.metQ] : null;
+  const txt = S.notes.hypothesis||'';
+  const can = /\d/.test(txt) && txt.length>=15 && moved(S.metric);
   return `${chart(true)}
-    <div style="margin-top:22px;max-width:680px">
-      <label style="display:block;font-size:13.5px;font-weight:700;color:var(--ink-2);margin-bottom:6px">
-        ועכשיו במילים — עם מספר</label>
-      <input data-note="hypothesis" value="${S.notes.hypothesis||''}"
-        ${S.locked?'disabled':''} placeholder="מ-200 ל-400 יתווספו פחות מ-3 נקודות דיוק">
-      <div style="margin-top:12px;display:flex;gap:10px;align-items:center">
-        ${S.locked
-          ? `<span class="stamp ${S.broken?'broken':''}">${S.broken?'נשבר · ':''}ננעל ${S.locked}</span>
-             <button class="quiet" id="unlock">פתיחה לעריכה</button>`
-          : `<button class="go" id="lock" ${/\d/.test(S.notes.hypothesis||'')&&(S.notes.hypothesis||'').length>=15?'':'disabled'}>נעילה</button>
-             <span style="font-size:12.5px;color:var(--ink-3)">צריך מספר, ולפחות 15 תווים</span>`}
-      </div></div>`;
+    ${metQuestions(counts)}
+    <div class="hyprow">
+      ${q ? `<div class="metbox"><div class="hd">${q.t}</div>${q.d}
+              <div style="margin-top:6px;color:var(--ink-3)">${q.w}</div></div>`
+          : ptsExplain()}
+      <div>
+        <label style="display:block;font-size:13.5px;font-weight:700;color:var(--ink-2);margin-bottom:6px">
+          ועכשיו במילים — עם מספר</label>
+        <input data-note="hypothesis" value="${txt}"
+          ${S.locked?'disabled':''} placeholder="מ-___ ל-___ יתווספו ___ נקודות ___">
+        <div style="margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          ${S.locked
+            ? `<span class="stamp ${S.broken?'broken':''}">${S.broken?'נשבר · ':''}ננעל ${S.locked}</span>
+               <button class="quiet" id="unlock">פתיחה לעריכה</button>`
+            : `<button class="go" id="lock" ${can?'':'disabled'}>נעילה</button>
+               <span style="font-size:12.5px;color:var(--ink-3)">${
+                 !moved(S.metric) ? `עצבו את הקו של ${MET[S.metric]} — כרגע הוא ישר ב-70`
+                        : 'צריך מספר, ולפחות 15 תווים'}</span>`}
+        </div></div>
+    </div>`;
 }
 
+/* לוח 4 — תרשים זרימה. ארבעה שלבים ממוספרים: ברור על מה לוחצים קודם,
+   וברור איפה זה נגמר. ההרצה כאן אמיתית — אותה ערימה שבכלי ההערכה. */
+const RULER = SETS.find(s=>s.n===WEEK.ruler);
 function wNoise(){
-  const slot=(k,on,lbl)=>`<button class="run ${on?'done':''} ${S.sel===k?'on':''}" data-noise="${k}">
-      <span class="n">${lbl}</span><span class="s">${on?'נקלט':'ריק'}</span></button>`;
-  return `<div class="runs two">${slot('A',S.noiseA,'אימון א׳')}${slot('B',S.noiseB,'אימון ב׳')}</div>
-    ${S.sel&&!(S.sel==='A'?S.noiseA:S.noiseB)
-      ? `<div class="runbar"><button class="go" id="runOne">הרצה וקליטה</button>
-         <span class="lbl">אותה ערכת מבחן · סף 0.50</span></div>`:''}
-    ${noiseIn()?`<div style="margin-top:26px" class="chartwrap">
-        <div style="text-align:center;padding:14px 0">
-          <span class="eyebrow">NOISE BAND</span>
-          <div style="font-size:52px;font-weight:900;font-family:var(--mono);color:var(--brand-2);line-height:1.1">
-            ${noiseBand(S.metric).toFixed(1)}</div>
-          <div style="font-size:16px;color:var(--ink-2);margin-top:4px">
-            נקודות ${MET[S.metric]} — זה הרעש שלכם</div>
-          <div style="font-size:14px;color:var(--ink-3);margin-top:10px;max-width:520px;margin-inline:auto">
-            כל הפרש קטן מזה בין שתי נקודות על העקומה אינו ניתן להבחנה ממקריות.</div>
-        </div></div>`:''}`;
+  const gotRuler = got(WEEK.ruler);
+  /* ערכת המבחן אינה מורדת כאן: ההרצה בשלב 4 טוענת אותה מהשרת בעצמה
+     (benchList), ולכן התלמיד צריך רק את ערכת האימון. */
+  const okDl = gotRuler;
+  const okUp = !!(S.nmod.A && S.nmod.B);
+  const okRun = !!(S.nres.A && S.nres.B);
+  const st = (done,now)=> done ? 'done' : (now ? 'now' : '');
+  const slot = k => `<div class="fslot ${S.nmod[k]?'has':''}">
+      <label>${S.nmod[k] ? `אימון ${k==='A'?'א׳':'ב׳'} ✓ ${S.nmod[k]}` : `תיקיית אימון ${k==='A'?'א׳':'ב׳'}`}
+        <input type="file" webkitdirectory directory multiple data-model="${k}"></label></div>`;
+
+  return `<div class="flow ${okRun?'mini':''}">
+      <div class="fstep ${st(okDl,!okDl)}">
+        <div class="fhd"><span class="fn">1</span><span class="ft">הורדת ערכת האימון</span></div>
+        <div class="fd">ערכה אחת בלבד. שני האימונים יקבלו את
+          <b>אותן תמונות בדיוק</b> — זו כל הנקודה.</div>
+        <div class="fa">
+          <button data-dl="${WEEK.ruler}" class="${gotRuler?'hasdl':''} ${S.dling[WEEK.ruler]?'busy':''}">${
+            gotRuler?'✓ ':''}ערכת אימון ${WEEK.ruler} · ${RULER.mb}MB</button>
+        </div>
+      </div>
+
+      <div class="fstep ${st(okUp, okDl&&!okUp)}">
+        <div class="fhd"><span class="fn">2</span><span class="ft">אימון · פעמיים</span></div>
+        <div class="fd">פרויקט חדש, גררו <code>נגוע</code> ו<code>תקין</code>, Train,
+          ואז Export → Tensorflow.js. ואז <b>שוב מאפס</b>, אותן תמונות.</div>
+        <div class="fa"><button id="openTM">פתיחת Teachable Machine</button></div>
+      </div>
+
+      <div class="fstep ${st(okUp, okDl&&!okUp)}">
+        <div class="fhd"><span class="fn">3</span><span class="ft">העלאת שני המודלים</span></div>
+        <div class="fd">בחרו את <b>התיקייה</b> שירדה מ-TM (זו עם
+          <code>model.json</code>), אחת לכל אימון.</div>
+        <div class="fa">${slot('A')}${slot('B')}</div>
+      </div>
+
+      <div class="fstep ${st(okRun, okUp&&!okRun)}">
+        <div class="fhd"><span class="fn">4</span><span class="ft">הרצה אוטומטית</span></div>
+        <div class="fd">ערכת המבחן (${WEEK.benchN} תמונות) נטענת לכאן <b>לבד</b> — אין מה
+          להעלות. שני המודלים רצים עליה בסף 0.50, וההפרש הוא הרעש.</div>
+        <div class="fa">
+          <button class="go" id="runBoth" ${okUp&&!S.nbusy?'':'disabled'}>${
+            S.nbusy ? 'רץ…' : (okRun?'הרצה מחדש':'הרצת שני המודלים')}</button>
+          ${S.nbusy?`<div class="prog"><i style="width:${Math.round(S.nprog*100)}%"></i></div>
+            <div style="font-size:11px;color:var(--ink-3);margin-top:5px;text-align:center">${S.nbusy}</div>`:''}
+        </div>
+      </div>
+    </div>
+
+    ${S.nerr?`<p style="margin-top:12px;color:var(--err);font-size:13.5px">${S.nerr}</p>`:''}
+    ${okRun?noiseOut():`<p style="margin-top:14px;font-size:12.5px;color:var(--ink-3)">
+      אין עדיין שני מודלים?
+      <button class="quiet" id="demoNoise" style="font-size:12.5px;padding:2px 8px">המשך עם נתוני דמו</button></p>`}`;
 }
 
+/* טבלה אחת ולא שני בלוקים: שורת ההפרש היא התוצר, וצריך לראות אותה
+   מתחת לשני המספרים שהיא נגזרת מהם. */
+function noiseOut(){
+  const A=S.nres.A, B=S.nres.B, m=S.metric;
+  const f=(r,k)=>(r[k]*100).toFixed(1);
+  const d=k=>Math.abs(A[k]-B[k])*100;
+  const row=(ttl,r,cls)=>`<tr class="${cls||''}"><td class="rl">${ttl}</td>
+      <td>${f(r,'acc')}</td><td>${f(r,'sens')}</td><td>${f(r,'spec')}</td>
+      <td>${r.TP} / ${r.FP}</td></tr>`;
+  return `<div class="noiseout">
+      <table class="notab">
+        <tr><th></th><th>דיוק</th><th>רגישות</th><th>ספציפיות</th><th>TP / FP</th></tr>
+        ${row('אימון א׳',A)}${row('אימון ב׳',B)}
+        <tr class="dif"><td class="rl">ההפרש</td>
+          <td>${d('acc').toFixed(1)}</td><td>${d('sens').toFixed(1)}</td>
+          <td>${d('spec').toFixed(1)}</td><td>—</td></tr>
+      </table>
+      <div class="nobig">
+        <span class="eyebrow">NOISE BAND · ${MET[m]}</span>
+        <div class="v">${noiseBand(m).toFixed(1)}</div>
+        <div style="font-size:13.5px;color:var(--ink-2);margin-top:1px">
+          אותן תמונות, אותן הגדרות — ובכל זאת הפרש.
+          כל פער קטן מזה על העקומה אינו ניתן להבחנה ממקריות.</div>
+      </div>
+      <div style="text-align:center;margin-top:8px">
+        <button class="quiet" id="runBoth" style="font-size:12.5px">הרצה מחדש</button></div>
+    </div>`;
+}
+
+/* לוח 5 — צ׳ק ליסט נפרד לכל גודל. אותם שישה צעדים בכל עמודה: מה שנשאר
+   זהה בין המודלים הוא מה שהופך את ההשוואה ביניהם לתקפה. */
 function wModels(){
-  return `<div class="gate">
-      <img src="img/curve-slides.jpg" alt="">
-      <div class="in">
-        <span class="eyebrow">TEACHABLE MACHINE</span>
-        <ol>
-          <li>פרויקט חדש · Image Project · Standard</li>
-          <li>שמות הקלאסים בדיוק כך: <code>נגוע</code> · <code>תקין</code></li>
-          <li>Export ← <code>Tensorflow.js</code> ← Download</li>
-        </ol>
-        <button class="go" id="openTM" style="margin-top:16px">פתיחת Teachable Machine</button>
-      </div></div>
-    <div style="margin-top:20px;max-width:680px">
-      <label style="display:block;font-size:13.5px;font-weight:700;color:var(--ink-2);margin-bottom:6px">
-        כמה מודלים אימנת, ומה נשאר זהה בכולם?</label>
-      <input data-note="models" value="${S.notes.models||''}"
-        placeholder="חמישה · אותם קלאסים, אותם Epochs, אותו Batch size"></div>`;
+  const boxes = SIZES.map(n=>{
+    const open = n===25 || S.stage>=2, m = S.models[n];
+    if (!open) return `<div class="mbox off"><div class="mpad">
+        <span class="mic">·</span><span class="mn">${n}</span><span class="ms">שלב 2</span></div></div>`;
+    return `<div class="mbox ${m?'full':''}">
+        <label class="mpad">
+          <input type="file" webkitdirectory directory multiple data-model="m${n}">
+          <span class="mic">${m?ICON_OK:'+'}</span>
+          <span class="mn">${n}</span>
+          <span class="ms" title="${m?m.name:''}">${m?m.name:'גררו לכאן את המודל'}</span>
+        </label></div>`;
+  }).join('');
+  return `<div class="sharedchk">
+      <ol>${CHK.map(t=>`<li>${t}</li>`).join('')}</ol>
+      <button id="openTM">פתיחת Teachable Machine</button>
+    </div>
+    <div class="mboxes">${boxes}</div>
+    ${S.mdlerr?`<p style="margin-top:9px;color:var(--err);font-size:13px">${S.mdlerr}</p>`:''}`;
 }
 
+/* לוח 6 — המודלים כבר שמורים בלוח 5, אז אין כאן טעינה: רק בחירה והרצה.
+   הגרף מוצג מההתחלה עם קו הניחוש בלבד, וכל הרצה מוסיפה לו נקודה אמיתית. */
 function wRuns(){
   const sel = S.sel;
-  const r = sel && S.runs[sel] && S.runs[sel].res;
-  return `<div class="runs">${SIZES.map(n=>{
-      const open = n===25||S.stage>=2, st = S.runs[n]||{};
-      return `<button class="run ${st.cap?'done':''} ${sel===n?'on':''} ${open?'':'off'}"
-        data-run="${n}" ${open?'':'disabled'}>
-        <span class="n">n=${n}</span>
-        <span class="s">${st.cap?'על הגרף':(open?'ריק':'שלב 2')}</span></button>`;}).join('')}</div>
-    ${sel&&!(S.runs[sel]||{}).cap?`<div class="runbar">
-        ${r?`<button class="go" id="cap">קליטה לגרף ←</button>
-             <span class="lbl num">${MET[S.metric]} ${(r[S.metric]*100).toFixed(1)}%</span>`
-           :`<button class="go" id="runOne">הרצה על ערכת המבחן</button>
-             <span class="lbl">200 תמונות · סף 0.50</span>`}</div>`:''}
-    ${captured().length?`<div style="margin-top:26px">${chart(false)}</div>`:''}`;
+  const boxes = SIZES.map(n=>{
+    const open = n===25||S.stage>=2, m = S.models[n], st = S.runs[n]||{};
+    const can = open && !!m;
+    const txt = !open ? 'שלב 2' : (st.cap ? 'על הגרף' : (m ? 'מוכן להרצה' : 'אין מודל'));
+    return `<button class="run ${st.cap?'done':''} ${sel===n?'on':''} ${can?'':'off'}"
+      data-run="${n}" ${can&&!st.cap?'':'disabled'}>
+      <span class="n">${n}</span><span class="s">${txt}</span></button>`;
+  }).join('');
+  const ready = sel && S.models[sel] && !(S.runs[sel]||{}).cap;
+  return `<div class="runs">${boxes}</div>
+    <div class="runbar">
+      <button class="go" id="runReal" ${ready&&!S.rbusy?'':'disabled'}>${
+        S.rbusy ? 'רץ…' : (sel ? `הרצת המודל של ${sel}` : 'בחרו גודל')}</button>
+      <span class="lbl">${WEEK.benchN} תמונות · סף 0.50 · ${captured().length}/5 על הגרף</span>
+      ${S.rbusy?`<div class="prog" style="flex:1;min-width:120px"><i style="width:${
+        Math.round(S.rprog*100)}%"></i></div>`:''}
+    </div>
+    ${S.rerr?`<p style="color:var(--err);font-size:13px;margin-top:8px">${S.rerr}</p>`:''}
+    <div style="margin-top:12px">${chart(false)}</div>
+    ${captured().length<5?`<p style="margin-top:7px;font-size:12px;color:var(--ink-3)">
+      אין עדיין מודלים?
+      <button class="quiet" id="demoRuns" style="font-size:12px;padding:2px 8px">מילוי בנתוני דמו</button></p>`:''}`;
+}
+
+async function runReal(n){
+  S.rbusy=true; S.rprog=0; S.rerr=''; render();
+  try{
+    await loadTM();
+    const imgs = await benchList();
+    const model = await modelFromFiles(S.models[n].files);
+    const res = await evalModel(model, imgs, p=>{ S.rprog=p;
+      const el=document.querySelector('.prog i'); if(el) el.style.width=Math.round(p*100)+'%'; });
+    S.runs[n] = {res, cap:true};
+    if (captured().length>=5) S.done.runs5=true;
+  }catch(e){ S.rerr='ההרצה נכשלה — '+e.message; }
+  S.rbusy=false; S.sel=null; render();
 }
 
 function wRead(){
@@ -493,33 +950,119 @@ function wRead(){
       <label style="display:block;font-size:13.5px;font-weight:700;color:var(--ink-2);margin-bottom:6px">
         בין איזה שתי נקודות העקומה התיישרה, ובכמה?</label>
       <input data-note="read3" value="${S.notes.read3||''}"
-        placeholder="בין 200 ל-400 — הפער 1.0 נקודות, קטן מהרעש 2.5"></div>`;
+        placeholder="בין ___ ל-___ — הפער ___ נקודות, והרעש ___"></div>`;
 }
 
+/* לוח 8 — המפה אומרת איפה המודל הסתכל, לא מה הוא הסיק משם.
+   קודם היו כאן כיתובים שאמרו את המסקנה ("מתכנס לכתם אחד") ו-placeholder
+   שאמר את התשובה המלאה, ולכן לא נשארה שאלה: התלמיד העתיק מהמסך אל התיבה.
+   עכשיו צריך להתחייב לטענה אחת משלוש, ושתיים מהן אומרות יותר ממה שמפה
+   יכולה להראות — וזו בדיוק המלכודת שהלוח אמור ללמד. */
+const MAP_CLAIMS = [
+  {k:'learn', t:'המודל למד לזהות את הטפיל',
+   s:'הקשב התכנס אל הכתם, ולכן הוא מזהה אותו.'},
+  {k:'dunno', t:'המודל השתפר — ואי אפשר לדעת ממה',
+   s:'הקשב זז והתכנס. זה כל מה שהמפה אומרת.'},
+  {k:'short', t:'המודל למד קיצור דרך',
+   s:'הקשב התכנס אל משהו שאינו הטפיל.'}
+];
+const MAP_SAY = {
+  learn:{cls:'no', t:'זו טענה על <b>מה</b> שהמודל למד, והמפה מראה רק <b>איפה</b> הוא הסתכל. '
+    +'אותו כתם בדיוק היה מופיע גם אם מה שנלמד הוא סימן צביעה שיושב במקרה במרכז תאים נגועים.'},
+  short:{cls:'no', t:'גם זו טענה על <b>מה</b> שנלמד, והמפה לא מראה אותה. '
+    +'זו אותה טעות כמו הטענה ההפוכה — רק בכיוון השני.'},
+  dunno:{cls:'ok', t:'כן. שהקשב זז והתכנס — זו עובדה על המודל, ואותה באמת מדדתם. '
+    +'מה הוא למד מהאזור הזה נשאר פתוח, ושום מפה לא תסגור אותו.'}
+};
 function wMaps(){
+  const pick = S.notes.mapclaim;
   return `<div class="cells">
-      <div class="cellbox"><canvas id="m25" width="150" height="150"></canvas>
-        <div class="t">n=25</div><div class="d">קשב פרוס · גם על השוליים</div></div>
-      <div class="cellbox"><canvas id="m400" width="150" height="150"></canvas>
-        <div class="t">n=400</div><div class="d">מתכנס לכתם אחד</div></div>
+      <div class="cellbox"><canvas id="m25" width="132" height="132"></canvas>
+        <div class="t">n=25</div></div>
+      <div class="cellbox"><canvas id="m400" width="132" height="132"></canvas>
+        <div class="t">n=400</div></div>
     </div>
-    <p style="font-size:12px;color:var(--warn);font-family:var(--mono);margin-top:8px">
+    <p style="font-size:11.5px;color:var(--warn);font-family:var(--mono);margin-top:6px">
       דמו — המפות חושבו מראש</p>
-    <div style="margin-top:18px;max-width:680px">
+    <div style="margin-top:14px">
+      <label style="display:block;font-size:13.5px;font-weight:700;color:var(--ink-2);margin-bottom:8px">
+        הדיוק עלה והקשב זז. איזו טענה שתי המפות <b>מחזקות</b>?</label>
+      <div class="picks" style="grid-template-columns:repeat(3,1fr)">
+        ${MAP_CLAIMS.map(c=>`<button class="pick ${pick===c.k?'on':''}" data-mapclaim="${c.k}">
+          <span class="t" style="font-size:14.5px">${c.t}</span>
+          <span class="s">${c.s}</span></button>`).join('')}
+      </div>
+      ${pick?`<p class="mapsay ${MAP_SAY[pick].cls}">${MAP_SAY[pick].t}</p>`:''}
+    </div>
+    <div style="margin-top:14px;max-width:680px">
       <label style="display:block;font-size:13.5px;font-weight:700;color:var(--ink-2);margin-bottom:6px">
-        על מה הסתכל הקטן, על מה הגדול?</label>
+        הציעו מה אפשר לעשות, כדי להבין טוב יותר מה <b>גורם</b> למיקוד הקשב</label>
       <input data-note="maps" value="${S.notes.maps||''}"
-        placeholder="הקטן על כל התא, הגדול על הכתם — האזור התכנס"></div>`;
+        placeholder="לשנות ___ ולבדוק אם המיקוד זז"></div>`;
 }
 
 const VERDICTS=['המדידה לא הכריעה','התאמתה','התאמתה חלקית','הופרכה'];
+
+/* סיכום הניסוי במספרים של התלמיד עצמו, לא בטקסט מוכן: המטרה, ואז ארבעת
+   הדברים שהוא באמת עשה. בלי זה הלוח האחרון מבקש מסקנה בלי להזכיר ממה. */
+function conclRecap(){
+  const m=S.metric, nb=noiseBand(m), caps=captured(), g=gaps(m), last=g[g.length-1];
+  const lo=val(PTS[0].n,m)*100, hi=val(PTS[PTS.length-1].n,m)*100;
+  return `<div class="recap">
+      <div class="rg"><b>המטרה:</b> לבדוק כמה תמונות אימון באמת צריך —
+        ומאיפה עוד תמונות כבר לא קונות ${MET[m]}.</div>
+      <ol>
+        <li>ניבאתם את הקו <b>לפני</b> שמדדתם, ונעלתם משפט עם מספר.</li>
+        <li>מדדתם רעש: שני אימונים על אותן ${WEEK.ruler} תמונות בדיוק נבדלו
+          ב-<b class="num">${nb.toFixed(1)}</b> נקודות ${MET[m]}.</li>
+        <li>הרצתם ${caps.length?`<b class="num">${caps.length}</b> גדלים`:'את הגדלים'}
+          על אותן <b class="num">${WEEK.benchN}</b> תמונות מבחן:
+          <b class="num">${lo.toFixed(1)}%</b> ב-25 מול
+          <b class="num">${hi.toFixed(1)}%</b> ב-400, והקפיצה האחרונה
+          (${last.from}→${last.to}) הייתה <b class="num">${last.delta.toFixed(1)}</b>
+          נקודות — ${last.delta<=nb?'<b>קטנה מהרעש</b>':'<b>גדולה מהרעש</b>'}.</li>
+      </ol></div>`;
+}
+
+/* שלוש טענות שהניסוי מרשה ושלוש שאומרות יותר ממה שנמדד. אי אפשר לסמן
+   "נכון" ליד כל אחת בלי להפוך את זה לתרגיל סימון — ולכן הרמז אומר כמה
+   מהן חורגות, ולא איזו. */
+const CLAIMS = [
+  {k:'c1', ok:true,  t:'ככל שהוספנו תמונות אימון, התוצאה עלתה — אבל פחות ופחות בכל קפיצה.'},
+  {k:'c2', ok:false, t:'העקומה התיישרה, ולכן הגעתי לתקרה של המודל.'},
+  {k:'c3', ok:true,  t:'קפיצה שקטנה מהרעש שמדדתי אינה ראיה לשיפור.'},
+  {k:'c4', ok:false, t:'מפת הקשב מראה שהמודל באמת מזהה את הטפיל.'},
+  {k:'c5', ok:true,  t:'מה שמדדתי תקף למאגר הזה ולערכת המבחן הזו בלבד.'},
+  {k:'c6', ok:false, t:'מ-400 והלאה, עוד תמונות כבר לא ישפרו כלום.'}
+];
+const claimsOn = () => CLAIMS.filter(c=>S.claims[c.k]);
+
 function wConc(){
-  return `<div class="picks" style="grid-template-columns:repeat(4,1fr)">
-      ${VERDICTS.map(v=>`<button class="pick ${S.notes.verdict===v?'on':''}" data-verdict="${v}"
-        style="text-align:center"><span class="t" style="font-size:15px">${v}</span></button>`).join('')}</div>
-    <div class="fields" style="margin-top:20px">
-      <div><label>מה הניסוי הזה לא יכול להוכיח?</label>
-        <textarea data-note="conclusion" style="height:84px"
+  const on = claimsOn(), over = on.filter(c=>!c.ok).length;
+  return `${conclRecap()}
+    <div style="margin-top:13px">
+      <label style="display:block;font-size:13.5px;font-weight:700;color:var(--ink-2);margin-bottom:3px">
+        ההשערה שנעלתם — מה קרה לה?</label>
+      <div class="picks" style="grid-template-columns:repeat(4,1fr);gap:8px">
+        ${VERDICTS.map(v=>`<button class="pick ${S.notes.verdict===v?'on':''}" data-verdict="${v}"
+          style="text-align:center;padding:10px"><span class="t" style="font-size:14px;margin:0">${v}</span></button>`).join('')}</div>
+    </div>
+    <div style="margin-top:13px">
+      <label style="display:block;font-size:13.5px;font-weight:700;color:var(--ink-2);margin-bottom:2px">
+        סמנו כל טענה שאתם מסכימים איתה על הניסוי הזה</label>
+      <div class="claims">
+        ${CLAIMS.map(c=>`<button class="claim ${S.claims[c.k]?'on':''}" data-claim="${c.k}">
+          <span class="bx">${S.claims[c.k]?'✓':''}</span><span>${c.t}</span></button>`).join('')}
+      </div>
+      ${on.length?`<p style="margin-top:7px;font-size:12.5px;color:var(--ink-3)">
+        סימנתם ${on.length} ${on.length===1?'טענה':'טענות'}. ${over
+          ? `<b style="color:var(--warn)">${over===1?'אחת מהן אומרת':`${over} מהן אומרות`}
+             יותר ממה שהניסוי הזה מודד</b> — חזרו וקראו ${over===1?'איזו':'אילו'}.`
+          : '<b style="color:var(--ok)">כולן נשארות בתוך מה שנמדד.</b>'}</p>`:''}
+    </div>
+    <div class="fields" style="margin-top:12px">
+      <div><label style="margin-bottom:4px">מה הניסוי הזה לא יכול להוכיח?</label>
+        <textarea data-note="conclusion" style="height:58px"
           placeholder="גודל ערכת המבחן · מאגר יחיד · אותו מקור · רעש התיוג">${S.notes.conclusion||''}</textarea></div>
     </div>`;
 }
@@ -534,8 +1077,7 @@ function wRec(){
 /* ========== הגרף ========== */
 function chart(editable){
   return `<div class="chartwrap">
-      <svg id="chart" viewBox="0 0 640 230" preserveAspectRatio="none"
-        data-edit="${editable?1:0}"></svg>
+      <svg id="chart" data-edit="${editable?1:0}"></svg>
       <div class="chartfoot">
         <span class="k"><i style="background:var(--ink)"></i>נמדד</span>
         <span class="k"><i style="background:var(--brand);opacity:.6"></i>הניבוי שלך</span>
@@ -543,24 +1085,43 @@ function chart(editable){
         <div class="metsel">${Object.keys(MET).map(m=>
           `<button data-met="${m}" class="${S.metric===m?'on':''}">${MET[m]}</button>`).join('')}</div>
       </div>
-      ${step().id==='read3'&&noiseIn()?`<div id="cal"><span class="tip">מַדָּה</span></div>`:''}
+      ${step().id==='read3'&&noiseIn()?`<div id="cal"><span class="tip">סרגל הרעש</span></div>`:''}
     </div>`;
 }
-const CX={x0:52,x1:614,y0:16,y1:186};
+/* ה-viewBox נקבע מחדש בכל ציור לפי הגודל האמיתי, כך שיחידה אחת ב-SVG שווה
+   פיקסל CSS אחד. קודם היה viewBox קבוע עם preserveAspectRatio="none", ולכן
+   כל טקסט נמתח לרוחב — זו הסיבה שמספרי ציר ה-Y נראו פחוסים. */
+let CX={x0:46,x1:600,y0:14,y1:174};
+function layout(el){
+  const r = el.getBoundingClientRect();
+  const W = Math.max(320, Math.round(r.width)), H = Math.max(120, Math.round(r.height));
+  el.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  /* מקום לכותרת הציר האנכי למעלה, ולמספרים ולכותרת הציר האופקי למטה. */
+  CX = {x0:52, x1:W-18, y0:22, y1:H-42};
+}
 const px = i => CX.x0 + i*(CX.x1-CX.x0)/4;
 const py = v => CX.y1 - (v-.5)/.5*(CX.y1-CX.y0);
 function drawChart(){
   const el = document.getElementById('chart'); if(!el) return;
+  layout(el);
   const m = S.metric; let s='';
   for(let v=.5;v<=1.001;v+=.1){
     s+=`<line x1="${CX.x0}" y1="${py(v)}" x2="${CX.x1}" y2="${py(v)}" stroke="#eef3f7"/>
-        <text x="${CX.x0-10}" y="${py(v)+4}" font-size="11" fill="#8aa2b3" text-anchor="end"
-          font-family="JetBrains Mono,monospace">${Math.round(v*100)}</text>`;
+        <text x="${CX.x0-9}" y="${py(v)+4}" font-size="11" fill="#8aa2b3" text-anchor="end"
+          font-family="JetBrains Mono,monospace">${Math.round(v*100)}%</text>`;
   }
-  PTS.forEach((p,i)=> s+=`<text x="${px(i)}" y="${CX.y1+22}" font-size="12" fill="#8aa2b3"
+  PTS.forEach((p,i)=> s+=`<text x="${px(i)}" y="${CX.y1+20}" font-size="12" fill="#8aa2b3"
     text-anchor="middle" font-family="JetBrains Mono,monospace">${p.n}</text>`);
+  /* משמעות הצירים — בלי זה המספרים 25..400 ו-50..100 הם סתם מספרים.
+     ה-SVG כולו ltr (ראו את הכלל של #chart), ולכן "end" הוא הקצה הימני:
+     הכותרת נתלית מ-x1 וגדלה שמאלה. הטקסט עצמו עברי ונקרא כרגיל. */
+  s+=`<text x="${CX.x1}" y="${CX.y0-9}" font-size="11" fill="#4a6478" text-anchor="end"
+        font-family="Heebo,sans-serif" font-weight="700">${MET[m]} — אחוז מתוך ערכת המבחן</text>
+      <text x="${(CX.x0+CX.x1)/2}" y="${CX.y1+37}" font-size="11.5" fill="#4a6478"
+        text-anchor="middle" font-family="Heebo,sans-serif" font-weight="700">תמונות אימון לכל מחלקה</text>`;
 
-  const pr = PTS.map((p,i)=> S.predict[p.n]==null?null:[px(i),py(S.predict[p.n])]);
+  const P = pred();
+  const pr = PTS.map((p,i)=> P[p.n]==null?null:[px(i),py(P[p.n])]);
   if (pr.every(Boolean))
     s+=`<polyline points="${pr.map(q=>q.join(',')).join(' ')}" fill="none" stroke="#0891b2"
         stroke-width="2" stroke-dasharray="6 4" opacity=".65"/>`;
@@ -571,17 +1132,17 @@ function drawChart(){
   if (noiseIn()){
     const h=(CX.y1-CX.y0)*(noiseBand(m)/100)/.5;
     caps.forEach(n=>{ const i=PTS.findIndex(p=>p.n===n);
-      s+=`<rect x="${px(i)-14}" y="${py(PTS[i][m])-h/2}" width="28" height="${h}"
+      s+=`<rect x="${px(i)-14}" y="${py(val(n,m))-h/2}" width="28" height="${h}"
         fill="#cbd9e2" opacity=".6" rx="3"/>`; });
   }
-  const dots = PTS.map((p,i)=> caps.includes(p.n)?[px(i),py(p[m])]:null).filter(Boolean);
+  const dots = PTS.map((p,i)=> caps.includes(p.n)?[px(i),py(val(p.n,m))]:null).filter(Boolean);
   if (dots.length>1) s+=`<polyline points="${dots.map(q=>q.join(',')).join(' ')}" fill="none"
       stroke="#0d1f2b" stroke-width="2.6"/>`;
   dots.forEach(q=> s+=`<circle cx="${q[0]}" cy="${q[1]}" r="5.5" fill="#0d1f2b"/>`);
 
   if (step().id==='read3' && S.cal!=null){
     const i=S.cal, g=gaps(m)[i], h=(CX.y1-CX.y0)*(noiseBand(m)/100)/.5;
-    const xm=(px(i)+px(i+1))/2, ym=(py(PTS[i][m])+py(PTS[i+1][m]))/2;
+    const xm=(px(i)+px(i+1))/2, ym=(py(val(PTS[i].n,m))+py(val(PTS[i+1].n,m)))/2;
     const dh=(CX.y1-CX.y0)*(g.delta/100)/.5;
     s+=`<line x1="${xm}" y1="${ym-dh/2}" x2="${xm}" y2="${ym+dh/2}" stroke="#0d1f2b" stroke-width="2.6"/>
         <line x1="${xm-17}" y1="${ym-h/2}" x2="${xm+17}" y2="${ym-h/2}" stroke="#0e7490" stroke-width="3"/>
@@ -602,20 +1163,45 @@ function calState(){
   if (r>=.8) return {cls:'edge', t:'על גבול הרעש'};
   return {cls:'under', t:'קטן מהרעש — המדידה לא הכריעה'};
 }
+/* קודם הייתה כאן שורה ריקה כשחסר רעש, והתלמיד ראה גרף, טקסט על "לסתות"
+   ושום כלי על המסך. כל מצב חסר אומר עכשיו מה חסר ולאן לחזור. */
+const IDX = id => STEPS.findIndex(s=>s.id===id);
+const goBtn = (id,txt) => `<button class="quiet" data-goto="${IDX(id)}"
+  style="font-size:12.5px;padding:2px 9px;margin-inline-start:4px">${txt}</button>`;
 function calSay(){
-  if (!noiseIn()) return '';
-  if (S.cal==null) return '<span style="color:var(--ink-3);font-weight:500">גררו את המַדָּה אל פער בין שתי נקודות</span>';
+  if (!noiseIn()) return `<span class="calneed"><b>אין עדיין סרגל.</b>
+    אורך הסרגל הוא הרעש שלכם, ועוד לא מדדתם אותו: בלוח 4 מאמנים פעמיים
+    על אותה ערכה, וההפרש בין שני האימונים הוא האורך הזה.
+    ${goBtn('noise','מעבר ללוח 4')}</span>`;
+  const caps = captured();
+  if (!gaps(S.metric).some(g=>caps.includes(g.from)&&caps.includes(g.to)))
+    return `<span class="calneed"><b>אין עדיין קפיצה למדוד.</b>
+      קפיצה היא המרחק בין שתי נקודות <b>סמוכות</b> שהרצתם באמת — כרגע
+      יש ${caps.length} ${caps.length===1?'נקודה אמיתית':'נקודות אמיתיות'}.
+      ${goBtn('runs5','מעבר ללוח 6')}</span>`;
+  if (S.cal==null) return '<span style="color:var(--ink-3);font-weight:500">גררו את הסרגל אל פער בין שתי נקודות</span>';
   const m=S.metric, g=gaps(m)[S.cal];
   return `${g.from}→${g.to}: <span class="num">${g.delta.toFixed(1)}</span> נק׳ · רעש <span class="num">${noiseBand(m).toFixed(1)}</span> — ${calState().t}`;
+}
+/* המיקום נשמר בין פתיחות, ולכן אסור שאפשר יהיה לגרור את הסרגל אל מחוץ
+   לכרטיס ולאבד אותו לתמיד. כל מיקום — נגרר או משוחזר — נכלא בתוך הכרטיס. */
+function clampCal(p, hgt){
+  const w=document.querySelector('.chartwrap'); if(!w) return p;
+  const r=w.getBoundingClientRect();
+  const maxX=Math.max(0, r.width-52), maxY=Math.max(16, r.height-hgt);
+  return {x:Math.min(Math.max(p.x,0),maxX), y:Math.min(Math.max(p.y,16),maxY)};
 }
 function placeCal(){
   const c=document.getElementById('cal'); if(!c) return;
   const svg=document.getElementById('chart').getBoundingClientRect();
   const wrap=document.querySelector('.chartwrap').getBoundingClientRect();
-  const h=Math.max(14,(CX.y1-CX.y0)*(noiseBand(S.metric)/100)/.5*(svg.height/230));
-  if (!S.calXY) S.calXY={x:svg.left-wrap.left+14, y:svg.top-wrap.top+svg.height*0.52};
+  const h=Math.max(14,(CX.y1-CX.y0)*(noiseBand(S.metric)/100)/.5);
+  /* מתחילים בתוך שטח הגרף ולא על שוליו: ב-x=14 התווית של הסרגל נחתה
+     בדיוק על מספרי ציר ה-Y. CX.x0 הוא הקצה השמאלי של אזור הציור. */
+  if (!S.calXY) S.calXY={x:svg.left-wrap.left+CX.x0+10, y:svg.top-wrap.top+svg.height*0.52};
+  S.calXY = clampCal(S.calXY, h+18);
   c.style.left=S.calXY.x+'px'; c.style.top=S.calXY.y+'px'; c.style.height=(h+18)+'px';
-  c.innerHTML=`<span class="tip">מַדָּה · ${noiseBand(S.metric).toFixed(1)}</span>
+  c.innerHTML=`<span class="tip">סרגל הרעש · ${noiseBand(S.metric).toFixed(1)}</span>
     <svg width="52" height="${h+18}" style="overflow:visible">
       <line x1="26" y1="9" x2="26" y2="${h+9}" stroke="#0e7490" stroke-width="1.4" stroke-dasharray="3 3"/>
       <line x1="6" y1="9" x2="46" y2="9" stroke="#0e7490" stroke-width="3.4" stroke-linecap="round"/>
@@ -625,8 +1211,9 @@ function placeCal(){
 function numsTable(){
   const caps=captured();
   const head=`<tr><th></th>${caps.map(n=>`<th>n=${n}</th>`).join('')}${noiseIn()?'<th>רעש</th>':''}</tr>`;
+  const obj = n => (S.runs[n] && S.runs[n].res) ? S.runs[n].res : PTS.find(p=>p.n===n);
   const row=(lbl,f)=>`<tr><td class="rl">${lbl}</td>${caps.map(n=>
-      `<td>${f(PTS.find(p=>p.n===n))}</td>`).join('')}${noiseIn()?`<td>${f(NOISE_RUN)}</td>`:''}</tr>`;
+      `<td>${f(obj(n))}</td>`).join('')}${noiseIn()?`<td>${f(S.nres.B||NOISE_RUN)}</td>`:''}</tr>`;
   return `<table>${head}
     ${row('דיוק',p=>(p.acc*100).toFixed(1))}
     ${row('רגישות',p=>(p.sens*100).toFixed(1))}
@@ -641,15 +1228,16 @@ function numsTable(){
 function drawCells(){
   [['m25',.25,'07'],['m400',.9,'07']].forEach(([id,focus,n])=>{
     const c=document.getElementById(id); if(!c) return;
+    const W=c.width, M=W/2, R=W*0.413, B=W*0.147;   /* נגזר מהקנבס, לא קבוע */
     const g=c.getContext('2d'); const im=new Image();
-    im.onload=()=>{ g.drawImage(im,0,0,150,150);
+    im.onload=()=>{ g.drawImage(im,0,0,W,W);
       const k = focus>.5?9:34;
       for(let i=0;i<k;i++){
-        const a=i*2.399, r=(1-focus)*62*Math.sqrt(i/k);
-        const x=75+Math.cos(a)*r, y=75+Math.sin(a)*r;
-        const rg=g.createRadialGradient(x,y,0,x,y,22);
+        const a=i*2.399, r=(1-focus)*R*Math.sqrt(i/k);
+        const x=M+Math.cos(a)*r, y=M+Math.sin(a)*r;
+        const rg=g.createRadialGradient(x,y,0,x,y,B);
         rg.addColorStop(0,'rgba(20,184,166,.42)'); rg.addColorStop(1,'rgba(20,184,166,0)');
-        g.fillStyle=rg; g.fillRect(x-22,y-22,44,44);
+        g.fillStyle=rg; g.fillRect(x-B,y-B,B*2,B*2);
       }};
     im.src='../../features/samples/נגוע/'+n+'.png';
   });
@@ -658,11 +1246,14 @@ function drawCells(){
 /* ========== כותרת תחתונה ========== */
 function canAdvance(){
   const s=step();
+  if (s.kind==='brief') return true;          /* תדריך — אין מה להצהיר */
   if (s.kind==='auto') return s.id==='noise' ? noiseIn() : captured().length>=5;
-  if (s.id==='exp_marked') return S.exp && (S.notes.exp_marked||'').trim().length>=12;
-  if (s.id==='sizes')      return S.sizes.length>0;
+  if (s.id==='sizes')      return SETS.some(x=>got(x.n)) && got('bench');
+  if (s.id==='models')     return SIZES.some(n=>S.models[n]);
   if (s.id==='hypothesis') return !!S.locked;
-  if (s.id==='conclusion') return !!S.notes.verdict && (S.notes.conclusion||'').trim().length>=12;
+  if (s.id==='maps')       return !!S.notes.mapclaim && (S.notes.maps||'').trim().length>=12;
+  if (s.id==='conclusion') return !!S.notes.verdict && claimsOn().length>0
+                               && (S.notes.conclusion||'').trim().length>=12;
   if (s.id==='record')     return true;
   return (S.notes[s.id]||'').trim().length>=12;
 }
@@ -671,17 +1262,23 @@ function footer(s){
   document.getElementById('prev').disabled = S.i===0;
   const nx = document.getElementById('next');
   nx.disabled = !ok && s.id!=='record';
-  nx.textContent = S.i===STEPS.length-1 ? 'סיום' : 'הבא →';
+  /* ב-RTL הכיוון "קדימה" הוא שמאלה. */
+  nx.textContent = S.i===STEPS.length-1 ? 'סיום' : '← הבא';
   const hints = {
-    exp_marked:'בחרו ניסוי וכתבו באיזה מאגר',
-    sizes:'סמנו את הגדלים שבאמת נפתחו',
-    hypothesis:'גררו חמש נקודות, ואז נעלו משפט עם מספר',
-    noise:'שני אימונים על אותה ערכה',
-    models:'חמישה מודלים, אותן הגדרות',
-    runs5:'חמש קליטות לגרף',
-    read3:'גררו את המַדָּה אל פער',
-    maps:'השוו את שתי המפות',
-    conclusion:'בחרו מסקנה וכתבו מגבלה אחת',
+    exp_marked:'קראו את שלושת השלבים',
+    sizes:'הורידו לפחות ערכה אחת — ואת ערכת המבחן',
+    hypothesis:`עצבו את הקו של ${MET[S.metric]}, ואז נעלו משפט עם מספר`,
+    noise:'הורדה ← אימון פעמיים ← העלאה ← הרצה',
+    models:'העלו לפחות מודל אחד לקופסה של הגודל שלו',
+    runs5:'בחרו גודל שיש לו מודל, ואז הרצה',
+    /* הרמז מתאר את מה ש-canAdvance באמת בודק — כאן זה המשפט, לא הסרגל. */
+    read3: noiseIn() ? 'מדדו פער עם הסרגל, ואז כתבו את המשפט'
+                     : 'אין עדיין רעש — חזרו ללוח 4 והריצו שני אימונים',
+    maps: S.notes.mapclaim ? 'ועכשיו הציעו דרך לבדוק מה גורם למיקוד'
+                           : 'בחרו איזו טענה המפות מחזקות',
+    conclusion: !S.notes.verdict ? 'מה קרה להשערה שנעלתם?'
+              : !claimsOn().length ? 'סמנו לפחות טענה אחת שאתם מסכימים איתה'
+              : 'כתבו מגבלה אחת של הניסוי',
     record:'כפתור אחד'
   };
   document.getElementById('hint').innerHTML = ok
@@ -708,6 +1305,94 @@ function armScreen(){
 }
 const CANNED='כי סרגל הרעש שלכם הוא 2.5 נקודות — שני אימונים על אותן תמונות בדיוק נבדלים ביותר מזה. הפרש של 1.0 קטן מהרעש, ולכן אי אפשר להבחין בינו לבין מקריות. נסו להחליף את המדד לספציפיות ולראות מה קורה לתשובה.';
 
+/* ========== הרצה אמיתית ==========
+   אותה ערימה בדיוק שבכלי ההערכה — tfjs 1.3.1 + @teachablemachine/image 0.8 —
+   כדי שמספר שיוצא כאן יהיה אותו מספר שיוצא שם. נטענת רק בלחיצה, כך שהמעבדה
+   לא סוחבת מגה־בייט בכל פתיחה. */
+let tmLib = null;
+function loadTM(){
+  if (tmLib) return tmLib;
+  const add = src => new Promise((ok,bad)=>{
+    const s=document.createElement('script'); s.src=src; s.onload=ok;
+    s.onerror=()=>bad(new Error('טעינת הספרייה נכשלה — צריך חיבור לאינטרנט'));
+    document.head.appendChild(s); });
+  tmLib = add('https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js')
+    .then(()=>add('https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js'));
+  return tmLib;
+}
+let benchCache = null;
+async function benchList(){
+  if (benchCache) return benchCache;
+  const r = await fetch(DATA+'manifest.json');
+  if (!r.ok) throw new Error('data/manifest.json לא נמצא — הריצו את בניית הנתונים');
+  const f = (await r.json()).benchFlat;
+  if (!f) throw new Error('ערכת המבחן לא נבנתה');
+  benchCache = [...f.pos.map(n=>({src:DATA+'bench/pos/'+n, truth:1})),
+                ...f.neg.map(n=>({src:DATA+'bench/neg/'+n, truth:0}))];
+  return benchCache;
+}
+const loadImg = src => new Promise((ok,bad)=>{
+  const i=new Image(); i.onload=()=>ok(i);
+  i.onerror=()=>bad(new Error('תמונה לא נטענה: '+src)); i.src=src; });
+
+async function modelFromFiles(files){
+  const f=[...files], pick=re=>f.find(x=>re.test(x.name));
+  const mj=pick(/^model\.json$/i), md=pick(/^metadata\.json$/i), wt=pick(/\.bin$/i);
+  if (!mj||!md||!wt) throw new Error(
+    'בתיקייה חייבים להיות model.json, metadata.json וקובץ weights.bin — בחרו את התיקייה שירדה מ-Teachable Machine');
+  return tmImage.loadFromFiles(mj, wt, md);
+}
+/* איזה פלט הוא "נגוע". סדר הקלאסים ב-TM הוא סדר הגרירה ויכול להתהפך בין
+   אימונים, והתוויות עשויות להיות באנגלית אם המאגר לא עבר לעברית — ולכן
+   מזהים לפי שם, לפי אותם כללים שבכלי הפרויקט. אם אי אפשר להכריע, נופלים
+   בקול ולא מנחשים: ניחוש כאן הופך רגישות לספציפיות בלי שאיש ישים לב. */
+const POS_RE=/נגוע|parasit|pneumon|positive|חול/i;
+const NEG_RE=/תקין|uninfect|normal|negative|בריא/i;
+function posIndex(labels){
+  let i = labels.findIndex(l=>POS_RE.test(l));
+  if (i>=0) return i;
+  i = labels.findIndex(l=>NEG_RE.test(l));
+  if (i>=0 && labels.length===2) return 1-i;
+  return -1;
+}
+async function evalModel(model, imgs, onProg){
+  let TP=0,FN=0,FP=0,TN=0, idx=-1;
+  for (let i=0;i<imgs.length;i++){
+    const p = await model.predict(await loadImg(imgs[i].src));
+    if (idx<0){
+      idx = posIndex(p.map(x=>x.className));
+      if (idx<0) throw new Error('אי אפשר לזהות איזו מחלקה היא "נגוע" מתוך: '
+        + p.map(x=>x.className).join(' · ') + ' — שנו את שמות הקלאסים ב-TM ל"נגוע" ו"תקין"');
+    }
+    const yes = p[idx].probability>=0.5;
+    if (imgs[i].truth===1) yes?TP++:FN++; else yes?FP++:TN++;
+    if (i%5===0){ onProg((i+1)/imgs.length); await new Promise(r=>setTimeout(r)); }
+  }
+  const n=imgs.length;
+  return {TP,FN,FP,TN, acc:(TP+TN)/n, sens:TP/((TP+FN)||1), spec:TN/((TN+FP)||1)};
+}
+async function runBothModels(){
+  S.nerr=''; S.nprog=0;
+  /* אחרי שחזור ללא הקבצים — לומר את זה ולא ליפול בתוך tfjs. */
+  if (!S.nfiles.A || !S.nfiles.B){
+    S.nerr='תיקיות האימון אינן זמינות בדפדפן הזה — העלו אותן שוב בשלב 3'; render(); return; }
+  try{
+    S.nbusy='טוען ספריות…'; render();
+    await loadTM();
+    S.nbusy='טוען את ערכת המבחן…'; render();
+    const imgs = await benchList();
+    for (const k of ['A','B']){
+      const he = k==='A'?'א׳':'ב׳';
+      S.nbusy=`טוען מודל ${he}…`; S.nprog=0; render();
+      const model = await modelFromFiles(S.nfiles[k]);
+      S.nbusy=`מריץ אימון ${he} · ${imgs.length} תמונות`; render();
+      S.nres[k] = await evalModel(model, imgs, p=>{ S.nprog=p;
+        const el=document.querySelector('.prog i'); if(el) el.style.width=Math.round(p*100)+'%'; });
+    }
+    S.nbusy=''; S.done.noise=true; render();
+  }catch(err){ S.nbusy=''; S.nerr='ההרצה נכשלה — '+err.message; render(); }
+}
+
 /* ========== חיווט, בהאצלה אחת ========== */
 function go(d){
   let j=S.i+d;
@@ -719,6 +1404,8 @@ function go(d){
 document.addEventListener('click', e=>{
   const T=s=>e.target.closest(s); let el;
   if ((el=T('#steps button'))){ S.i=+el.dataset.i; S.sel=null; render(); return; }
+  if ((el=T('[data-goto]'))){ const j=+el.dataset.goto;
+    if (STEPS[j] && avail(STEPS[j])){ S.i=j; S.sel=null; render(); } return; }
   if (T('#next')){ go(1); return; }
   if (T('#prev')){ go(-1); return; }
   if (T('#stgBtn')){ S.stage=S.stage===2?1:2; if(!avail(step())) S.i=0; render(); return; }
@@ -729,22 +1416,27 @@ document.addEventListener('click', e=>{
       g.onclick=()=>{ const o=document.getElementById('askOut'); o.textContent=''; let i=0;
         const t=setInterval(()=>{o.textContent=CANNED.slice(0,i+=2); if(i>=CANNED.length)clearInterval(t);},11); };
     },0); return; }
-  if ((el=T('[data-exp]'))){ S.exp=el.dataset.exp; render(); return; }
-  if ((el=T('[data-size]'))){ const n=+el.dataset.size;
-    S.sizes = S.sizes.includes(n)?S.sizes.filter(x=>x!==n):S.sizes.concat(n).sort((a,b)=>a-b);
+  if ((el=T('[data-dl]'))){ const k=el.dataset.dl;
+    if (k==='bench') grab('bench', BENCH_SET.file, benchName());
+    else { const s=SETS.find(x=>x.n===+k); if (s) grab(s.n, s.file, setName(s.n)); }
+    return; }
+  if ((el=T('[data-metq]'))){ S.metQ = S.metQ===el.dataset.metq?null:el.dataset.metq;
     render(); return; }
+  if (T('#runBoth')){ runBothModels(); return; }
+  if (T('#runReal')){ if (S.sel && S.models[S.sel]) runReal(S.sel); return; }
+  if (T('#demoRuns')){ SIZES.forEach(n=>{ if(n===25||S.stage>=2)
+      S.runs[n]={res:PTS.find(p=>p.n===n), cap:true}; });
+    if (captured().length>=5) S.done.runs5=true; S.sel=null; render(); return; }
+  if (T('#demoNoise')){
+    S.nres.A=Object.assign({},PTS.find(p=>p.n===100));
+    S.nres.B=Object.assign({},NOISE_RUN);
+    S.nmod.A='דמו'; S.nmod.B='דמו'; S.done.noise=true; render(); return; }
   if ((el=T('[data-met]'))){ S.metric=el.dataset.met; render(); return; }
   if ((el=T('[data-verdict]'))){ S.notes.verdict=el.dataset.verdict; render(); return; }
-  if ((el=T('[data-noise]'))){ S.sel=el.dataset.noise; render(); return; }
+  if ((el=T('[data-mapclaim]'))){ S.notes.mapclaim=el.dataset.mapclaim; render(); return; }
+  if ((el=T('[data-claim]'))){ const k=el.dataset.claim;
+    S.claims[k]=!S.claims[k]; render(); return; }
   if ((el=T('[data-run]'))){ S.sel=+el.dataset.run; render(); return; }
-  if (T('#runOne')){
-    const s=step();
-    if (s.id==='noise'){ if(S.sel==='A') S.noiseA=true; else S.noiseB=true; S.sel=null;
-      if(noiseIn()) S.done.noise=true; }
-    else { S.runs[S.sel]=S.runs[S.sel]||{}; S.runs[S.sel].res=PTS.find(p=>p.n===S.sel); }
-    render(); return; }
-  if (T('#cap')){ S.runs[S.sel].cap=true; S.sel=null;
-    if(captured().length>=5) S.done.runs5=true; render(); return; }
   if (T('#lock')){ const d=new Date();
     S.locked=d.getHours()+':'+String(d.getMinutes()).padStart(2,'0'); render(); return; }
   if (T('#unlock')){ S.broken=true; S.locked=null; render(); return; }
@@ -752,15 +1444,34 @@ document.addEventListener('click', e=>{
   if (T('#openTM')){ window.open('https://teachablemachine.withgoogle.com/train/image','_blank','noopener,noreferrer'); return; }
   if (T('#fileAll')){ S.filed=4; S.done.record=true; render(); return; }
 });
+/* בחירת תיקיית מודל. שומרים את ה-FileList עצמו; הטעינה קורית רק בהרצה.
+   הבדיקה נעשית כאן ולא בהרצה: עדיף לומר "זו לא תיקיית TM" ברגע הבחירה
+   מאשר אחרי שלוש דקות של טעינת ספריות. */
+document.addEventListener('change', e=>{
+  const t=e.target;
+  if (!t.dataset || t.dataset.model==null || !t.files || !t.files.length) return;
+  const k=t.dataset.model, f=[...t.files];
+  const has=re=>f.some(x=>re.test(x.name));
+  if (!(has(/^model\.json$/i) && has(/^metadata\.json$/i) && has(/\.bin$/i))){
+    S.mdlerr='התיקייה שנבחרה אינה ייצוא של Teachable Machine — חסרים model.json, metadata.json או weights.bin';
+    S.nerr=S.mdlerr; render(); return;
+  }
+  const name = (f[0].webkitRelativePath||'').split('/')[0] || `${f.length} קבצים`;
+  S.mdlerr=''; S.nerr='';
+  if (k==='A'||k==='B'){ S.nfiles[k]=f; S.nmod[k]=name; S.nres[k]=null; }
+  else { S.models[+k.slice(1)] = {name, files:f}; }
+  render();
+});
 document.addEventListener('input', e=>{
   const t=e.target;
-  if (t.dataset.note!=null){ S.notes[t.dataset.note]=t.value; footer(step());
+  /* הקלדה אינה מציירת מחדש, ולכן save נקרא כאן במפורש — אחרי העדכון. */
+  if (t.dataset.note!=null){ S.notes[t.dataset.note]=t.value; save(); footer(step());
     if (t.dataset.note==='hypothesis'){
       const b=document.getElementById('lock');
-      if (b) b.disabled = !(/\d/.test(t.value)&&t.value.length>=15); } return; }
+      if (b) b.disabled = !(/\d/.test(t.value)&&t.value.length>=15&&moved(S.metric)); } return; }
   if (t.dataset.prec!=null){ const n=+t.dataset.prec, p=PTS.find(x=>x.n===n);
     const truth=100*p.TP/(p.TP+p.FP);
-    S.prec[n]=t.value===''?null:parseFloat(t.value);
+    S.prec[n]=t.value===''?null:parseFloat(t.value); save();
     t.style.color = S.prec[n]==null?'var(--ink-3)'
       :(Math.abs(S.prec[n]-truth)<=0.1?'var(--ok)':'var(--err)'); }
 });
@@ -770,36 +1481,39 @@ document.addEventListener('pointerdown', e=>{
   const svg = e.target.closest('#chart');
   if (!svg || svg.dataset.edit!=='1' || S.locked) return;
   const r=svg.getBoundingClientRect();
-  const rx=(e.clientX-r.left)/r.width*640;
+  /* יחידת ה-viewBox שווה כעת לפיקסל CSS, ולכן אין צורך בשום המרה. */
+  const rx=e.clientX-r.left;
   let best=0,bd=1e9;
   for(let i=0;i<5;i++){ const d=Math.abs(px(i)-rx); if(d<bd){bd=d;best=i;} }
   if (bd>54) return;
-  const n=PTS[best].n;
-  const mv=ev=>{ const yy=(ev.clientY-r.top)/r.height*230;
-    S.predict[n]=Math.max(.5,Math.min(1,.5+(CX.y1-yy)/(CX.y1-CX.y0)*.5)); drawChart(); };
+  const n=PTS[best].n, M=S.metric;
+  const mv=ev=>{ const yy=ev.clientY-r.top;
+    S.predict[M][n]=Math.max(.5,Math.min(1,.5+(CX.y1-yy)/(CX.y1-CX.y0)*.5)); drawChart(); };
+  /* render מלא ולא footer בלבד: מונה הנקודות לכל מדד ומצב כפתור הנעילה
+     משתנים עם כל נקודה שנגררה. */
   const up=()=>{window.removeEventListener('pointermove',mv);window.removeEventListener('pointerup',up);
-    footer(step());};
+    render();};
   window.addEventListener('pointermove',mv); window.addEventListener('pointerup',up); mv(e);
 });
 
-/* גרירת המַדָּה */
+/* גרירת הסרגל */
 document.addEventListener('pointerdown', e=>{
   const c=e.target.closest('#cal'); if(!c) return;
   const d={dx:e.clientX-S.calXY.x, dy:e.clientY-S.calXY.y};
   c.classList.add('drag'); c.setPointerCapture(e.pointerId);
-  const mv=ev=>{ S.calXY={x:ev.clientX-d.dx, y:ev.clientY-d.dy};
+  const mv=ev=>{ S.calXY=clampCal({x:ev.clientX-d.dx, y:ev.clientY-d.dy}, c.offsetHeight);
     c.style.left=S.calXY.x+'px'; c.style.top=S.calXY.y+'px'; };
   const up=ev=>{ c.classList.remove('drag');
     window.removeEventListener('pointermove',mv); window.removeEventListener('pointerup',up);
     const svg=document.getElementById('chart').getBoundingClientRect();
-    const rel=(ev.clientX-svg.left)/svg.width*640; const caps=captured();
+    const rel=ev.clientX-svg.left; const caps=captured();
     S.cal=null;
     for(let i=0;i<4;i++){ const g=gaps(S.metric)[i];
       if (rel>=px(i)&&rel<=px(i+1)&&caps.includes(g.from)&&caps.includes(g.to)){ S.cal=i; break; } }
     drawChart();
     const say=document.getElementById('calsay');
     say.className=S.cal==null?'':calState().cls; say.innerHTML=calSay();
-    footer(step()); };
+    footer(step()); save(); };
   window.addEventListener('pointermove',mv); window.addEventListener('pointerup',up);
 });
 
@@ -823,7 +1537,145 @@ window.addEventListener('keydown', e=>{
   if (e.key==='ArrowRight') go(-1);
 });
 window.addEventListener('resize',()=>{ if(document.getElementById('chart')){drawChart();} });
-render();
+
+/* ========== שמירה מקומית ==========
+   הדרישה: תלמיד שהתנתק ונכנס שוב לפני ההגשה לא מאבד דבר.
+   IndexedDB ולא localStorage, כי תיקיות המודלים הן אובייקטי File של
+   מגה-בייטים — localStorage מחזיק מחרוזות בלבד ותקוע על ~5MB.
+   שתי רשומות ולא אחת: המצב הקטן נשמר בכל שינוי, והקבצים הכבדים רק כשהם
+   מתחלפים — כך ששמירה שנכשלת על הקבצים אינה לוקחת איתה את התשובות. */
+const DB='lab-ml', STORE='state', KEY_S='state', KEY_F='files', SNAP_V=1;
+const CAN_SAVE = (()=>{ try{ return !!window.indexedDB; }catch(e){ return false; } })();
+
+/* רשימת היתר ולא רשימת איסור: שדה חדש אינו נשמר עד שמוסיפים אותו כאן,
+   וכך דגל רגעי כמו "רץ עכשיו" לא יכול לשרוד לפתיחה הבאה ולנעול כפתור. */
+const SAVE_KEYS = ['i','stage','metric','predict','locked','broken','notes','done',
+  'prec','cal','calXY','gotMB','claims','metQ','numsOpen','armTab','filed','nmod','nres','runs'];
+const FILE_KEYS = ['models','nfiles'];
+
+let dbp=null;
+function dbOpen(){
+  if (dbp) return dbp;
+  dbp = new Promise((ok,bad)=>{
+    const r = indexedDB.open(DB,1);
+    r.onupgradeneeded = ()=>{ const d=r.result;
+      if (!d.objectStoreNames.contains(STORE)) d.createObjectStore(STORE); };
+    r.onsuccess = ()=>ok(r.result);
+    r.onerror   = ()=>bad(r.error||new Error('indexedDB'));
+    r.onblocked = ()=>bad(new Error('הלשונית הקודמת עדיין פתוחה'));
+  });
+  return dbp;
+}
+const dbGet = key => dbOpen().then(d=>new Promise((ok,bad)=>{
+  const q = d.transaction(STORE,'readonly').objectStore(STORE).get(key);
+  q.onsuccess=()=>ok(q.result); q.onerror=()=>bad(q.error); }));
+const dbPut = (key,val) => dbOpen().then(d=>new Promise((ok,bad)=>{
+  const t = d.transaction(STORE,'readwrite');
+  t.objectStore(STORE).put(val,key);
+  t.oncomplete=()=>ok(true);
+  t.onerror=t.onabort=()=>bad(t.error||new Error('אין מקום פנוי')); }));
+const dbDel = key => dbOpen().then(d=>new Promise(ok=>{
+  const t = d.transaction(STORE,'readwrite'); t.objectStore(STORE).delete(key);
+  t.oncomplete=()=>ok(true); t.onerror=t.onabort=()=>ok(false); }));
+
+function warn(msg){
+  const el=document.getElementById('savewarn'); if(!el) return;
+  el.textContent=msg||''; el.hidden=!msg;
+}
+/* חתימה זולה על הקבצים, כדי לא לכתוב 16MB בכל הקלדה. */
+const sigOf = () => JSON.stringify([
+  Object.keys(S.models).sort().map(n=>[n,((S.models[n]||{}).files||[]).map(f=>f.name+':'+f.size)]),
+  ['A','B'].map(k=>(S.nfiles[k]||[]).map(f=>f.name+':'+f.size))]);
+
+let saveT=null, lastSig=null, saving=false, again=false, myT=0, stopped=false;
+function save(){ if(!CAN_SAVE||stopped) return; clearTimeout(saveT); saveT=setTimeout(flush,300); }
+async function flush(){
+  if (!CAN_SAVE || stopped) return;
+  if (saving){ again=true; return; }   /* לא שתי כתיבות במקביל על אותה רשומה */
+  saving=true;
+  try{
+    /* שתי לשוניות על אותה מעבדה: "מי שכתב אחרון מנצח" הוא בדיוק הדרך
+       לאבד עבודה. אם מישהו כתב אחרינו — לא דורסים אותו, עוצרים ואומרים. */
+    const cur = await dbGet(KEY_S);
+    if (cur && cur.t > myT){
+      stopped=true; saving=false;
+      warn('המעבדה פתוחה בלשונית נוספת, והשמירה כאן נעצרה כדי לא לדרוס אותה. '
+         + 'סגרו את הלשונית הזו, או רעננו אותה כדי להמשיך לעבוד כאן.');
+      return;
+    }
+    const t = Date.now();
+    const snap={v:SNAP_V,t}; SAVE_KEYS.forEach(k=>snap[k]=S[k]);
+    await dbPut(KEY_S,snap); myT=t;
+    const sig=sigOf();
+    if (sig!==lastSig){
+      const f={v:SNAP_V}; FILE_KEYS.forEach(k=>f[k]=S[k]);
+      await dbPut(KEY_F,f); lastSig=sig;
+    }
+    warn('');
+  }catch(e){
+    warn('השמירה המקומית נכשלה — '+e.message+'. אל תסגרו את הלשונית לפני ההגשה.');
+  }
+  saving=false;
+  if (again){ again=false; flush(); }
+}
+addEventListener('visibilitychange',()=>{
+  if (document.visibilityState==='hidden'){ clearTimeout(saveT); flush(); } });
+addEventListener('pagehide',()=>{ clearTimeout(saveT); flush(); });
+
+const isObj = x => !!x && typeof x==='object' && !Array.isArray(x) && !(x instanceof File);
+async function restore(){
+  if (!CAN_SAVE) return;
+  if (new URLSearchParams(location.search).has('reset')){
+    try{ await dbDel(KEY_S); await dbDel(KEY_F); }catch(e){}
+    return;
+  }
+  let st=null, fl=null;
+  /* אם אי אפשר לקרוא, בוודאי אסור לדרוס: עוצרים את השמירה ואומרים זאת. */
+  try{ st = await dbGet(KEY_S); }
+  catch(e){ stopped=true;
+    warn('אי אפשר לקרוא את השמירה המקומית ('+e.message+') — העבודה בלשונית הזו '
+       + 'לא תישמר. אל תסגרו אותה לפני ההגשה.'); return; }
+  try{ fl = await dbGet(KEY_F); }catch(e){}
+  /* מיזוג מפתח-מפתח ולא החלפה של S: רשומה שנשמרה לפני ששדה נוסף עדיין
+     נטענת, ומה שחסר בה פשוט נשאר בברירת המחדל. אף גרסה לא נזרקת. */
+  if (st) SAVE_KEYS.forEach(k=>{ const v=st[k]; if (v===undefined) return;
+    S[k] = (isObj(S[k])&&isObj(v)) ? Object.assign({},S[k],v) : v; });
+  if (fl) FILE_KEYS.forEach(k=>{ const v=fl[k];
+    if (isObj(v)) S[k]=Object.assign({},S[k],v); });
+  lastSig = sigOf();
+  myT = (st && st.t) || 0;   /* נקודת הייחוס לזיהוי לשונית שנייה */
+
+  /* עקביות אחרי טעינה: עדיף "לא הועלה מודל" על כפתור הרצה שנופל. */
+  ['A','B'].forEach(k=>{ if (!S.nfiles[k]) S.nmod[k]=null; });
+  Object.keys(S.models).forEach(n=>{
+    const m=S.models[n]; if (!m||!m.files||!m.files.length) delete S.models[n]; });
+  if (!MET[S.metric]) S.metric='acc';
+  if (!['how','why','trap','ask'].includes(S.armTab)) S.armTab='how';
+  if (S.stage!==1 && S.stage!==2) S.stage=2;
+  S.i = Math.max(0, Math.min(STEPS.length-1, S.i|0));
+  while (S.i>0 && !avail(STEPS[S.i])) S.i--;
+}
+
+/* הציור לא מחכה לאחסון תקוע: אם IndexedDB לא ענה בשתי שניות וחצי,
+   המעבדה נפתחת בלי שחזור — וכשהשחזור כן מגיע, היא מציירת שוב. */
+let booted=false;
+const boot = ()=>{ booted=true; render(); };
+const bootT = setTimeout(()=>{ if(!booted) boot(); }, 2500);
+restore().then(()=>{ clearTimeout(bootT); boot(); },
+               ()=>{ clearTimeout(bootT); boot(); });
+</script>
+
+<!-- רקע דינמי. שכבה נפרדת לחלוטין: הקנבס הוא z-index:-1, כלומר מעל רקע העמוד
+     ומתחת לכל התוכן, ולכן אף שורת CSS של המעבדה לא משתנה. אם הקובץ חסר
+     (למשל בפתיחה ישירה מ-file://), המעבדה עובדת בדיוק כמו קודם. -->
+<script type="module">
+try {
+  const { mountBackground } = await import('../../../js/background.js');
+  /* ?bg=0.8 לכיול מהיר, ?bg=0 לכיבוי. ברירת המחדל 0.5. */
+  const p = new URLSearchParams(location.search).get('bg');
+  const intensity = p === null ? 0.5 : Math.max(0, Math.min(1, +p || 0));
+  if (intensity > 0) mountBackground(document.body, { intensity, accent: true, seed: 7 });
+} catch (e) { /* בלי רקע. לא שוברים את המעבדה בשביל שכבת רקע. */ }
 </script>
 </body>
 </html>
