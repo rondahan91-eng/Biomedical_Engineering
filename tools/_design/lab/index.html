@@ -452,9 +452,10 @@ const flatLine = () => ({25:FLAT,50:FLAT,100:FLAT,200:FLAT,400:FLAT});
 const moved = m => PTS.some(p=>Math.abs(S.predict[m][p.n]-FLAT)>0.005);
 /* הרעש הוא ההפרש בין שני האימונים של התלמיד. אם עוד לא רצו — הנתון המובנה,
    כדי שאפשר יהיה לעבור על הדמו בלי לאמן. */
+const RULER_PT = () => PTS.find(p=>p.n===WEEK.ruler) || PTS[Math.floor(PTS.length/2)];
 const noiseBand = m => (S.nres && S.nres.A && S.nres.B)
   ? Math.abs(S.nres.A[m] - S.nres.B[m])*100
-  : Math.abs(PTS.find(p=>p.n===100)[m] - NOISE_RUN[m])*100;
+  : Math.abs(RULER_PT()[m] - NOISE_RUN[m])*100;
 /* הערך של נקודה: התוצאה האמיתית של התלמיד אם הוא כבר הריץ, ואחרת הנתון
    המובנה — כדי שאפשר יהיה לעבור על הדמו בלי לאמן חמישה מודלים. */
 const val = (n,m) => (S.runs[n] && S.runs[n].res) ? S.runs[n].res[m] : PTS.find(p=>p.n===n)[m];
@@ -592,6 +593,10 @@ const step = () => STEPS[S.i];
 const avail = s => s.stage <= S.stage;
 const captured = () => PTS.filter(p=>S.runs[p.n] && S.runs[p.n].cap).map(p=>p.n);
 const noiseIn = () => !!(S.nres.A && S.nres.B);
+/* שני כפתורי "נתוני דמו" ממלאים שבוע שלם בשתי לחיצות. זה בדיוק מה שצריך
+   כדי להדגים את המסך, וזה בדיוק מה שאסור שיהיה בהישג ידו של תלמיד שמקבל
+   ציון. מעכשיו הם מאחורי ?demo=1 — ההדגמה נשמרת, הקיצור נסגר. */
+const DEMO = new URLSearchParams(location.search).has('demo');
 
 /* ========== כותרת ========== */
 function renderSteps(){
@@ -842,9 +847,9 @@ function wNoise(){
     </div>
 
     ${S.nerr?`<p style="margin-top:12px;color:var(--err);font-size:13.5px">${S.nerr}</p>`:''}
-    ${okRun?noiseOut():`<p style="margin-top:14px;font-size:12.5px;color:var(--ink-3)">
+    ${okRun?noiseOut():(DEMO?`<p style="margin-top:14px;font-size:12.5px;color:var(--ink-3)">
       אין עדיין שני מודלים?
-      <button class="quiet" id="demoNoise" style="font-size:12.5px;padding:2px 8px">המשך עם נתוני דמו</button></p>`}`;
+      <button class="quiet" id="demoNoise" style="font-size:12.5px;padding:2px 8px">המשך עם נתוני דמו</button></p>`:'')}`;
 }
 
 /* טבלה אחת ולא שני בלוקים: שורת ההפרש היא התוצר, וצריך לראות אותה
@@ -922,7 +927,7 @@ function wRuns(){
     </div>
     ${S.rerr?`<p style="color:var(--err);font-size:13px;margin-top:8px">${S.rerr}</p>`:''}
     <div style="margin-top:12px">${chart(false)}</div>
-    ${captured().length<5?`<p style="margin-top:7px;font-size:12px;color:var(--ink-3)">
+    ${(DEMO && captured().length<5)?`<p style="margin-top:7px;font-size:12px;color:var(--ink-3)">
       אין עדיין מודלים?
       <button class="quiet" id="demoRuns" style="font-size:12px;padding:2px 8px">מילוי בנתוני דמו</button></p>`:''}`;
 }
@@ -1005,22 +1010,44 @@ const VERDICTS=['המדידה לא הכריעה','התאמתה','התאמתה ח
 
 /* סיכום הניסוי במספרים של התלמיד עצמו, לא בטקסט מוכן: המטרה, ואז ארבעת
    הדברים שהוא באמת עשה. בלי זה הלוח האחרון מבקש מסקנה בלי להזכיר ממה. */
+/* שום שורה כאן לא מדווחת על משהו שלא נעשה. הגרסה הקודמת ציטטה את נתוני
+   הדמו במילים "הרצתם ... וקיבלתם", וזה בדיוק הדיווח שהמורה לא יכול לתפוס:
+   תלמיד שלא אימן דבר קיבל סיכום שנראה כמו מדידה. */
 function conclRecap(){
-  const m=S.metric, nb=noiseBand(m), caps=captured(), g=gaps(m), last=g[g.length-1];
-  const lo=val(PTS[0].n,m)*100, hi=val(PTS[PTS.length-1].n,m)*100;
+  const m=S.metric, caps=captured();
+  const measured = n => !!(S.runs[n] && S.runs[n].res);
+  const noise = noiseIn()
+    ? `מדדתם רעש: שני אימונים על אותן ${WEEK.ruler} תמונות בדיוק נבדלו
+       ב-<b class="num">${noiseBand(m).toFixed(1)}</b> נקודות ${MET[m]}.`
+    : `<b style="color:var(--warn)">עוד לא מדדתם רעש</b> — ובלעדיו אי אפשר
+       לומר על שום קפיצה אם היא אמיתית.`;
+  let runs;
+  if (caps.length < 2){
+    runs = `<b style="color:var(--warn)">הרצתם ${caps.length} גדלים</b> מתוך
+      ${PTS.length}. הקו שעל הגרף הוא עדיין הניחוש שלכם, לא מדידה.`;
+  } else {
+    const lo=Math.min(...caps), hi=Math.max(...caps);
+    const real = gaps(m).filter(x=>measured(x.from) && measured(x.to));
+    const last = real.length ? real[real.length-1] : null;
+    runs = `הרצתם <b class="num">${caps.length}</b> גדלים על אותן
+      <b class="num">${WEEK.benchN}</b> תמונות מבחן:
+      <b class="num">${(val(lo,m)*100).toFixed(1)}%</b> ב-${lo} מול
+      <b class="num">${(val(hi,m)*100).toFixed(1)}%</b> ב-${hi}`
+      + (last ? `, והקפיצה האחרונה שנמדדה (${last.from}→${last.to}) הייתה
+          <b class="num">${last.delta.toFixed(1)}</b> נקודות${noiseIn()
+            ? ` — ${last.delta<=noiseBand(m)?'<b>קטנה מהרעש</b>':'<b>גדולה מהרעש</b>'}`
+            : ''}.`
+        : `. אין עדיין שתי נקודות סמוכות שנמדדו, ולכן אין קפיצה למדוד.`);
+  }
   return `<div class="recap">
       <div class="rg"><b>המטרה:</b> לבדוק כמה תמונות אימון באמת צריך —
         ומאיפה עוד תמונות כבר לא קונות ${MET[m]}.</div>
       <ol>
-        <li>ניבאתם את הקו <b>לפני</b> שמדדתם, ונעלתם משפט עם מספר.</li>
-        <li>מדדתם רעש: שני אימונים על אותן ${WEEK.ruler} תמונות בדיוק נבדלו
-          ב-<b class="num">${nb.toFixed(1)}</b> נקודות ${MET[m]}.</li>
-        <li>הרצתם ${caps.length?`<b class="num">${caps.length}</b> גדלים`:'את הגדלים'}
-          על אותן <b class="num">${WEEK.benchN}</b> תמונות מבחן:
-          <b class="num">${lo.toFixed(1)}%</b> ב-25 מול
-          <b class="num">${hi.toFixed(1)}%</b> ב-400, והקפיצה האחרונה
-          (${last.from}→${last.to}) הייתה <b class="num">${last.delta.toFixed(1)}</b>
-          נקודות — ${last.delta<=nb?'<b>קטנה מהרעש</b>':'<b>גדולה מהרעש</b>'}.</li>
+        <li>${S.locked
+          ? `ניבאתם את הקו <b>לפני</b> שמדדתם, ונעלתם משפט ב-${S.locked}.`
+          : `<b style="color:var(--warn)">לא נעלתם השערה</b> לפני המדידה.`}</li>
+        <li>${noise}</li>
+        <li>${runs}</li>
       </ol></div>`;
 }
 
@@ -1428,7 +1455,7 @@ document.addEventListener('click', e=>{
       S.runs[n]={res:PTS.find(p=>p.n===n), cap:true}; });
     if (captured().length>=5) S.done.runs5=true; S.sel=null; render(); return; }
   if (T('#demoNoise')){
-    S.nres.A=Object.assign({},PTS.find(p=>p.n===100));
+    S.nres.A=Object.assign({},RULER_PT());
     S.nres.B=Object.assign({},NOISE_RUN);
     S.nmod.A='דמו'; S.nmod.B='דמו'; S.done.noise=true; render(); return; }
   if ((el=T('[data-met]'))){ S.metric=el.dataset.met; render(); return; }
@@ -1625,8 +1652,12 @@ addEventListener('pagehide',()=>{ clearTimeout(saveT); flush(); });
 const isObj = x => !!x && typeof x==='object' && !Array.isArray(x) && !(x instanceof File);
 async function restore(){
   if (!CAN_SAVE) return;
+  /* כתובת אחת שמסתובבת בכיתה מוחקת שבוע שלם. מאשרים לפני, ולא בשקט. */
   if (new URLSearchParams(location.search).has('reset')){
-    try{ await dbDel(KEY_S); await dbDel(KEY_F); }catch(e){}
+    const had = await dbGet(KEY_S).catch(()=>null);
+    if (!had || confirm('למחוק את כל העבודה השמורה במעבדה במחשב הזה? אי אפשר לבטל.')){
+      try{ await dbDel(KEY_S); await dbDel(KEY_F); }catch(e){}
+    }
     return;
   }
   let st=null, fl=null;
