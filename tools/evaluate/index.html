@@ -1076,10 +1076,14 @@ async function flushQueue() {
  * חוזרים, אותו פס מצב - רק גוף הבקשה שונה.
  */
 async function postQueued(token, item) {
+  // כל השדות נכנסים תחת payload. השרת (doPost ב-Code.gs) קורא משם בלבד,
+  // וגוף שטוח הגיע אליו כ-{} - כלומר בלי טוקן, ולכן עם "פג תוקף
+  // ההתחברות". זו הצורה שמשותפת ל-js/api.js ולכלים; אל תשטחו אותה.
   const body = (item.action === 'saveRun')
-    ? { action: 'saveRun', token: token, run: item.run }
-    : { action: 'saveArtifact', token: token, kind: item.kind,
-        filename: item.filename, mimeType: item.mimeType, base64: item.base64 };
+    ? { action: 'saveRun', payload: { token: token, run: item.run } }
+    : { action: 'saveArtifact',
+        payload: { token: token, kind: item.kind, filename: item.filename,
+                   mimeType: item.mimeType, base64: item.base64 } };
   const resp = await fetch(apiUrl(), {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },   // מונע preflight מול Apps Script

@@ -605,9 +605,14 @@ async function postArtifact(token, item) {
   const resp = await fetch(apiUrl(), {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    // כל השדות תחת payload. השרת קורא משם בלבד, וגוף שטוח הגיע אליו כ-{}
+    // - כלומר בלי טוקן, ולכן עם "פג תוקף ההתחברות".
     body: JSON.stringify({
-      action: 'saveArtifact', token: token, kind: item.kind,
-      filename: item.filename, mimeType: item.mimeType, base64: item.base64,
+      action: 'saveArtifact',
+      payload: {
+        token: token, kind: item.kind, filename: item.filename,
+        mimeType: item.mimeType, base64: item.base64,
+      },
     }),
   });
   return resp.json();

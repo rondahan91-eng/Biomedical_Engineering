@@ -718,8 +718,10 @@ async function fileToServer(kind, filename, blob){
     r.onerror=()=>rej(new Error('קריאת הקובץ נכשלה')); r.readAsDataURL(blob); });
   const resp=await fetch(apiUrl(),{ method:'POST',
     headers:{'Content-Type':'text/plain;charset=utf-8'},   // מונע preflight מול Apps Script
-    body:JSON.stringify({action:'saveArtifact', token:u.token, kind, filename,
-                         mimeType:blob.type, base64}) });
+    // כל השדות תחת payload. השרת קורא משם בלבד, וגוף שטוח הגיע אליו כ-{}
+    // - כלומר בלי טוקן, ולכן עם "פג תוקף ההתחברות".
+    body:JSON.stringify({action:'saveArtifact', payload:{token:u.token, kind, filename,
+                         mimeType:blob.type, base64}}) });
   const d=await resp.json();
   // מבנה התשובה של השרת: {ok, result} או {ok:false, error} - זהה ל-api.js
   if(!d.ok) throw new Error(d.error||'התיוק נכשל');

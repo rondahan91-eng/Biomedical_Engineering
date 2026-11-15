@@ -450,7 +450,13 @@ function doPost(e) {
   }
   const { action, payload } = body;
   try {
-    const result = routeAction(action, payload || {});
+    // גוף שטוח - {action, token, ...} בלי עטיפת payload - נקרא כ-payload.
+    // כלי הניתוח שלחו כך, וכל שדה מלבד action נזרק: requireAuth({}) החזיר
+    // "פג תוקף ההתחברות", שגיאה שנראית כמו התחברות שפגה ולא כמו צורת בקשה
+    // שגויה, ולכן חיפשנו אותה בטוקנים. תיקון הכלים לבדו אינו מספיק - עותק
+    // שמור בדפדפן של תלמיד/ה ממשיך לשלוח את הצורה הישנה, והתור שלו היה
+    // נשאר תקוע עד שהוא פותח מחדש את הדף.
+    const result = routeAction(action, payload || body || {});
     return jsonResponse({ ok: true, result });
   } catch (err) {
     return jsonResponse({ ok: false, error: err.message || String(err) });
