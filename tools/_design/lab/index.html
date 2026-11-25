@@ -2106,11 +2106,17 @@ function whoBar(){
     : `<a href="../../../" target="_blank" rel="opener"
          style="color:var(--warn);font-weight:700">לא מחובר/ת · כניסה ↗</a>`;
 }
-document.addEventListener('click', e=>{
+document.addEventListener('click', async e=>{
   if (!e.target.closest('#logout')) return;
-  /* יציאה מקומית בלבד: הטוקן מבוטל במסך הראשי. מה שנשמר נשאר תחת
-     המזהה של התלמיד, ולכן חוזר אליו בכניסה הבאה. */
+  /* יציאה מלאה. לנקות רק את ה-sessionStorage לא מספיק: המראה ב-localStorage
+     משותף לכל הלשוניות, והתלמיד הבא באותו מחשב היה מזוהה כקודם. מבטלים
+     גם את הטוקן בשרת, כדי שלא יישאר תקף 24 שעות אחרי שקמו מהמחשב.
+     מה שנשמר נשאר תחת המזהה של התלמיד, וחוזר אליו בכניסה הבאה. */
+  const btn = e.target.closest('#logout');
+  btn.disabled = true; btn.textContent = 'יוצא…';
+  try{ await apiCall('logout', {}); }catch(e2){}
   try{ sessionStorage.removeItem(SESSION_KEY); }catch(e2){}
+  try{ localStorage.removeItem(SESSION_MIRROR); }catch(e2){}
   location.href = '../../../';
 });
 
