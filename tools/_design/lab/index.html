@@ -140,6 +140,24 @@ main{flex:1;min-height:0;overflow-y:auto;display:flex;justify-content:center}
 #filingChk a{color:inherit}
 .who b{font-weight:800;color:var(--ink)}
 .who .out{margin-inline-start:8px}
+/* ---------------- המנטור בתוך הזרוע ---------------- */
+#chatlog{max-height:200px;overflow-y:auto;margin:6px 0 8px;padding-inline-end:4px}
+.cm{font-size:12.5px;line-height:1.6;border-radius:9px;padding:7px 10px;margin-bottom:6px;
+  white-space:pre-wrap;word-break:break-word}
+.cm.user{background:#13303f;color:#dbeafe;margin-inline-start:22px}
+.cm.model{background:#0b2330;color:#cfe3ec;margin-inline-end:22px}
+.cm.sys{background:none;color:#8aa2b3;padding:0;margin:0 0 6px}
+.cm.busy{opacity:.6;font-style:italic}
+/* ---------------- לוח 10: ההגשה השבועית ---------------- */
+.cislots{display:flex;gap:10px}
+.cislot{flex:none;width:112px;height:84px;border:1.5px dashed var(--line-2);border-radius:10px;
+  background:var(--surface);display:flex;align-items:center;justify-content:center;
+  cursor:pointer;overflow:hidden;position:relative}
+.cislot:hover{border-color:var(--ink-3)}
+.cislot input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.cislot span{font-size:12.5px;color:var(--ink-3);font-weight:700}
+.cislot img{width:100%;height:100%;object-fit:cover}
+.cislot.has{border-style:solid;border-color:var(--ok)}
 
 /* ---------------- טבלת המספרים — נפתחת, לא מוצגת ---------------- */
 .numsbtn{margin-top:8px}
@@ -640,6 +658,22 @@ function fileArtifact(kind, filename, text, mimeType){
   flushQueue();
 }
 
+/* קריאה חיה לשרת, לדברים שתשובה שלהם נחוצה עכשיו ולא בתור — שיחה עם
+   המנטור והצ׳ק-אין המוערך. אותה מעטפת מקוננת, והזהות מהטוקן. */
+async function apiCall(action, extra){
+  const u = currentUser();
+  if (!u) throw new Error('לא מזוהה התחברות. היכנסו למערכת ונסו שוב.');
+  const api = apiUrl();
+  if (!api) throw new Error('כתובת השרת לא נמצאה. רעננו את הדף.');
+  const payload = Object.assign({ token:u.token, studentId:u.studentId }, extra||{});
+  const r = await fetch(api, { method:'POST',
+    headers:{'Content-Type':'text/plain;charset=utf-8'},
+    body: JSON.stringify({ action, payload }) });
+  const d = await r.json();
+  if (!d.ok) throw new Error(d.error || 'שגיאה לא ידועה');
+  return d.result;
+}
+
 /* ========== המספרים. צורת curveReport מהשרת, בלי שינוי. ========== */
 const PTS = [
   {n:25, acc:.610,sens:.520,spec:.700,TP:52,FN:48,FP:30,TN:70},
@@ -738,10 +772,11 @@ const STEPS = [
    trap:'"העקומה התיישרה אז הגעתי לתקרה" — הטעות המרכזית של השיעור.'},
 
   {id:'record', stage:1, kind:'soft',
-   eyebrow:'KEEP IT', h:'תיוק',
-   lede:'ההרצות יושבות בדפדפן הזה בלבד.',
-   why:'"איפוס הרצות", או מחשב אחר, והן איננו.',
-   how:'כפתור אחד.', trap:'להסתמך על הדפדפן. הוא לא מחסן.'}
+   eyebrow:'WEEKLY CHECK-IN', h:'ההגשה השבועית',
+   lede:'שתי תמונות התקדמות ומשפט על מה שעשיתם. זה החלק המוערך של השבוע.',
+   why:'ההרצות כבר נשלחו למורה בזמן אמת; זו ההגשה שמקבלת ציון.',
+   how:'העלו תמונות, כתבו סיכום קצר, ושלחו.',
+   trap:'להסתמך על הדפדפן. הוא לא מחסן — מה שלא נשלח, לא קיים.'}
 ];
 
 /* ========== נתוני השבוע. הכול נגזר מכאן — התלמיד לא בוחר מאגר. ========== */
@@ -795,7 +830,9 @@ const S = {
   nmod:{A:null,B:null}, nfiles:{A:null,B:null}, nres:{A:null,B:null},
   nbusy:'', nprog:0, nerr:'',
   rbusy:false, rprog:0, rerr:'', mdlerr:'',
-  armOpen:false, armTab:'how', numsOpen:false, filed:0
+  armOpen:false, armTab:'how', numsOpen:false, filed:0,
+  chat:[], askBusy:false,            /* השיחה עם המנטור, בתוך המעבדה */
+  ci:{slots:[null,null], summary:'', busy:false, err:'', score:null, sent:false}
 };
 const pred = () => S.predict[S.metric];
 const step = () => STEPS[S.i];
@@ -1331,11 +1368,59 @@ function fileAll(){
   S.done.record = true; render();
 }
 
+/* לוח 10 — ההגשה השבועית. זה החלק המוערך: שתי תמונות התקדמות וסיכום
+   נשלחים למנטור, והשרת הוא זה שנותן את הציון. קודם הכפתור כאן רק הגדיל
+   מונה על המסך ולא פנה לשום שרת. */
+async function sendCheckIn(){
+  const ci=S.ci;
+  if (!ci.slots.some(Boolean) || !ci.summary.trim()){
+    ci.err='צריך לפחות תמונה אחת ומשפט סיכום.'; render(); return; }
+  ci.busy=true; ci.err=''; render();
+  try{
+    const images = ci.slots.filter(Boolean).map(d=>{
+      const [meta,base64]=d.split(',');
+      return { base64, mimeType:(meta.match(/data:(.*);base64/)||[])[1]||'image/jpeg' }; });
+    const hist = S.chat.concat([{role:'user', text:ci.summary.trim()}]);
+    const res = await apiCall('sendMentorMessage', { history:hist, images });
+    S.chat = hist.concat([{role:'model', text:(res&&res.reply)||''}]);
+    S.notes.ciSent = new Date().toISOString();
+    if (res && res.graded){ ci.score=res.score; S.notes.ciScore=res.score; }
+    ci.sent=true;
+  }catch(e){ ci.err='ההגשה נכשלה — '+e.message; }
+  ci.busy=false; render(); save();
+}
+
 function wRec(){
-  return S.filed
-    ? `<div class="doneBig"><div class="big">${S.filed}</div>
-        <div style="font-size:17px;color:var(--ink-2);margin-top:6px">תוצרים תויקו</div></div>`
-    : `<button class="go" id="fileAll" style="font-size:16px;padding:14px 30px">תיוק כל התוצרים</button>`;
+  const ci=S.ci, score = ci.score!=null ? ci.score : S.notes.ciScore;
+  const last = S.chat.filter(m=>m.role==='model').slice(-1)[0];
+  if (score!=null) return `<div class="doneBig">
+      <div class="big">${score}</div>
+      <div style="font-size:17px;color:var(--ink-2);margin-top:6px">הצ׳ק-אין השבועי נוקד</div>
+      ${last?`<p style="max-width:640px;margin:14px auto 0;font-size:13.5px;
+        line-height:1.65;color:var(--ink-2);text-align:start">${esc(last.text)}</p>`:''}
+      <button class="quiet" id="fileAll" style="margin-top:14px">תיוק התוצרים</button></div>`;
+  if (S.notes.ciSent && !ci.err) return `<div class="doneBig">
+      <div style="font-size:19px;font-weight:900">ההגשה נשלחה</div>
+      <div style="font-size:14px;color:var(--ink-2);margin-top:6px">הציון יופיע כאן אחרי ההערכה.</div>
+      <button class="quiet" id="fileAll" style="margin-top:14px">תיוק התוצרים</button></div>`;
+  const has = ci.slots.filter(Boolean).length;
+  return `<div class="fields" style="max-width:720px">
+    <div><label>שתי תמונות התקדמות</label>
+      <div class="cislots">${[0,1].map(i=>`
+        <label class="cislot ${ci.slots[i]?'has':''}">
+          <input type="file" accept="image/*" data-ci="${i}">
+          ${ci.slots[i]?`<img src="${ci.slots[i]}" alt="">`:'<span>+ תמונה</span>'}
+        </label>`).join('')}</div></div>
+    <div><label>מה עשיתם השבוע, בקצרה</label>
+      <textarea id="ciSum" style="height:74px" ${ci.busy?'disabled':''}
+        placeholder="מה אימנתם, מה מדדתם, ומה הפתיע">${esc(ci.summary)}</textarea></div>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+      <button class="go" id="ciSend" ${(has && ci.summary.trim() && !ci.busy)?'':'disabled'}>${
+        ci.busy?'שולח…':'הגשה שבועית'}</button>
+      <button class="quiet" id="fileAll">תיוק התוצרים</button>
+      ${ci.err?`<span style="color:var(--err);font-size:12.5px">${esc(ci.err)}</span>`
+              :'<span style="color:var(--ink-3);font-size:12.5px">ההגשה נשלחת למנטור ומנוקדת.</span>'}
+    </div></div>`;
 }
 
 /* ========== הגרף ========== */
@@ -1554,10 +1639,16 @@ function armScreen(){
   const s=step(), el=document.getElementById('armscreen');
   const T={how:['איך עושים',s.how],why:['למה זה חשוב',s.why],trap:['המלכודת',s.trap]};
   if (S.armTab==='ask'){
+    /* המנטור האמיתי, בתוך המעבדה. קודם הייתה כאן מחרוזת קבועה אחת לכולם. */
+    const log = S.chat.length
+      ? S.chat.map(m=>`<div class="cm ${m.role}">${esc(m.text)}</div>`).join('')
+      : `<p class="cm sys">שאלו מה שתרצו על מה שעל המסך — אין הגבלה.</p>`;
     el.innerHTML = `<span class="eyebrow">ASK</span>
-      <p id="askOut">שאלה אחת, על מה שעל המסך.</p>
-      <div class="askrow"><input id="askIn" placeholder="למה 1.0 נקודות זה לא שיפור?">
-        <button id="askGo">שאל</button></div>`;
+      <div id="chatlog">${log}${S.askBusy?'<div class="cm model busy">כותב…</div>':''}</div>
+      <div class="askrow"><input id="askIn" ${S.askBusy?'disabled':''}
+          placeholder="למה 1.0 נקודות זה לא שיפור?">
+        <button id="askGo" ${S.askBusy?'disabled':''}>שאל</button></div>`;
+    const lg = el.querySelector('#chatlog'); if (lg) lg.scrollTop = lg.scrollHeight;
   } else {
     const [h,b]=T[S.armTab];
     el.innerHTML = `<span class="eyebrow">STEP ${S.i+1}</span>
@@ -1567,7 +1658,24 @@ function armScreen(){
     b.classList.toggle('on', b.dataset.t===S.armTab));
   document.getElementById('armpanel').classList.toggle('open', S.armOpen);
 }
-const CANNED='כי סרגל הרעש שלכם הוא 2.5 נקודות — שני אימונים על אותן תמונות בדיוק נבדלים ביותר מזה. הפרש של 1.0 קטן מהרעש, ולכן אי אפשר להבחין בינו לבין מקריות. נסו להחליף את המדד לספציפיות ולראות מה קורה לתשובה.';
+const esc = s => String(s==null?'':s)
+  .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+/* שיחה עם המנטור. אותה פעולה שהמסך הישן קרא לה, ולכן אותה מכסה שבועית,
+   אותו תמלול ואותו מסלול ציון — רק שהיא יושבת עכשיו ליד הלוח שעליו
+   התלמיד/ה שואל/ת. */
+async function mentorAsk(text){
+  if (!text || S.askBusy) return;
+  S.chat.push({role:'user', text});
+  S.askBusy=true; armScreen();
+  try{
+    const res = await apiCall('sendMentorMessage', { history:S.chat.slice(-24) });
+    S.chat.push({role:'model', text:(res && res.reply) || 'לא חזרה תשובה.'});
+  }catch(e){
+    S.chat.push({role:'model', text:'לא הצלחתי לענות — '+e.message});
+  }
+  S.askBusy=false; armScreen(); save();
+}
 
 /* ========== הרצה אמיתית ==========
    אותה ערימה בדיוק שבכלי ההערכה — tfjs 1.3.1 + @teachablemachine/image 0.8 —
@@ -1675,12 +1783,10 @@ document.addEventListener('click', e=>{
   if (T('#prev')){ go(-1); return; }
   /* שער השלבים שייך למורה. הכפתור שאִפשר לתלמיד להחליף אותו בעצמו ירד. */
   if (T('#armbtn')){ S.armOpen=!S.armOpen; armScreen(); return; }
-  if ((el=T('#armtabs button'))){ S.armTab=el.dataset.t; armScreen();
-    if (S.armTab==='ask') setTimeout(()=>{
-      const g=document.getElementById('askGo'); if(!g) return;
-      g.onclick=()=>{ const o=document.getElementById('askOut'); o.textContent=''; let i=0;
-        const t=setInterval(()=>{o.textContent=CANNED.slice(0,i+=2); if(i>=CANNED.length)clearInterval(t);},11); };
-    },0); return; }
+  if ((el=T('#armtabs button'))){ S.armTab=el.dataset.t; armScreen(); save(); return; }
+  if (T('#askGo')){
+    const i=document.getElementById('askIn'); if(!i) return;
+    const t=i.value.trim(); i.value=''; mentorAsk(t); return; }
   if ((el=T('[data-dl]'))){ const k=el.dataset.dl;
     if (k==='bench') grab('bench', BENCH_SET.file, benchName());
     else { const s=SETS.find(x=>x.n===+k); if (s) grab(s.n, s.file, setName(s.n)); }
@@ -1708,12 +1814,20 @@ document.addEventListener('click', e=>{
   if (T('#numsBtn')){ S.numsOpen=!S.numsOpen; render(); return; }
   if (T('#openTM')){ window.open('https://teachablemachine.withgoogle.com/train/image','_blank','noopener,noreferrer'); return; }
   if (T('#fileAll')){ fileAll(); return; }
+  if (T('#ciSend')){ sendCheckIn(); return; }
 });
 /* בחירת תיקיית מודל. שומרים את ה-FileList עצמו; הטעינה קורית רק בהרצה.
    הבדיקה נעשית כאן ולא בהרצה: עדיף לומר "זו לא תיקיית TM" ברגע הבחירה
    מאשר אחרי שלוש דקות של טעינת ספריות. */
 document.addEventListener('change', e=>{
   const t=e.target;
+  /* תמונות הצ׳ק-אין. נקראות ל-data URL, בדיוק כמו במסך הקודם. */
+  if (t.dataset && t.dataset.ci!=null && t.files && t.files[0]){
+    const i=+t.dataset.ci, r=new FileReader();
+    r.onload=()=>{ S.ci.slots[i]=r.result; S.ci.err=''; render(); };
+    r.onerror=()=>{ S.ci.err='קריאת התמונה נכשלה.'; render(); };
+    r.readAsDataURL(t.files[0]); return;
+  }
   if (!t.dataset || t.dataset.model==null || !t.files || !t.files.length) return;
   const k=t.dataset.model, f=[...t.files];
   const has=re=>f.some(x=>re.test(x.name));
@@ -1729,6 +1843,10 @@ document.addEventListener('change', e=>{
 });
 document.addEventListener('input', e=>{
   const t=e.target;
+  if (t.id==='ciSum'){ S.ci.summary=t.value;
+    const b=document.getElementById('ciSend');
+    if (b) b.disabled = !(S.ci.slots.some(Boolean) && t.value.trim() && !S.ci.busy);
+    return; }
   /* הקלדה אינה מציירת מחדש, ולכן save נקרא כאן במפורש — אחרי העדכון. */
   if (t.dataset.note!=null){ S.notes[t.dataset.note]=t.value; save(); footer(step());
     if (t.dataset.note==='hypothesis'){
@@ -1797,6 +1915,8 @@ document.addEventListener('pointerdown', e=>{
 })();
 window.addEventListener('keydown', e=>{
   if (e.key==='Escape'){ S.armOpen=false; armScreen(); }
+  if (e.key==='Enter' && e.target.id==='askIn'){
+    const t=e.target.value.trim(); e.target.value=''; mentorAsk(t); return; }
   if (e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA') return;
   if (e.key==='ArrowLeft') go(1);
   if (e.key==='ArrowRight') go(-1);
@@ -1822,7 +1942,8 @@ const CAN_SAVE = (()=>{ try{ return !!window.indexedDB; }catch(e){ return false;
 /* רשימת היתר ולא רשימת איסור: שדה חדש אינו נשמר עד שמוסיפים אותו כאן,
    וכך דגל רגעי כמו "רץ עכשיו" לא יכול לשרוד לפתיחה הבאה ולנעול כפתור. */
 const SAVE_KEYS = ['i','stage','metric','predict','locked','broken','notes','done',
-  'prec','cal','calXY','gotMB','claims','metQ','numsOpen','armTab','filed','nmod','nres','runs'];
+  'prec','cal','calXY','gotMB','claims','metQ','numsOpen','armTab','filed','nmod','nres','runs',
+  'chat'];   /* השיחה היא חלק מהעבודה של התלמיד, ולכן נשמרת איתה */
 const FILE_KEYS = ['models','nfiles'];
 
 let dbp=null;

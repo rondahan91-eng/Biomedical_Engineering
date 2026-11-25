@@ -4,8 +4,9 @@
 import { CONFIG } from './config.js';
 import { renderLogin } from './auth.js';
 import { logout as apiLogout } from './api.js';
-import { mountStudentChat } from './studentChat.js';
 import { mountTeacherDashboard } from './teacherDashboard.js';
+/* studentChat.js אינו מיובא יותר: המעבדה היא מסך התלמיד. הקובץ נשאר
+   בריפו כמקור לחלק המוערך שעובר אליה, ולא נטען בכניסה. */
 
 const app = document.getElementById('app');
 
@@ -44,8 +45,12 @@ function route() {
   }
   // מבטלים את הטוקן בשרת לפני שמוחקים אותו מקומית, כדי שלא יישאר תקף
   const onLogout = async () => { await apiLogout(); clearSession(); route(); };
-  if (session.role === 'admin') mountTeacherDashboard(app, session, onLogout);
-  else mountStudentChat(app, session, onLogout);
+  if (session.role === 'admin') { mountTeacherDashboard(app, session, onLogout); return; }
+  /* מסך התלמיד הוא המעבדה, והיא המסך היחיד. ההתחברות כבר נשמרה — גם
+     במראה שב-localStorage — ולכן המעבדה מזהה את התלמיד/ה מיד.
+     mountStudentChat נשאר בקוד כמקור לחלק המוערך שעובר לתוך המעבדה;
+     הוא אינו מנותב אליו יותר. */
+  location.replace('tools/_design/lab/');
 }
 
 route();
