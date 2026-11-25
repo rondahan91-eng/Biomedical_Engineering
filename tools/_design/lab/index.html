@@ -1703,9 +1703,25 @@ async function benchList(){
                 ...f.neg.map(n=>({src:DATA+'bench/neg/'+n, truth:0}))];
   return benchCache;
 }
-const loadImg = src => new Promise((ok,bad)=>{
-  const i=new Image(); i.onload=()=>ok(i);
-  i.onerror=()=>bad(new Error('תמונה לא נטענה: '+src)); i.src=src; });
+/* 200 תמונות ברצף, ושלושים תלמידים שמריצים בבת אחת: כשל רשת חולף על
+   תמונה אחת הפיל הרצה שלמה בת שמונה-עשרה שניות, בלי שום דרך להבין למה.
+   נמצא בבדיקה חיה — הקובץ עצמו היה תקין ומוגש. שלושה ניסיונות, והקובץ
+   מבוקש מחדש עם פרמטר כדי שלא ייתפס כישלון מהמטמון. */
+function loadImg(src, tries){
+  const N = tries==null ? 3 : tries;
+  return new Promise((ok,bad)=>{
+    const go = left => {
+      const i = new Image();
+      i.onload = ()=>ok(i);
+      i.onerror = ()=>{
+        if (left<=1) return bad(new Error('תמונה לא נטענה: '+src));
+        setTimeout(()=>go(left-1), 400);
+      };
+      i.src = left===N ? src : src + (src.includes('?')?'&':'?') + 'r=' + (N-left);
+    };
+    go(N);
+  });
+}
 
 async function modelFromFiles(files){
   const f=[...files], pick=re=>f.find(x=>re.test(x.name));
