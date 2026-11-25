@@ -209,7 +209,8 @@ export async function mountStudentChat(app, session, onLogout) {
               : `<div class="tool-link locked"><b>${escapeHtml(t.name)} 🔒</b>
                    <span>נפתח ב${escapeHtml(t.opensAtName || '')}</span></div>`).join('')
           : /* שרת ישן: כל הכלים פתוחים */
-            toolLink('tools/notebook/', 'מחברת ניסוי', 'השערה, מדידה, מסקנה')
+            toolLink('tools/_design/lab/', 'המעבדה', 'עשרה לוחות, מהשערה עד מסקנה')
+    + toolLink('tools/notebook/', 'מחברת ניסוי', 'השערה, מדידה, מסקנה')
             + toolLink('tools/evaluate/', 'הערכת מודל', 'דיוק, רגישות, מפת קשב')
             + toolLink('tools/perturb/', 'כלי הפרעות', 'מה באמת מניע את ההחלטה')}
         <p class="form-note" style="margin-top:8px">

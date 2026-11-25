@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>המעבדה — דמו</title>
+<title>המעבדה — שבוע עקומת הלמידה</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;700;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
@@ -129,6 +129,17 @@ main{flex:1;min-height:0;overflow-y:auto;display:flex;justify-content:center}
   background:#fff7ed;border:1px solid #fed7aa;color:#9a3412;border-radius:9px;
   padding:8px 11px;font-size:12px;line-height:1.55;font-weight:500}
 #savewarn[hidden]{display:none}
+/* פס התיוק של _filing.js. position:fixed, ולכן מחוץ לזרימה ולא משנה גובה
+   של שום לוח. "פס מצב קבוע על המסך, לא הודעה חולפת" — זו כל הנקודה שלו. */
+#filingChk{position:fixed;left:14px;bottom:86px;z-index:40;max-width:290px;
+  border-radius:9px;padding:7px 11px;font-size:11.5px;line-height:1.5;font-weight:500}
+#filingChk:empty{display:none}
+#filingChk.good{background:#f3fbf7;border:1px solid #bfe8d4;color:#065f46}
+#filingChk.warn{background:#fff8ec;border:1px solid #f6ddb4;color:#92400e}
+#filingChk b{font-weight:800}
+#filingChk a{color:inherit}
+.who b{font-weight:800;color:var(--ink)}
+.who .out{margin-inline-start:8px}
 
 /* ---------------- טבלת המספרים — נפתחת, לא מוצגת ---------------- */
 .numsbtn{margin-top:8px}
@@ -400,11 +411,11 @@ footer .hint b{color:var(--warn);font-weight:700}
 <header>
   <span class="wk">שבוע עקומת הלמידה</span>
   <nav id="steps"></nav>
-  <span class="who">דנה · י1 · שלב <b id="stg">2</b>
-    <button class="quiet" id="stgBtn" style="padding:3px 7px;font-size:11px">החלף</button></span>
+  <span class="who" id="who"></span>
 </header>
 
 <div id="savewarn" hidden></div>
+<div id="filingChk"></div>
 
 <main><div class="stage" id="stage"></div></main>
 
@@ -435,6 +446,200 @@ footer .hint b{color:var(--warn);font-weight:700}
 </div>
 
 <script>
+/* ==========================================================================
+   תיוק וזהות — העתק של tools/_filing.js, שהוא המקור. שני הבדלים בלבד,
+   שניהם בגלל שהמעבדה יושבת עומק אחד יותר מהכלים (tools/_design/lab/):
+   הייבוא של config.js ונתיב מסך הכניסה הם ../../../ ולא ../../.
+   אל תשנו כאן לוגיקה — משנים ב-_filing.js ומעתיקים.
+   ========================================================================== */
+const SESSION_KEY = 'ai-mentor-biorefua-session';
+const API_KEY_LS  = 'ai-mentor-api-url';
+const QUEUE_KEY   = 'ai-mentor-submit-queue';
+const RE_AUTH     = /פג תוקף ההתחברות|נדרשת התחברות|אין הרשאה/;
+
+const sessionUser = () => {
+  try { return JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null'); }
+  catch { return null; }
+};
+
+let CONFIG_API = '';
+function apiUrl() {
+  if (CONFIG_API) return CONFIG_API;
+  const own = localStorage.getItem(API_KEY_LS) || '';
+  if (own) return own;
+  let w = window, hops = 0;
+  try {
+    while (w.opener && w.opener !== w && hops < 5) {
+      w = w.opener; hops++;
+      const u = w.localStorage.getItem(API_KEY_LS);
+      if (u) return u;
+    }
+  } catch (e) {}
+  return '';
+}
+async function loadApiUrl() {
+  try {
+    const m = await import('../../../js/config.js');
+    CONFIG_API = (m.CONFIG && m.CONFIG.API_URL) || '';
+    if (CONFIG_API) { try { localStorage.setItem(API_KEY_LS, CONFIG_API); } catch (e) {} }
+  } catch (e) { /* נשארים עם הגיבויים */ }
+  renderFilingStatus();
+  flushQueue();
+}
+
+/* sessionStorage הוא פר-לשונית ולשונית בת מקבלת עותק מנותק. */
+function tokenFromOpenerChain(current) {
+  let w = window, hops = 0;
+  try {
+    while (w.opener && w.opener !== w && hops < 5) {
+      w = w.opener; hops++;
+      const raw = w.sessionStorage.getItem(SESSION_KEY);
+      if (!raw) continue;
+      const u = JSON.parse(raw);
+      if (u && u.token && u.token !== current) return u;
+    }
+  } catch (e) {}
+  return null;
+}
+const SESSION_MIRROR = 'ai-mentor-session-mirror';
+const MIRROR_TTL = 24 * 60 * 60 * 1000;
+function sessionFromMirror() {
+  try {
+    const u = JSON.parse(localStorage.getItem(SESSION_MIRROR) || 'null');
+    if (!u || !u.token) return null;
+    if (u.mirroredAt && Date.now() - u.mirroredAt > MIRROR_TTL) return null;
+    return u;
+  } catch { return null; }
+}
+function currentUser() {
+  const mine = sessionUser();
+  if (mine && mine.token) return mine;
+  const borrowed = tokenFromOpenerChain(null) || sessionFromMirror();
+  if (borrowed) {
+    try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(borrowed)); } catch (e) {}
+    return borrowed;
+  }
+  return null;
+}
+
+const loadQueue = () => {
+  try { return JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]'); } catch { return []; }
+};
+const saveQueue = q => { try { localStorage.setItem(QUEUE_KEY, JSON.stringify(q)); } catch (e) {} };
+function enqueue(item) { const q = loadQueue(); q.push(item); saveQueue(q); }
+
+let flushing = false;
+async function flushQueue() {
+  if (flushing) return;
+  const q = loadQueue();
+  if (!q.length) { renderFilingStatus(); return; }
+  const api = apiUrl(), u = currentUser();
+  if (!api || !u) { renderFilingStatus(); return; }
+  flushing = true;
+  try {
+    for (const item of q.slice()) {
+      let d;
+      try { d = await postQueued(u.token, item); } catch (netErr) { break; }
+      if (!d.ok && RE_AUTH.test(d.error || '')) {
+        const fresh = tokenFromOpenerChain(u.token);
+        if (!fresh) break;
+        try { sessionStorage.setItem(SESSION_KEY, JSON.stringify(fresh)); } catch (e) {}
+        try { d = await postQueued(fresh.token, item); } catch (e2) { break; }
+      }
+      if (!d.ok) {
+        const q2 = loadQueue(), row = q2.filter(x => x.id === item.id)[0];
+        if (row) { row.lastError = d.error || 'שגיאה לא ידועה'; saveQueue(q2); }
+        break;
+      }
+      saveQueue(loadQueue().filter(x => x.id !== item.id));
+      lastConfirmed = { filename: item.filename, kind: d.result && d.result.kind, at: Date.now() };
+      try { localStorage.setItem('ai-mentor-last-confirmed', JSON.stringify(lastConfirmed)); } catch (e) {}
+    }
+  } finally { flushing = false; renderFilingStatus(); }
+}
+
+async function postQueued(token, item) {
+  /* כל השדות תחת payload. גוף שטוח מגיע לשרת כ-{} — בלי טוקן, ולכן עם
+     "פג תוקף ההתחברות". ראו c852d40. */
+  const body = (item.action === 'saveRun')
+    ? { action: 'saveRun', payload: { token: token, run: item.run } }
+    : { action: 'saveArtifact',
+        payload: { token: token, kind: item.kind, filename: item.filename,
+                   mimeType: item.mimeType, base64: item.base64 } };
+  const resp = await fetch(apiUrl(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },   // מונע preflight מול Apps Script
+    body: JSON.stringify(body),
+  });
+  return resp.json();
+}
+
+let lastConfirmed = null;
+try { lastConfirmed = JSON.parse(localStorage.getItem('ai-mentor-last-confirmed') || 'null'); }
+catch { lastConfirmed = null; }
+
+function renderFilingStatus() {
+  const box = document.getElementById('filingChk');
+  if (!box) return;
+  const u = currentUser(), api = apiUrl(), q = loadQueue();
+  if (q.length) {
+    const refused = q.filter(x => x.lastError)[0];
+    box.className = 'verdict warn';
+    box.innerHTML = '<b>⏳ ' + q.length + ' פריטים ממתינים לשליחה.</b><br>' +
+      (refused
+        ? 'השרת החזיר: <b>' + String(refused.lastError).replace(/[<>&]/g, '') + '</b>'
+        : !u
+        ? 'כדי לשלוח צריך להיות מחוברים. <a href="../../../" target="_blank" rel="opener"><b>מסך הכניסה ↗</b></a>'
+        : !api
+        ? 'מחפש את כתובת השרת.'
+        : 'מנסה לשלוח שוב. אפשר להשאיר את הדף פתוח.') +
+      '<br><span style="font-weight:400">שום דבר לא אבד.</span>';
+    return;
+  }
+  if (lastConfirmed) {
+    box.className = 'verdict good';
+    box.innerHTML = '<b>✓ נקלט אצל המורה.</b> ' +
+      new Date(lastConfirmed.at).toLocaleString('he-IL',
+        { day:'numeric', month:'numeric', hour:'2-digit', minute:'2-digit' }) +
+      (lastConfirmed.kind ? ' · "' + lastConfirmed.kind + '"' : '');
+    return;
+  }
+  if (u && api) {
+    box.className = 'verdict good';
+    box.textContent = '✓ מחובר/ת. כל הרצה ותיוק יגיעו למורה.';
+  } else {
+    box.className = 'verdict warn';
+    box.innerHTML = '<b>עדיין לא מזוהה התחברות.</b> אפשר לעבוד — מה שתשמרו ' +
+      'יישלח ברגע שתתחברו. <a href="../../../" target="_blank" rel="opener"><b>מסך הכניסה ↗</b></a>';
+  }
+}
+window.addEventListener('focus', flushQueue);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) flushQueue(); });
+window.addEventListener('online', flushQueue);
+setInterval(() => { if (loadQueue().length) flushQueue(); }, 20000);
+
+/* ---- מה שהמעבדה קוראת לו ---- */
+const qid = () => 'LAB' + Date.now() + Math.random().toString(36).slice(2, 5);
+/* btoa נופל על עברית. ממירים ל-UTF-8 קודם. */
+function b64(str){
+  const bytes = new TextEncoder().encode(str);
+  let s = ''; bytes.forEach(b => s += String.fromCharCode(b));
+  return btoa(s);
+}
+/* הרצה אמיתית → לשונית Runs, אותה צורה שהשרת כבר מקבל מכלי ההערכה. */
+function fileRun(label, res, images){
+  enqueue({ id:qid(), action:'saveRun', filename:label,
+    run:{ label, threshold:0.5, images,
+          TP:res.TP, FN:res.FN, FP:res.FP, TN:res.TN,
+          acc:res.acc, sens:res.sens, spec:res.spec } });
+  flushQueue();
+}
+function fileArtifact(kind, filename, text, mimeType){
+  enqueue({ id:qid(), action:'saveArtifact', kind, filename,
+            mimeType: mimeType || 'application/json', base64: b64(text) });
+  flushQueue();
+}
+
 /* ========== המספרים. צורת curveReport מהשרת, בלי שינוי. ========== */
 const PTS = [
   {n:25, acc:.610,sens:.520,spec:.700,TP:52,FN:48,FP:30,TN:70},
@@ -542,7 +747,11 @@ const STEPS = [
 /* ========== נתוני השבוע. הכול נגזר מכאן — התלמיד לא בוחר מאגר. ========== */
 const WEEK = {
   pool:'מלריה — תאי דם', classes:['נגוע','תקין'],
-  benchN:200, ruler:100   /* הגודל שעליו מאמנים פעמיים בשביל סרגל הרעש */
+  benchN:200, ruler:100,  /* הגודל שעליו מאמנים פעמיים בשביל סרגל הרעש */
+  /* מזהה השבוע. נכנס למפתח האחסון, ולכן החלפת תוכן שבועית מחייבת להחליף
+     גם אותו — אחרת השבוע הבא נפתח עם התשובות של הקודם ועם וי ירוק על
+     עשרת הלוחות. זה הדבר היחיד שצריך לזכור כשמחליפים תוכן. */
+  id:'curve'
 };
 const DATA = '../../../data/';
 const SETS = [
@@ -604,7 +813,6 @@ function renderSteps(){
     `<button data-i="${i}" title="${s.h}"
       class="${S.done[s.id]?'done':''} ${i===S.i?'on':''} ${avail(s)?'':'lock'}"
       ${avail(s)?'':'disabled'}><b>${S.done[s.id]?'✓':(i+1)}</b></button>`).join('');
-  document.getElementById('stg').textContent = S.stage;
 }
 
 /* ========== הבמה ========== */
@@ -941,6 +1149,7 @@ async function runReal(n){
     const res = await evalModel(model, imgs, p=>{ S.rprog=p;
       const el=document.querySelector('.prog i'); if(el) el.style.width=Math.round(p*100)+'%'; });
     S.runs[n] = {res, cap:true};
+    fileRun('n='+n, res, imgs.length);     /* → לשונית Runs אצל המורה */
     if (captured().length>=5) S.done.runs5=true;
   }catch(e){ S.rerr='ההרצה נכשלה — '+e.message; }
   S.rbusy=false; S.sel=null; render();
@@ -1092,6 +1301,34 @@ function wConc(){
         <textarea data-note="conclusion" style="height:58px"
           placeholder="גודל ערכת המבחן · מאגר יחיד · אותו מקור · רעש התיוג">${S.notes.conclusion||''}</textarea></div>
     </div>`;
+}
+
+/* התיוק האמיתי: מה שהוצהר, מה שנמדד, ומה שנשאר פתוח — קובץ אחד לתיקיית
+   "מחברת ניסוי" של התלמיד. עובר באותו תור של שאר הכלים, ולכן שורד גם
+   רשת שנופלת באמצע ההגשה. ההרצות עצמן כבר נשלחו בזמן אמת. */
+function fileAll(){
+  const m=S.metric, caps=captured(), u=currentUser();
+  const claim = (MAP_CLAIMS.find(c=>c.k===S.notes.mapclaim)||{}).t || null;
+  const doc = {
+    שבוע: WEEK.id, מאגר: WEEK.pool, מדד_מוצג: MET[m],
+    תלמיד: (u && u.displayName) || null,
+    השערה: { טקסט:S.notes.hypothesis||null, ננעלה:S.locked||null, נפתחה_מחדש:!!S.broken },
+    ניבוי: S.predict,
+    רעש: noiseIn()
+      ? { נקודות:+noiseBand(m).toFixed(2), אימון_א:S.nres.A, אימון_ב:S.nres.B }
+      : null,
+    הרצות: caps.map(n=>Object.assign({n}, S.runs[n].res)),
+    קריאת_הגרף: S.notes.read3||null,
+    מפות_קשב: { טענה:claim, ניסוי_מפריד:S.notes.maps||null },
+    מסקנה: { הכרעה:S.notes.verdict||null, מגבלה:S.notes.conclusion||null,
+             טענות_שסומנו: CLAIMS.filter(c=>S.claims[c.k]).map(c=>c.t) },
+    נוצר: new Date().toISOString()
+  };
+  fileArtifact('notebook',
+    'מעבדה-' + WEEK.id + '-' + new Date().toISOString().slice(0,10) + '.json',
+    JSON.stringify(doc, null, 2));
+  S.filed = caps.length + (noiseIn()?2:0) + 1;
+  S.done.record = true; render();
 }
 
 function wRec(){
@@ -1415,6 +1652,7 @@ async function runBothModels(){
       S.nbusy=`מריץ אימון ${he} · ${imgs.length} תמונות`; render();
       S.nres[k] = await evalModel(model, imgs, p=>{ S.nprog=p;
         const el=document.querySelector('.prog i'); if(el) el.style.width=Math.round(p*100)+'%'; });
+      fileRun('רעש '+he+' · n='+WEEK.ruler, S.nres[k], imgs.length);
     }
     S.nbusy=''; S.done.noise=true; render();
   }catch(err){ S.nbusy=''; S.nerr='ההרצה נכשלה — '+err.message; render(); }
@@ -1435,7 +1673,7 @@ document.addEventListener('click', e=>{
     if (STEPS[j] && avail(STEPS[j])){ S.i=j; S.sel=null; render(); } return; }
   if (T('#next')){ go(1); return; }
   if (T('#prev')){ go(-1); return; }
-  if (T('#stgBtn')){ S.stage=S.stage===2?1:2; if(!avail(step())) S.i=0; render(); return; }
+  /* שער השלבים שייך למורה. הכפתור שאִפשר לתלמיד להחליף אותו בעצמו ירד. */
   if (T('#armbtn')){ S.armOpen=!S.armOpen; armScreen(); return; }
   if ((el=T('#armtabs button'))){ S.armTab=el.dataset.t; armScreen();
     if (S.armTab==='ask') setTimeout(()=>{
@@ -1469,7 +1707,7 @@ document.addEventListener('click', e=>{
   if (T('#unlock')){ S.broken=true; S.locked=null; render(); return; }
   if (T('#numsBtn')){ S.numsOpen=!S.numsOpen; render(); return; }
   if (T('#openTM')){ window.open('https://teachablemachine.withgoogle.com/train/image','_blank','noopener,noreferrer'); return; }
-  if (T('#fileAll')){ S.filed=4; S.done.record=true; render(); return; }
+  if (T('#fileAll')){ fileAll(); return; }
 });
 /* בחירת תיקיית מודל. שומרים את ה-FileList עצמו; הטעינה קורית רק בהרצה.
    הבדיקה נעשית כאן ולא בהרצה: עדיף לומר "זו לא תיקיית TM" ברגע הבחירה
@@ -1571,7 +1809,14 @@ window.addEventListener('resize',()=>{ if(document.getElementById('chart')){draw
    מגה-בייטים — localStorage מחזיק מחרוזות בלבד ותקוע על ~5MB.
    שתי רשומות ולא אחת: המצב הקטן נשמר בכל שינוי, והקבצים הכבדים רק כשהם
    מתחלפים — כך ששמירה שנכשלת על הקבצים אינה לוקחת איתה את התשובות. */
-const DB='lab-ml', STORE='state', KEY_S='state', KEY_F='files', SNAP_V=1;
+/* המפתחות נושאים את זהות התלמיד ואת מזהה השבוע. בלי זה, במחשב כיתה
+   משותף התלמיד השני משחזר את העבודה של הראשון ואז דורס אותה — וזה בדיוק
+   מה שקרה כאן עד עכשיו, עם מפתח קבוע אחד לכל מי שפתח את הדף. */
+const DB='lab-ml', STORE='state', SNAP_V=1;
+const WHO = () => { const u = currentUser(); return (u && u.studentId) ? u.studentId : 'anon'; };
+let OWNER = 'anon';
+let KEY_S = 'state:anon:' + WEEK.id, KEY_F = 'files:anon:' + WEEK.id;
+function setKeys(who){ OWNER = who; KEY_S = 'state:'+who+':'+WEEK.id; KEY_F = 'files:'+who+':'+WEEK.id; }
 const CAN_SAVE = (()=>{ try{ return !!window.indexedDB; }catch(e){ return false; } })();
 
 /* רשימת היתר ולא רשימת איסור: שדה חדש אינו נשמר עד שמוסיפים אותו כאן,
@@ -1650,8 +1895,27 @@ addEventListener('visibilitychange',()=>{
 addEventListener('pagehide',()=>{ clearTimeout(saveT); flush(); });
 
 const isObj = x => !!x && typeof x==='object' && !Array.isArray(x) && !(x instanceof File);
+/* תלמיד שפתח את המעבדה לפני שהתחבר כתב תחת 'anon'. ברגע שהזהות מגיעה,
+   מעבירים את הרשומה אליו — אחרת העבודה שלו פשוט "נעלמת" מול העיניים. */
+async function adoptAnon(who){
+  if (who === 'anon') return;
+  const target = 'state:'+who+':'+WEEK.id;
+  try{
+    if (await dbGet(target)) return;                 /* כבר יש לו רשומה */
+    const st = await dbGet('state:anon:'+WEEK.id);
+    if (!st) return;
+    const fl = await dbGet('files:anon:'+WEEK.id);
+    await dbPut(target, st);
+    if (fl) await dbPut('files:'+who+':'+WEEK.id, fl);
+    await dbDel('state:anon:'+WEEK.id); await dbDel('files:anon:'+WEEK.id);
+  }catch(e){}
+}
+
 async function restore(){
   if (!CAN_SAVE) return;
+  const who = WHO();
+  await adoptAnon(who);
+  setKeys(who);
   /* כתובת אחת שמסתובבת בכיתה מוחקת שבוע שלם. מאשרים לפני, ולא בשקט. */
   if (new URLSearchParams(location.search).has('reset')){
     const had = await dbGet(KEY_S).catch(()=>null);
@@ -1690,10 +1954,40 @@ async function restore(){
 /* הציור לא מחכה לאחסון תקוע: אם IndexedDB לא ענה בשתי שניות וחצי,
    המעבדה נפתחת בלי שחזור — וכשהשחזור כן מגיע, היא מציירת שוב. */
 let booted=false;
-const boot = ()=>{ booted=true; render(); };
+const boot = ()=>{ booted=true; render(); whoBar(); };
 const bootT = setTimeout(()=>{ if(!booted) boot(); }, 2500);
 restore().then(()=>{ clearTimeout(bootT); boot(); },
                ()=>{ clearTimeout(bootT); boot(); });
+
+/* הזהות בכותרת. עד עכשיו היה כתוב כאן "דנה · י1" לכל מי שפתח את הדף. */
+function whoBar(){
+  const el = document.getElementById('who'); if (!el) return;
+  const u = currentUser();
+  el.innerHTML = u
+    ? `<b>${String(u.displayName||'תלמיד/ה').trim().replace(/[<>&]/g,'')}</b>`
+      + `<button class="quiet out" id="logout" style="padding:3px 9px;font-size:11px">יציאה</button>`
+    : `<a href="../../../" target="_blank" rel="opener"
+         style="color:var(--warn);font-weight:700">לא מחובר/ת · כניסה ↗</a>`;
+}
+document.addEventListener('click', e=>{
+  if (!e.target.closest('#logout')) return;
+  /* יציאה מקומית בלבד: הטוקן מבוטל במסך הראשי. מה שנשמר נשאר תחת
+     המזהה של התלמיד, ולכן חוזר אליו בכניסה הבאה. */
+  try{ sessionStorage.removeItem(SESSION_KEY); }catch(e2){}
+  location.href = '../../../';
+});
+
+/* התחברות שקרתה אחרי שהדף נפתח: הזהות מתחלפת, והמפתחות חייבים להתחלף
+   איתה. טוענים מחדש במקום למזג שני מצבים זה לתוך זה. */
+addEventListener('focus', async ()=>{
+  const who = WHO();
+  if (who === OWNER) { whoBar(); return; }
+  clearTimeout(saveT);
+  await adoptAnon(who);
+  location.reload();
+});
+
+loadApiUrl();
 </script>
 
 <!-- רקע דינמי. שכבה נפרדת לחלוטין: הקנבס הוא z-index:-1, כלומר מעל רקע העמוד
