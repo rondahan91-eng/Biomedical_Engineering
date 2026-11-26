@@ -148,16 +148,8 @@ main{flex:1;min-height:0;overflow-y:auto;display:flex;justify-content:center}
 .cm.model{background:#0b2330;color:#cfe3ec;margin-inline-end:22px}
 .cm.sys{background:none;color:#8aa2b3;padding:0;margin:0 0 6px}
 .cm.busy{opacity:.6;font-style:italic}
-/* ---------------- לוח 10: ההגשה השבועית ---------------- */
-.cislots{display:flex;gap:10px}
-.cislot{flex:none;width:112px;height:84px;border:1.5px dashed var(--line-2);border-radius:10px;
-  background:var(--surface);display:flex;align-items:center;justify-content:center;
-  cursor:pointer;overflow:hidden;position:relative}
-.cislot:hover{border-color:var(--ink-3)}
-.cislot input{position:absolute;inset:0;opacity:0;cursor:pointer}
-.cislot span{font-size:12.5px;color:var(--ink-3);font-weight:700}
-.cislot img{width:100%;height:100%;object-fit:cover}
-.cislot.has{border-style:solid;border-color:var(--ok)}
+/* משוב לגרירה. בלעדיו אי אפשר לדעת אם הקופסה בכלל מקבלת את מה שגוררים. */
+.mbox.over,.fslot.over{border-color:var(--accent);background:#effbf9}
 
 /* ---------------- טבלת המספרים — נפתחת, לא מוצגת ---------------- */
 .numsbtn{margin-top:8px}
@@ -773,9 +765,9 @@ const STEPS = [
 
   {id:'record', stage:1, kind:'soft',
    eyebrow:'WEEKLY CHECK-IN', h:'ההגשה השבועית',
-   lede:'שתי תמונות התקדמות ומשפט על מה שעשיתם. זה החלק המוערך של השבוע.',
+   lede:'סכמו במשפטים ספורים מה עשיתם השבוע. זה החלק המוערך.',
    why:'ההרצות כבר נשלחו למורה בזמן אמת; זו ההגשה שמקבלת ציון.',
-   how:'העלו תמונות, כתבו סיכום קצר, ושלחו.',
+   how:'כתבו סיכום קצר ושלחו.',
    trap:'להסתמך על הדפדפן. הוא לא מחסן — מה שלא נשלח, לא קיים.'}
 ];
 
@@ -832,7 +824,7 @@ const S = {
   rbusy:false, rprog:0, rerr:'', mdlerr:'',
   armOpen:false, armTab:'how', numsOpen:false, filed:0,
   chat:[], askBusy:false,            /* השיחה עם המנטור, בתוך המעבדה */
-  ci:{slots:[null,null], summary:'', busy:false, err:'', score:null, sent:false}
+  ci:{summary:'', busy:false, err:'', score:null, sent:false}
 };
 const pred = () => S.predict[S.metric];
 const step = () => STEPS[S.i];
@@ -1049,8 +1041,9 @@ function wNoise(){
   const okUp = !!(S.nmod.A && S.nmod.B);
   const okRun = !!(S.nres.A && S.nres.B);
   const st = (done,now)=> done ? 'done' : (now ? 'now' : '');
-  const slot = k => `<div class="fslot ${S.nmod[k]?'has':''}">
-      <label>${S.nmod[k] ? `אימון ${k==='A'?'א׳':'ב׳'} ✓ ${S.nmod[k]}` : `תיקיית אימון ${k==='A'?'א׳':'ב׳'}`}
+  const slot = k => `<div class="fslot ${S.nmod[k]?'has':''}" data-drop="${k}">
+      <label>${S.nmod[k] ? `אימון ${k==='A'?'א׳':'ב׳'} ✓ ${S.nmod[k]}`
+                         : `תיקיית אימון ${k==='A'?'א׳':'ב׳'} · לחצו או גררו`}
         <input type="file" webkitdirectory directory multiple data-model="${k}"></label></div>`;
 
   return `<div class="flow ${okRun?'mini':''}">
@@ -1073,7 +1066,7 @@ function wNoise(){
 
       <div class="fstep ${st(okUp, okDl&&!okUp)}">
         <div class="fhd"><span class="fn">3</span><span class="ft">העלאת שני המודלים</span></div>
-        <div class="fd">בחרו את <b>התיקייה</b> שירדה מ-TM (זו עם
+        <div class="fd">לחצו או גררו את <b>התיקייה</b> שירדה מ-TM (זו עם
           <code>model.json</code>), אחת לכל אימון.</div>
         <div class="fa">${slot('A')}${slot('B')}</div>
       </div>
@@ -1133,12 +1126,12 @@ function wModels(){
     const open = n===25 || S.stage>=2, m = S.models[n];
     if (!open) return `<div class="mbox off"><div class="mpad">
         <span class="mic">·</span><span class="mn">${n}</span><span class="ms">שלב 2</span></div></div>`;
-    return `<div class="mbox ${m?'full':''}">
+    return `<div class="mbox ${m?'full':''}" data-drop="m${n}">
         <label class="mpad">
           <input type="file" webkitdirectory directory multiple data-model="m${n}">
           <span class="mic">${m?ICON_OK:'+'}</span>
           <span class="mn">${n}</span>
-          <span class="ms" title="${m?m.name:''}">${m?m.name:'גררו לכאן את המודל'}</span>
+          <span class="ms" title="${m?m.name:''}">${m?m.name:'לחצו או גררו תיקייה'}</span>
         </label></div>`;
   }).join('');
   return `<div class="sharedchk">
@@ -1373,15 +1366,11 @@ function fileAll(){
    מונה על המסך ולא פנה לשום שרת. */
 async function sendCheckIn(){
   const ci=S.ci;
-  if (!ci.slots.some(Boolean) || !ci.summary.trim()){
-    ci.err='צריך לפחות תמונה אחת ומשפט סיכום.'; render(); return; }
+  if (!ci.summary.trim()){ ci.err='צריך משפט סיכום.'; render(); return; }
   ci.busy=true; ci.err=''; render();
   try{
-    const images = ci.slots.filter(Boolean).map(d=>{
-      const [meta,base64]=d.split(',');
-      return { base64, mimeType:(meta.match(/data:(.*);base64/)||[])[1]||'image/jpeg' }; });
     const hist = S.chat.concat([{role:'user', text:ci.summary.trim()}]);
-    const res = await apiCall('sendMentorMessage', { history:hist, images });
+    const res = await apiCall('sendMentorMessage', { history:hist });
     S.chat = hist.concat([{role:'model', text:(res&&res.reply)||''}]);
     S.notes.ciSent = new Date().toISOString();
     if (res && res.graded){ ci.score=res.score; S.notes.ciScore=res.score; }
@@ -1403,19 +1392,12 @@ function wRec(){
       <div style="font-size:19px;font-weight:900">ההגשה נשלחה</div>
       <div style="font-size:14px;color:var(--ink-2);margin-top:6px">הציון יופיע כאן אחרי ההערכה.</div>
       <button class="quiet" id="fileAll" style="margin-top:14px">תיוק התוצרים</button></div>`;
-  const has = ci.slots.filter(Boolean).length;
   return `<div class="fields" style="max-width:720px">
-    <div><label>שתי תמונות התקדמות</label>
-      <div class="cislots">${[0,1].map(i=>`
-        <label class="cislot ${ci.slots[i]?'has':''}">
-          <input type="file" accept="image/*" data-ci="${i}">
-          ${ci.slots[i]?`<img src="${ci.slots[i]}" alt="">`:'<span>+ תמונה</span>'}
-        </label>`).join('')}</div></div>
     <div><label>מה עשיתם השבוע, בקצרה</label>
-      <textarea id="ciSum" style="height:74px" ${ci.busy?'disabled':''}
+      <textarea id="ciSum" style="height:92px" ${ci.busy?'disabled':''}
         placeholder="מה אימנתם, מה מדדתם, ומה הפתיע">${esc(ci.summary)}</textarea></div>
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-      <button class="go" id="ciSend" ${(has && ci.summary.trim() && !ci.busy)?'':'disabled'}>${
+      <button class="go" id="ciSend" ${(ci.summary.trim() && !ci.busy)?'':'disabled'}>${
         ci.busy?'שולח…':'הגשה שבועית'}</button>
       <button class="quiet" id="fileAll">תיוק התוצרים</button>
       ${ci.err?`<span style="color:var(--err);font-size:12.5px">${esc(ci.err)}</span>`
@@ -1837,25 +1819,67 @@ document.addEventListener('click', e=>{
    מאשר אחרי שלוש דקות של טעינת ספריות. */
 document.addEventListener('change', e=>{
   const t=e.target;
-  /* תמונות הצ׳ק-אין. נקראות ל-data URL, בדיוק כמו במסך הקודם. */
-  if (t.dataset && t.dataset.ci!=null && t.files && t.files[0]){
-    const i=+t.dataset.ci, r=new FileReader();
-    r.onload=()=>{ S.ci.slots[i]=r.result; S.ci.err=''; render(); };
-    r.onerror=()=>{ S.ci.err='קריאת התמונה נכשלה.'; render(); };
-    r.readAsDataURL(t.files[0]); return;
-  }
   if (!t.dataset || t.dataset.model==null || !t.files || !t.files.length) return;
-  const k=t.dataset.model, f=[...t.files];
+  acceptModel(t.dataset.model, [...t.files]);
+});
+
+/* קבלת תיקיית מודל — אותה בדיקה בדיוק בין אם נבחרה בלחיצה ובין אם נגררה. */
+function acceptModel(k, f, dirName){
   const has=re=>f.some(x=>re.test(x.name));
   if (!(has(/^model\.json$/i) && has(/^metadata\.json$/i) && has(/\.bin$/i))){
-    S.mdlerr='התיקייה שנבחרה אינה ייצוא של Teachable Machine — חסרים model.json, metadata.json או weights.bin';
+    S.mdlerr='מה שנבחר אינו ייצוא של Teachable Machine — חסרים model.json, metadata.json או weights.bin. '
+           + 'אם ירד קובץ ZIP, צריך לחלץ אותו קודם ולגרור את התיקייה שבתוכו.';
     S.nerr=S.mdlerr; render(); return;
   }
-  const name = (f[0].webkitRelativePath||'').split('/')[0] || `${f.length} קבצים`;
+  const name = (f[0].webkitRelativePath||'').split('/')[0] || dirName || `${f.length} קבצים`;
   S.mdlerr=''; S.nerr='';
   if (k==='A'||k==='B'){ S.nfiles[k]=f; S.nmod[k]=name; S.nres[k]=null; }
   else { S.models[+k.slice(1)] = {name, files:f}; }
   render();
+}
+
+/* גרירה ושחרור. המסך אמר "גררו לכאן את התיקייה" ולא היה בקובץ שום מאזין
+   drop — ה-input מוסתר, ולכן גרירה לא עשתה כלום ואפילו לא נתנה שגיאה.
+   תיקייה שנגררת מגיעה כ-entry ולא כקובץ, ולכן צריך לקרוא אותה; שתי רמות,
+   כי יש מי שגורר את התיקייה שחולצה מה-ZIP ובתוכה תיקיית המודל. */
+function entryFiles(entry, depth){
+  return new Promise(ok=>{
+    if (!entry) return ok([]);
+    if (entry.isFile) return entry.file(f=>ok([f]), ()=>ok([]));
+    if (!entry.isDirectory || depth<=0) return ok([]);
+    const rd = entry.createReader(), seen = [];
+    const step = () => rd.readEntries(es=>{
+      if (es.length) { seen.push(...es); return step(); }
+      Promise.all(seen.map(e=>entryFiles(e, depth-1)))
+        .then(ls=>ok([].concat.apply([], ls)));
+    }, ()=>ok([]));
+    step();
+  });
+}
+async function filesFromDrop(dt){
+  const items = [...(dt.items||[])];
+  const entries = items.map(i=>i.webkitGetAsEntry && i.webkitGetAsEntry()).filter(Boolean);
+  if (entries.length){
+    const dir = entries.find(e=>e.isDirectory);
+    const lists = await Promise.all(entries.map(e=>entryFiles(e, 2)));
+    const files = [].concat.apply([], lists);
+    if (files.length) return { files, dirName: dir && dir.name };
+  }
+  return { files:[...(dt.files||[])], dirName:null };
+}
+document.addEventListener('dragover', e=>{
+  const z=e.target.closest('[data-drop]'); if(!z) return;
+  e.preventDefault(); e.dataTransfer.dropEffect='copy'; z.classList.add('over');
+});
+document.addEventListener('dragleave', e=>{
+  const z=e.target.closest('[data-drop]'); if(z) z.classList.remove('over');
+});
+document.addEventListener('drop', async e=>{
+  const z=e.target.closest('[data-drop]'); if(!z) return;
+  e.preventDefault(); z.classList.remove('over');
+  const {files, dirName} = await filesFromDrop(e.dataTransfer);
+  if (!files.length){ S.mdlerr='לא הצלחתי לקרוא את מה שנגרר. נסו ללחוץ על הקופסה ולבחור את התיקייה.'; render(); return; }
+  acceptModel(z.dataset.drop, files, dirName);
 });
 document.addEventListener('input', e=>{
   const t=e.target;
