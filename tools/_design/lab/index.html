@@ -1354,11 +1354,26 @@ function fileAll(){
              טענות_שסומנו: CLAIMS.filter(c=>S.claims[c.k]).map(c=>c.t) },
     נוצר: new Date().toISOString()
   };
+  const json = JSON.stringify(doc, null, 2);
+  /* תלמיד אחד תייק עשר פעמים את אותו קובץ בשתי דקות, כי לכפתור לא היה
+     שום זיכרון והמורה קיבל עשרה עותקים זהים. מחתימים את התוכן בלי חותמת
+     הזמן: תיוק חוזר בלי שום שינוי נעצר כאן ואומר זאת. */
+  const sig = hash32(json.replace(/"נוצר":[^\n]*/, ''));
+  if (S.notes.filedSig === sig){
+    S.ci.err = 'התוצרים האלה כבר תויקו. שנו משהו ותייקו שוב, או המשיכו.';
+    render(); return;
+  }
   fileArtifact('notebook',
-    'מעבדה-' + WEEK.id + '-' + new Date().toISOString().slice(0,10) + '.json',
-    JSON.stringify(doc, null, 2));
+    'מעבדה-' + WEEK.id + '-' + new Date().toISOString().slice(0,10) + '.json', json);
+  S.notes.filedSig = sig;
+  S.ci.err = '';
   S.filed = caps.length + (noiseIn()?2:0) + 1;
   S.done.record = true; render();
+}
+function hash32(s){
+  let h = 5381;
+  for (let i=0;i<s.length;i++) h = ((h<<5)+h+s.charCodeAt(i))|0;
+  return (h>>>0).toString(36);
 }
 
 /* לוח 10 — ההגשה השבועית. זה החלק המוערך: שתי תמונות התקדמות וסיכום
@@ -1399,7 +1414,7 @@ function wRec(){
     <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
       <button class="go" id="ciSend" ${(ci.summary.trim() && !ci.busy)?'':'disabled'}>${
         ci.busy?'שולח…':'הגשה שבועית'}</button>
-      <button class="quiet" id="fileAll">תיוק התוצרים</button>
+      <button class="quiet" id="fileAll">${S.notes.filedSig?'תייקו שוב':'תיוק התוצרים'}</button>
       ${ci.err?`<span style="color:var(--err);font-size:12.5px">${esc(ci.err)}</span>`
               :'<span style="color:var(--ink-3);font-size:12.5px">ההגשה נשלחת למנטור ומנוקדת.</span>'}
     </div></div>`;
